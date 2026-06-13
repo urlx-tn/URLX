@@ -1,0 +1,34 @@
+{
+  "name": "urlx",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:generate": "turbo -F @urlx/db db:generate",
+    "deploy": "turbo -F @urlx/infra deploy",
+    "destroy": "turbo -F @urlx/infra destroy",
+    "check": "biome check --write ."
+  },
+  "dependencies": {
+    "@urlx/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@cloudflare/workers-types": "catalog:",
+    "@types/node": "catalog:",
+    "@urlx/config": "workspace:*",
+    "turbo": "^2.9.16",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@10.22.0"
+}

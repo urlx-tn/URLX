@@ -1,0 +1,3 @@
+{
+  "extends": "@urlx/config/tsconfig.base.json"
+}

@@ -1,0 +1,19 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+catalog:
+  dotenv: ^17.2.2
+  zod: ^4.1.13
+  typescript: ^6
+  "@types/node": ^22.13.14
+  "@cloudflare/workers-types": ^4.20251213.0
+  hono: ^4.8.2
+  "@orpc/server": ^1.13.14
+  "@orpc/openapi": ^1.13.14
+  "@orpc/zod": ^1.13.14
+  alchemy: ^0.91.2
+  "@orpc/client": ^1.13.14
