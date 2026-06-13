@@ -1,6 +1,8 @@
 # urlx
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Astro, Hono, ORPC, and more.
+This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Astro, Hono, oRPC, and more.
+
+urlx is a Cloudflare-first URL shortener with a web UI, QR code generation, and a Hono/oRPC API backed by Cloudflare D1.
 
 ## Features
 
@@ -9,7 +11,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **TailwindCSS** - Utility-first CSS for rapid UI development
 - **Hono** - Lightweight, performant server framework
 - **oRPC** - End-to-end type-safe APIs with OpenAPI integration
-- **workers** - Runtime environment
+- **Cloudflare Workers** - Runtime environment
 - **Drizzle** - TypeScript-first ORM
 - **Cloudflare D1** - Database engine
 - **Biome** - Linting and formatting
@@ -17,7 +19,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 
 ## Getting Started
 
-First, install the dependencies:
+Install dependencies:
 
 ```bash
 pnpm install
@@ -31,13 +33,27 @@ Runtime database access uses the Cloudflare `DB` binding from `packages/infra/al
 
 Alchemy provisions the D1 database and applies migrations during `dev` and `deploy`.
 
-1. Generate migration files:
+Generate migration files:
 
 ```bash
 pnpm run db:generate
 ```
 
-Then, run the development server:
+## Environment
+
+Create a local `.env` file before running the full stack:
+
+```bash
+CORS_ORIGIN=http://localhost:4321
+SHORT_URL_BASE=http://localhost:3000
+```
+
+- `CORS_ORIGIN` is required by the server Worker.
+- `SHORT_URL_BASE` is optional and defaults to `http://localhost:3000`.
+
+## Development
+
+Run the development server:
 
 ```bash
 pnpm run dev
@@ -50,27 +66,53 @@ The API is running at [http://localhost:3000](http://localhost:3000).
 
 ### Cloudflare via Alchemy
 
-- Target: web + server
-- Dev: pnpm run dev
-- Deploy: pnpm run deploy
-- Destroy: pnpm run destroy
+This project deploys the Astro web app, Hono server Worker, and D1 database through Alchemy.
+
+Log in to Cloudflare:
+
+```bash
+pnpm dlx wrangler login
+```
+
+Set production environment values:
+
+```bash
+CORS_ORIGIN=https://your-web-domain.com
+SHORT_URL_BASE=https://your-short-domain.com
+```
+
+Deploy:
+
+```bash
+pnpm run build
+pnpm run deploy
+```
+
+Destroy the Cloudflare resources:
+
+```bash
+pnpm run destroy
+```
 
 For more details, see the guide on [Deploying to Cloudflare with Alchemy](https://www.better-t-stack.dev/docs/guides/cloudflare-alchemy).
 
 ## Git Hooks and Formatting
 
 - Run checks: `pnpm run check`
+- Format and apply safe fixes: `pnpm run check:write`
 
 ## Project Structure
 
-```
+```text
 urlx/
-├── apps/
-│   ├── web/         # Frontend application (Astro)
-│   └── server/      # Backend API (Hono, ORPC)
-├── packages/
-│   ├── api/         # API layer / business logic
-│   └── db/          # Database schema & queries
+|-- apps/
+|   |-- web/       # Frontend application (Astro)
+|   `-- server/    # Backend API (Hono, oRPC)
+`-- packages/
+    |-- api/       # API layer and business logic
+    |-- db/        # Database schema and queries
+    |-- env/       # Runtime environment helpers
+    `-- infra/     # Cloudflare/Alchemy infrastructure
 ```
 
 ## Available Scripts
@@ -80,5 +122,8 @@ urlx/
 - `pnpm run dev:web`: Start only the web application
 - `pnpm run dev:server`: Start only the server
 - `pnpm run check-types`: Check TypeScript types across all apps
-- `pnpm run db:generate`: Generate database client/types
-- `pnpm run check`: Run Biome formatting and linting
+- `pnpm run db:generate`: Generate Drizzle migration files
+- `pnpm run deploy`: Deploy to Cloudflare through Alchemy
+- `pnpm run destroy`: Destroy Cloudflare resources managed by Alchemy
+- `pnpm run check`: Run Biome checks
+- `pnpm run check:write`: Run Biome checks and apply safe fixes
