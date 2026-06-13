@@ -3,6 +3,8 @@ import { drizzle } from "drizzle-orm/d1";
 
 import * as schema from "./schema";
 
-export function createDb() {
-  return drizzle(env.DB, { schema });
+export function createDb(database: D1Database = env.DB) {
+	return drizzle(database, { schema });
 }
+
+export * from "./schema";

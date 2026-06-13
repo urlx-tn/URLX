@@ -1,8 +1,187 @@
 @import "tailwindcss";
 
-/* Add your theme customizations here. */
-/* See the TailwindCSS v4 docs for more info: https://tailwindcss.com/docs/v4-beta */
-
 @theme {
-  --font-sans: "Inter", sans-serif;
+	--font-sans:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+	--font-mono:
+		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+	--color-canvas: #ffffff;
+	--color-surface: #f5f5f7;
+	--color-ink: #1d1d1f;
+	--color-ink-2: #6e6e73;
+	--color-hair: #d2d2d7;
+	--color-accent: #0071e3;
+	--color-link: #0066cc;
+}
+
+html {
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	scroll-behavior: smooth;
+}
+
+body {
+	min-height: 100dvh;
+	letter-spacing: 0;
+	background-color: #ffffff;
+	color: #1d1d1f;
+}
+
+::selection {
+	background-color: rgb(0 113 227 / 0.18);
+	color: #1d1d1f;
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+	letter-spacing: inherit;
+}
+
+.surface {
+	background-color: #f5f5f7;
+	border-radius: 18px;
+}
+
+.field {
+	width: 100%;
+	height: 54px;
+	padding-inline: 18px;
+	color: #1d1d1f;
+	background-color: #ffffff;
+	border: 1px solid #d2d2d7;
+	border-radius: 12px;
+	outline: none;
+	font-size: 17px;
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.field::placeholder {
+	color: #86868b;
+}
+
+.field:hover:not(:focus):not(:disabled) {
+	border-color: #b0b0b8;
+}
+
+.field:focus-visible {
+	border-color: #0071e3;
+	box-shadow: 0 0 0 4px rgb(0 113 227 / 0.18);
+}
+
+.field[aria-invalid="true"] {
+	border-color: #d70015;
+}
+
+.field[aria-invalid="true"]:focus-visible {
+	box-shadow: 0 0 0 4px rgb(215 0 21 / 0.16);
+}
+
+.field:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	height: 54px;
+	min-width: 44px;
+	padding-inline: 28px;
+	font-size: 17px;
+	font-weight: 400;
+	color: #ffffff;
+	background-color: #0071e3;
+	border: 1px solid #0071e3;
+	border-radius: 980px;
+	cursor: pointer;
+	white-space: nowrap;
+	user-select: none;
+	transition:
+		background-color 150ms ease,
+		border-color 150ms ease,
+		opacity 150ms ease;
+}
+
+.btn:hover:not(:disabled) {
+	background-color: #0077ed;
+	border-color: #0077ed;
+}
+
+.btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 4px rgb(0 113 227 / 0.3);
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn-secondary {
+	color: #1d1d1f;
+	background-color: #ffffff;
+	border-color: #d2d2d7;
+}
+
+.btn-secondary:hover:not(:disabled) {
+	background-color: #f5f5f7;
+	border-color: #b0b0b8;
+}
+
+.btn-secondary:focus-visible {
+	box-shadow: 0 0 0 4px rgb(0 0 0 / 0.08);
+}
+
+.spinner {
+	width: 16px;
+	height: 16px;
+	border-radius: 9999px;
+	border: 2px solid rgb(255 255 255 / 0.45);
+	border-top-color: #ffffff;
+	animation: urlx-spin 0.7s linear infinite;
+}
+
+@keyframes urlx-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.reveal {
+	animation: urlx-reveal 220ms ease both;
+}
+
+@keyframes urlx-reveal {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	.reveal {
+		animation: none;
+	}
+
+	.spinner {
+		animation-duration: 1.4s;
+	}
 }

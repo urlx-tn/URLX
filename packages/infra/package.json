@@ -1,19 +1,19 @@
 {
-  "name": "@urlx/infra",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "alchemy dev",
-    "deploy": "alchemy deploy",
-    "destroy": "alchemy destroy"
-  },
-  "dependencies": {
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@urlx/config": "workspace:*",
-    "alchemy": "catalog:",
-    "typescript": "catalog:"
-  }
+	"name": "@urlx/infra",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "alchemy dev",
+		"deploy": "alchemy deploy",
+		"destroy": "alchemy destroy"
+	},
+	"dependencies": {
+		"dotenv": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@urlx/config": "workspace:*",
+		"alchemy": "catalog:",
+		"typescript": "catalog:"
+	}
 }

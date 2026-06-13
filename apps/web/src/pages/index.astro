@@ -1,55 +1,459 @@
 ---
+import ResultPanel from "../components/ResultPanel.astro";
+import UrlShortenerForm from "../components/UrlShortenerForm.astro";
 import Layout from "../layouts/Layout.astro";
-import { orpc } from "../lib/orpc";
-
-const TITLE_TEXT = `
- ██████╗ ███████╗████████╗████████╗███████╗██████╗
- ██╔══██╗██╔════╝╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗
- ██████╔╝█████╗     ██║      ██║   █████╗  ██████╔╝
- ██╔══██╗██╔══╝     ██║      ██║   ██╔══╝  ██╔══██╗
- ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
- ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
-
- ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
- ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-    ██║       ███████╗   ██║   ███████║██║     █████╔╝
-    ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-    ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-    ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
- `;
 ---
 
-<Layout title="urlx">
-  <div class="container mx-auto max-w-3xl px-4 py-2">
-    <pre class="overflow-x-auto font-mono text-sm text-white">{TITLE_TEXT}</pre>
-    <div class="grid gap-6">
-      <section class="rounded-lg border border-neutral-700 p-4">
-        <h2 class="mb-2 font-medium text-white">API Status</h2>
-        <div class="flex items-center gap-2" id="api-status">
-          <div class="h-2 w-2 rounded-full bg-orange-400" id="status-dot"></div>
-          <span class="text-sm text-neutral-400" id="status-text">Checking...</span>
-        </div>
-      </section>
-    </div>
-  </div>
+<Layout>
+	<section class="flex flex-1 items-center bg-white">
+		<div class="mx-auto w-full max-w-[800px] px-6 py-16 text-center">
+			<h1
+				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
+			>
+				Shorten links.<br />Share them beautifully.
+			</h1>
+			<p
+				class="mx-auto mt-5 max-w-[32ch] text-[19px] leading-7 text-ink-2 sm:text-[21px]"
+			>
+				Create clean, reliable short links in seconds.
+			</p>
+
+			<div class="mx-auto mt-10 max-w-[560px] text-left">
+				<UrlShortenerForm />
+			</div>
+
+			<ResultPanel />
+		</div>
+	</section>
 </Layout>
 
 <script>
-  import { orpc } from "../lib/orpc";
+	import { copyToClipboard } from "../lib/copy-to-clipboard";
+	import { friendlyErrorMessage } from "../lib/form-errors";
+	import { orpc } from "../lib/orpc";
+	import { renderQrPngDataUrl, renderQrSvg } from "../lib/qr-code";
+	import {
+		addRecentUrl,
+		getRecentUrls,
+		removeRecentUrl,
+	} from "../lib/url-history";
 
-  const statusDot = document.getElementById("status-dot")!;
-  const statusText = document.getElementById("status-text")!;
+	type State =
+		| { status: "idle" }
+		| { status: "submitting" }
+		| { status: "success"; shortCode: string; shortUrl: string }
+		| { status: "error"; code: string; message: string };
 
-  async function checkHealth() {
-    try {
-      const data = await orpc.healthCheck();
-      statusDot.className = "h-2 w-2 rounded-full bg-green-500";
-      statusText.textContent = "Connected";
-    } catch (error) {
-      statusDot.className = "h-2 w-2 rounded-full bg-red-500";
-      statusText.textContent = "Disconnected";
-    }
-  }
+	const select = <T extends Element>(selector: string): T | null =>
+		document.querySelector<T>(selector);
 
-  checkHealth();
+	const form = select<HTMLFormElement>('[data-form="url-shortener"]');
+	const input = select<HTMLInputElement>('[data-form="url-input"]');
+	const submitButton = select<HTMLButtonElement>('[data-form="submit"]');
+	const submitLabel = select<HTMLElement>('[data-form="submit-label"]');
+	const submitSpinner = select<HTMLElement>('[data-form="submit-spinner"]');
+	const errorEl = select<HTMLElement>('[data-form="error"]');
+	const errorMessageEl = select<HTMLElement>('[data-form="error-message"]');
+
+	const resultPanel = select<HTMLElement>('[data-result="panel"]');
+	const resultUrl = select<HTMLElement>('[data-result="url"]');
+	const resultUrlLink = select<HTMLAnchorElement>('[data-result="url-link"]');
+	const copyButton = select<HTMLButtonElement>('[data-result="copy"]');
+	const copyLabel = select<HTMLElement>('[data-result="copy-label"]');
+	const qrToggle = select<HTMLButtonElement>('[data-result="qr-toggle"]');
+	const qrToggleLabel = select<HTMLElement>('[data-result="qr-toggle-label"]');
+	const qrPanel = select<HTMLElement>('[data-qr="panel"]');
+	const qrCanvas = select<HTMLElement>('[data-qr="canvas"]');
+	const qrStatus = select<HTMLElement>('[data-qr="status"]');
+	const qrActions = select<HTMLElement>('[data-qr="actions"]');
+	const downloadSvgButton = select<HTMLButtonElement>('[data-qr="download-svg"]');
+	const downloadPngButton = select<HTMLButtonElement>('[data-qr="download-png"]');
+	const downloadPngLabel = select<HTMLElement>('[data-qr="download-png-label"]');
+	const inputWrap = select<HTMLElement>('[data-form="input-wrap"]');
+	const historyList = select<HTMLUListElement>('[data-form="history"]');
+
+	if (
+		form &&
+		input &&
+		submitButton &&
+		submitLabel &&
+		submitSpinner &&
+		errorEl &&
+		errorMessageEl &&
+		resultPanel &&
+		resultUrl &&
+		resultUrlLink &&
+		copyButton &&
+		copyLabel &&
+		qrToggle &&
+		qrToggleLabel &&
+		qrPanel &&
+		qrCanvas &&
+		qrStatus &&
+		qrActions &&
+		downloadSvgButton &&
+		downloadPngButton &&
+		downloadPngLabel &&
+		inputWrap &&
+		historyList
+	) {
+		let state: State = { status: "idle" };
+		let copyResetTimer: number | null = null;
+		let qrRequestToken = 0;
+		let qrShown = false;
+		let currentQr: { svg: string; shortUrl: string } | null = null;
+
+		const setStatusError = (isError: boolean) => {
+			qrStatus.classList.toggle("text-[#d70015]", isError);
+			qrStatus.classList.toggle("text-ink-2", !isError);
+		};
+
+		const resetCopyLabel = () => {
+			if (copyResetTimer !== null) {
+				window.clearTimeout(copyResetTimer);
+				copyResetTimer = null;
+			}
+			copyLabel.textContent = "Copy";
+		};
+
+		const resetQr = () => {
+			qrRequestToken += 1;
+			qrShown = false;
+			currentQr = null;
+			qrPanel.hidden = true;
+			qrActions.hidden = true;
+			qrToggle.setAttribute("aria-expanded", "false");
+			qrToggle.disabled = false;
+			qrToggleLabel.textContent = "Generate QR code";
+			qrCanvas.innerHTML = "";
+			qrStatus.textContent = "";
+			setStatusError(false);
+		};
+
+		const fileSlug = () =>
+			state.status === "success" ? state.shortCode : "code";
+
+		const triggerDownload = (filename: string, href: string) => {
+			const anchor = document.createElement("a");
+			anchor.href = href;
+			anchor.download = filename;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+		};
+
+		let historyItems: string[] = [];
+		let historyActive = -1;
+
+		const closeHistory = () => {
+			historyList.hidden = true;
+			historyActive = -1;
+			input.setAttribute("aria-expanded", "false");
+			input.removeAttribute("aria-activedescendant");
+		};
+
+		const setHistoryActive = (index: number) => {
+			historyActive = index;
+			const options = Array.from(historyList.children);
+			options.forEach((option, i) => {
+				option.setAttribute("aria-selected", i === index ? "true" : "false");
+			});
+			if (index >= 0 && options[index]) {
+				input.setAttribute("aria-activedescendant", options[index].id);
+				options[index].scrollIntoView({ block: "nearest" });
+			} else {
+				input.removeAttribute("aria-activedescendant");
+			}
+		};
+
+		const applyHistoryUrl = (url: string) => {
+			input.value = url;
+			closeHistory();
+			input.focus();
+			const end = url.length;
+			input.setSelectionRange(end, end);
+		};
+
+		const buildHistoryOption = (url: string, index: number) => {
+			const option = document.createElement("li");
+			option.id = `url-history-opt-${index}`;
+			option.setAttribute("role", "option");
+			option.setAttribute("aria-selected", "false");
+			option.className =
+				"group flex cursor-pointer items-center gap-2 px-3 py-2 text-[15px] text-ink aria-selected:bg-surface hover:bg-surface";
+
+			const label = document.createElement("span");
+			label.className = "flex-1 truncate";
+			label.title = url;
+			label.textContent = url;
+			option.appendChild(label);
+
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.tabIndex = -1;
+			remove.className =
+				"shrink-0 rounded-md p-1 text-ink-2 opacity-0 transition group-hover:opacity-100 hover:bg-hair/50 hover:text-ink";
+			remove.setAttribute("aria-label", `Remove ${url} from recent`);
+			remove.innerHTML =
+				'<svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4 12 12M12 4 4 12"/></svg>';
+			remove.addEventListener("mousedown", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+			});
+			remove.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				removeRecentUrl(url);
+				renderHistory();
+				input.focus();
+			});
+			option.appendChild(remove);
+
+			option.addEventListener("mousedown", (event) => event.preventDefault());
+			option.addEventListener("click", () => applyHistoryUrl(url));
+			option.addEventListener("mousemove", () => setHistoryActive(index));
+			return option;
+		};
+
+		function renderHistory() {
+			const query = input.value.trim().toLowerCase();
+			historyItems = getRecentUrls().filter((url) => {
+				const lower = url.toLowerCase();
+				return query === "" ? true : lower.includes(query) && lower !== query;
+			});
+			historyList.replaceChildren();
+			historyActive = -1;
+			input.removeAttribute("aria-activedescendant");
+			if (historyItems.length === 0) {
+				closeHistory();
+				return;
+			}
+			historyItems.forEach((url, index) => {
+				historyList.appendChild(buildHistoryOption(url, index));
+			});
+			historyList.hidden = false;
+			input.setAttribute("aria-expanded", "true");
+		}
+
+		const render = () => {
+			const isSubmitting = state.status === "submitting";
+			input.disabled = isSubmitting;
+			submitButton.disabled = isSubmitting;
+			submitLabel.textContent = isSubmitting ? "Shortening..." : "Shorten URL";
+			submitSpinner.hidden = !isSubmitting;
+
+			if (state.status === "error") {
+				errorEl.hidden = false;
+				errorMessageEl.textContent = state.message;
+				input.setAttribute("aria-invalid", "true");
+			} else {
+				errorEl.hidden = true;
+				errorMessageEl.textContent = "";
+				input.setAttribute("aria-invalid", "false");
+			}
+
+			if (state.status === "success") {
+				resultUrl.textContent = state.shortUrl;
+				resultUrlLink.setAttribute("href", state.shortUrl);
+				resultUrlLink.setAttribute("title", state.shortUrl);
+				resultPanel.hidden = false;
+				resetCopyLabel();
+				resetQr();
+			} else {
+				resultPanel.hidden = true;
+				resetCopyLabel();
+				resetQr();
+			}
+		};
+
+		const generateQr = async (shortUrl: string) => {
+			const token = qrRequestToken + 1;
+			qrRequestToken = token;
+			qrShown = false;
+			qrToggle.disabled = true;
+			qrToggleLabel.textContent = "Generating...";
+
+			try {
+				const svg = await renderQrSvg(shortUrl, {
+					margin: 1,
+					color: { dark: "#1d1d1f", light: "#ffffff" },
+				});
+				if (token !== qrRequestToken) return;
+
+				qrCanvas.innerHTML = svg;
+				const svgEl = qrCanvas.querySelector("svg");
+				if (svgEl) {
+					svgEl.setAttribute("width", "100%");
+					svgEl.setAttribute("height", "100%");
+					svgEl.setAttribute("aria-label", `QR code for ${shortUrl}`);
+				}
+				qrStatus.textContent = "";
+				setStatusError(false);
+				currentQr = { svg, shortUrl };
+				qrActions.hidden = false;
+				qrPanel.hidden = false;
+				qrToggle.setAttribute("aria-expanded", "true");
+				qrToggleLabel.textContent = "Hide QR code";
+				qrShown = true;
+			} catch {
+				if (token !== qrRequestToken) return;
+				qrCanvas.innerHTML = "";
+				currentQr = null;
+				qrActions.hidden = true;
+				qrStatus.textContent = "Could not generate QR code. Try again.";
+				setStatusError(true);
+				qrPanel.hidden = false;
+				qrToggle.setAttribute("aria-expanded", "true");
+				qrToggleLabel.textContent = "Generate QR code";
+				qrShown = false;
+			} finally {
+				if (token === qrRequestToken) {
+					qrToggle.disabled = false;
+				}
+			}
+		};
+
+		const handleQrToggle = () => {
+			if (state.status !== "success") return;
+			if (qrShown) {
+				qrRequestToken += 1;
+				qrShown = false;
+				qrPanel.hidden = true;
+				qrToggle.setAttribute("aria-expanded", "false");
+				qrToggleLabel.textContent = "Generate QR code";
+				return;
+			}
+			void generateQr(state.shortUrl);
+		};
+
+		const handleSubmit = async (event: Event) => {
+			event.preventDefault();
+			if (state.status === "submitting") return;
+
+			closeHistory();
+			const url = input.value.trim();
+			if (!url) {
+				state = {
+					status: "error",
+					code: "EMPTY_URL",
+					message: "Please enter a URL.",
+				};
+				render();
+				input.focus();
+				return;
+			}
+
+			state = { status: "submitting" };
+			render();
+
+			try {
+				const result = await orpc.links.shorten({ url });
+				addRecentUrl(url);
+				state = {
+					status: "success",
+					shortCode: result.shortCode,
+					shortUrl: result.shortUrl,
+				};
+				render();
+			} catch (err) {
+				state = {
+					status: "error",
+					code: "SERVER_ERROR",
+					message: friendlyErrorMessage(err),
+				};
+				render();
+				input.focus();
+				input.select();
+			}
+		};
+
+		const handleCopy = async () => {
+			if (state.status !== "success") return;
+			const ok = await copyToClipboard(state.shortUrl);
+			if (!ok) return;
+			copyLabel.textContent = "Copied";
+			if (copyResetTimer !== null) {
+				window.clearTimeout(copyResetTimer);
+			}
+			copyResetTimer = window.setTimeout(() => {
+				copyLabel.textContent = "Copy";
+				copyResetTimer = null;
+			}, 1600);
+		};
+
+		const handleDownloadSvg = () => {
+			if (!currentQr) return;
+			const blob = new Blob([currentQr.svg], {
+				type: "image/svg+xml;charset=utf-8",
+			});
+			const url = URL.createObjectURL(blob);
+			triggerDownload(`urlx-qr-${fileSlug()}.svg`, url);
+			window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+		};
+
+		const handleDownloadPng = async () => {
+			if (!currentQr) return;
+			const target = currentQr;
+			downloadPngButton.disabled = true;
+			downloadPngLabel.textContent = "Preparing...";
+			try {
+				const dataUrl = await renderQrPngDataUrl(target.shortUrl, {
+					margin: 1,
+					width: 1024,
+					color: { dark: "#1d1d1f", light: "#ffffff" },
+				});
+				triggerDownload(`urlx-qr-${fileSlug()}.png`, dataUrl);
+			} catch {
+				qrStatus.textContent = "Could not export PNG. Try again.";
+				setStatusError(true);
+			} finally {
+				downloadPngButton.disabled = false;
+				downloadPngLabel.textContent = "Download PNG";
+			}
+		};
+
+		const handleHistoryKeydown = (event: KeyboardEvent) => {
+			const open = !historyList.hidden;
+			if (event.key === "ArrowDown") {
+				if (!open) {
+					renderHistory();
+					if (!historyList.hidden) setHistoryActive(0);
+				} else {
+					setHistoryActive(Math.min(historyActive + 1, historyItems.length - 1));
+				}
+				if (!historyList.hidden) event.preventDefault();
+			} else if (event.key === "ArrowUp") {
+				if (open) {
+					setHistoryActive(historyActive <= 0 ? -1 : historyActive - 1);
+					event.preventDefault();
+				}
+			} else if (event.key === "Enter") {
+				if (open && historyActive >= 0) {
+					event.preventDefault();
+					applyHistoryUrl(historyItems[historyActive]);
+				}
+			} else if (event.key === "Escape") {
+				if (open) {
+					event.preventDefault();
+					closeHistory();
+				}
+			}
+		};
+
+		form.addEventListener("submit", handleSubmit);
+		copyButton.addEventListener("click", handleCopy);
+		qrToggle.addEventListener("click", handleQrToggle);
+		downloadSvgButton.addEventListener("click", handleDownloadSvg);
+		downloadPngButton.addEventListener("click", handleDownloadPng);
+		input.addEventListener("focus", renderHistory);
+		input.addEventListener("input", renderHistory);
+		input.addEventListener("keydown", handleHistoryKeydown);
+		document.addEventListener("mousedown", (event) => {
+			if (!inputWrap.contains(event.target as Node)) {
+				closeHistory();
+			}
+		});
+
+		render();
+	}
 </script>

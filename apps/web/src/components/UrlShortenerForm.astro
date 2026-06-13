@@ -1,0 +1,58 @@
+---
+---
+
+<form
+	class="flex flex-col gap-3 sm:flex-row"
+	data-form="url-shortener"
+	novalidate
+>
+	<label class="sr-only" for="url-input">Long URL to shorten</label>
+	<div class="relative flex-1" data-form="input-wrap">
+		<input
+			id="url-input"
+			name="url"
+			type="url"
+			inputmode="url"
+			autocomplete="off"
+			spellcheck="false"
+			autocapitalize="off"
+			placeholder="Paste your long URL"
+			class="field w-full"
+			data-form="url-input"
+			role="combobox"
+			aria-invalid="false"
+			aria-expanded="false"
+			aria-autocomplete="list"
+			aria-haspopup="listbox"
+			aria-controls="url-history"
+			aria-describedby="url-form-error"
+		/>
+		<ul
+			id="url-history"
+			class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
+			role="listbox"
+			aria-label="Recent URLs"
+			data-form="history"
+			hidden
+		>
+		</ul>
+	</div>
+	<button
+		type="submit"
+		class="btn w-full sm:w-auto sm:min-w-[148px]"
+		data-form="submit"
+	>
+		<span class="spinner shrink-0" aria-hidden="true" data-form="submit-spinner" hidden></span>
+		<span data-form="submit-label">Shorten URL</span>
+	</button>
+</form>
+<p
+	id="url-form-error"
+	class="mt-3 text-[14px] leading-5 text-[#d70015]"
+	role="alert"
+	aria-live="assertive"
+	data-form="error"
+	hidden
+>
+	<span data-form="error-message"></span>
+</p>

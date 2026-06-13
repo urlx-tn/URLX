@@ -1,0 +1,34 @@
+---
+---
+
+<div id="qr-panel" class="reveal mt-5" data-qr="panel" hidden>
+	<div
+		class="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border border-hair bg-white p-3"
+		data-qr="canvas"
+		role="img"
+		aria-label="QR code"
+	>
+	</div>
+	<div class="mt-4 flex flex-wrap gap-2.5" data-qr="actions" hidden>
+		<button
+			type="button"
+			class="btn-secondary inline-flex h-10 items-center justify-center rounded-full border px-4 text-[14px] font-medium"
+			data-qr="download-svg"
+		>
+			Download SVG
+		</button>
+		<button
+			type="button"
+			class="btn-secondary inline-flex h-10 items-center justify-center rounded-full border px-4 text-[14px] font-medium"
+			data-qr="download-png"
+		>
+			<span data-qr="download-png-label">Download PNG</span>
+		</button>
+	</div>
+	<p
+		class="mt-3 text-[14px] leading-5 text-ink-2"
+		data-qr="status"
+		aria-live="polite"
+	>
+	</p>
+</div>

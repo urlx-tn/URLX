@@ -1,28 +1,28 @@
 {
-  "name": "@urlx/db",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    },
-    "./*": {
-      "default": "./src/*.ts"
-    }
-  },
-  "scripts": {
-    "db:generate": "drizzle-kit generate"
-  },
-  "dependencies": {
-    "@libsql/client": "0.15.15",
-    "@urlx/env": "workspace:*",
-    "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
-    "libsql": "0.5.22",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@urlx/config": "workspace:*",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "catalog:"
-  }
+	"name": "@urlx/db",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"db:generate": "drizzle-kit generate"
+	},
+	"dependencies": {
+		"@libsql/client": "0.15.15",
+		"@urlx/env": "workspace:*",
+		"dotenv": "catalog:",
+		"drizzle-orm": "^0.45.1",
+		"libsql": "0.5.22",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@urlx/config": "workspace:*",
+		"drizzle-kit": "^0.31.8",
+		"typescript": "catalog:"
+	}
 }

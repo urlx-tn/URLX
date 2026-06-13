@@ -10,12 +10,14 @@ build
 
 # Generated files
 apps/web/src/routeTree.gen.ts
+apps/web/.wrangler/
 
 # Environment variables
 .env
 .env*.local
 
 # IDEs and editors
+.claude/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json

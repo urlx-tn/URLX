@@ -1,0 +1,50 @@
+---
+import QrCodePanel from "./QrCodePanel.astro";
+---
+
+<section
+	class="surface reveal mx-auto mt-8 max-w-[560px] p-6 text-left sm:p-7"
+	data-result="panel"
+	aria-labelledby="result-label"
+	aria-live="polite"
+	hidden
+>
+	<h2
+		id="result-label"
+		class="text-[13px] font-semibold uppercase tracking-[0.06em] text-ink-2"
+	>
+		Your short link
+	</h2>
+
+	<div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+		<a
+			href="#"
+			class="flex-1 break-all rounded-xl border border-hair bg-white px-4 py-3 text-[16px] text-link no-underline"
+			data-result="url-link"
+			rel="noopener noreferrer"
+			target="_blank"
+		>
+			<span data-result="url"></span>
+		</a>
+		<button
+			type="button"
+			class="btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-[15px] sm:self-stretch"
+			data-result="copy"
+			aria-label="Copy short link to clipboard"
+		>
+			<span data-result="copy-label">Copy</span>
+		</button>
+	</div>
+
+	<button
+		type="button"
+		class="btn-secondary mt-4 inline-flex h-11 items-center justify-center rounded-full border px-5 text-[15px]"
+		data-result="qr-toggle"
+		aria-expanded="false"
+		aria-controls="qr-panel"
+	>
+		<span data-result="qr-toggle-label">Generate QR code</span>
+	</button>
+
+	<QrCodePanel />
+</section>

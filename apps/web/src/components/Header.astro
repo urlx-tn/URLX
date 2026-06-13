@@ -1,21 +1,30 @@
 ---
-const links = [
-  { to: "/", label: "Home" },
-];
 ---
 
-<div>
-  <div class="flex flex-row items-center justify-between px-4 py-2 md:px-6">
-    <nav class="flex gap-4 text-lg">
-      {links.map((link) => (
-        <a href={link.to} class="text-white hover:text-neutral-400 transition-colors">
-          {link.label}
-        </a>
-      ))}
-    </nav>
-    <div class="flex items-center gap-2" id="user-menu-container">
-    </div>
-  </div>
-  <hr class="border-neutral-800" />
-</div>
-
+<header
+	class="sticky top-0 z-20 border-b border-hair/70 bg-white/75 backdrop-blur-xl backdrop-saturate-150"
+>
+	<div
+		class="mx-auto flex h-14 w-full max-w-[980px] items-center justify-between px-6"
+	>
+		<a
+			href="/"
+			class="inline-flex items-center no-underline"
+			aria-label="URLX home"
+		>
+			<img
+				src="/logo.png"
+				alt="URLX"
+				width="1033"
+				height="274"
+				class="h-[26px] w-auto"
+			/>
+		</a>
+		<a
+			href="#url-input"
+			class="btn-secondary inline-flex h-9 items-center justify-center rounded-full border px-4 text-[14px] font-medium no-underline"
+		>
+			Shorten a link
+		</a>
+	</div>
+</header>

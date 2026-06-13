@@ -1,34 +1,41 @@
 {
-  "name": "urlx",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "type": "module",
-  "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "check-types": "turbo check-types",
-    "dev:web": "turbo -F web dev",
-    "dev:server": "turbo -F server dev",
-    "db:generate": "turbo -F @urlx/db db:generate",
-    "deploy": "turbo -F @urlx/infra deploy",
-    "destroy": "turbo -F @urlx/infra destroy",
-    "check": "biome check --write ."
-  },
-  "dependencies": {
-    "@urlx/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
-    "@cloudflare/workers-types": "catalog:",
-    "@types/node": "catalog:",
-    "@urlx/config": "workspace:*",
-    "turbo": "^2.9.16",
-    "typescript": "catalog:"
-  },
-  "packageManager": "pnpm@10.22.0"
+	"name": "urlx",
+	"private": true,
+	"license": "MIT",
+	"author": "Chames Eddine Dhibi (https://v1.chames.dhibi.tn)",
+	"contributors": [
+		"Chames Eddine Dhibi (https://v1.chames.dhibi.tn)",
+		"Youssef Dhibi (https://youssef.tn)"
+	],
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"type": "module",
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"check-types": "turbo run check-types",
+		"dev:web": "turbo run dev --filter=web",
+		"dev:server": "turbo run dev --filter=server",
+		"db:generate": "turbo run db:generate --filter=@urlx/db",
+		"deploy": "turbo run deploy --filter=@urlx/infra",
+		"destroy": "turbo run destroy --filter=@urlx/infra",
+		"check": "biome check .",
+		"check:write": "biome check --write ."
+	},
+	"dependencies": {
+		"@urlx/env": "workspace:*",
+		"dotenv": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.16",
+		"@cloudflare/workers-types": "catalog:",
+		"@types/node": "catalog:",
+		"@urlx/config": "workspace:*",
+		"turbo": "^2.9.16",
+		"typescript": "catalog:"
+	},
+	"packageManager": "pnpm@10.22.0"
 }
