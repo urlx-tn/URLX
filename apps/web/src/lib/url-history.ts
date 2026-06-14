@@ -1,7 +1,29 @@
 const STORAGE_KEY = "urlx:recent-urls";
+const PREFERENCE_KEY = "urlx:remember-recent-urls";
 const LIMIT = 8;
 
+export const isUrlHistoryEnabled = (): boolean => {
+	try {
+		return localStorage.getItem(PREFERENCE_KEY) === "true";
+	} catch {
+		return false;
+	}
+};
+
+export const setUrlHistoryEnabled = (enabled: boolean): boolean => {
+	try {
+		localStorage.setItem(PREFERENCE_KEY, enabled ? "true" : "false");
+	} catch {
+		return enabled;
+	}
+	return enabled;
+};
+
 export const getRecentUrls = (): string[] => {
+	if (!isUrlHistoryEnabled()) {
+		return [];
+	}
+
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
 		if (!raw) {
@@ -42,3 +64,11 @@ export const addRecentUrl = (url: string): string[] => {
 
 export const removeRecentUrl = (url: string): string[] =>
 	persist(getRecentUrls().filter((value) => value !== url));
+
+export const clearRecentUrls = (): void => {
+	try {
+		localStorage.removeItem(STORAGE_KEY);
+	} catch {
+		return;
+	}
+};

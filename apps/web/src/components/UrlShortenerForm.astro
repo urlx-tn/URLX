@@ -2,61 +2,83 @@
 ---
 
 <form
-	class="flex flex-col gap-3 sm:flex-row"
+	class="flex flex-col gap-3"
 	data-form="url-shortener"
 	novalidate
 >
-	<label class="sr-only" for="url-input">Long URL to shorten</label>
-	<div class="relative flex-1" data-form="input-wrap">
-		<div
-			class="field flex w-full items-center gap-2 overflow-hidden pl-4"
-			data-form="input-shell"
-		>
-			<span
-				class="shrink-0 select-none text-[15px] text-ink-2"
-				data-form="scheme-prefix"
-				aria-hidden="true"
+	<div class="flex flex-col gap-3 sm:flex-row">
+		<label class="sr-only" for="url-input">Long URL to shorten</label>
+		<div class="relative flex-1" data-form="input-wrap">
+			<div
+				class="field flex w-full items-center gap-2 overflow-hidden pl-4"
+				data-form="input-shell"
 			>
-				https://
-			</span>
-			<input
-				id="url-input"
-				name="url"
-				type="url"
-				inputmode="url"
-				autocomplete="off"
-				spellcheck="false"
-				autocapitalize="off"
-				placeholder="example.com"
-				class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
-				data-form="url-input"
-				role="combobox"
-				aria-invalid="false"
-				aria-expanded="false"
-				aria-autocomplete="list"
-				aria-haspopup="listbox"
-				aria-controls="url-history"
-				aria-describedby="url-form-error"
-			/>
+				<span
+					class="shrink-0 select-none text-[15px] text-ink-2"
+					data-form="scheme-prefix"
+					aria-hidden="true"
+				>
+					https://
+				</span>
+				<input
+					id="url-input"
+					name="url"
+					type="url"
+					inputmode="url"
+					autocomplete="off"
+					spellcheck="false"
+					autocapitalize="off"
+					placeholder="example.com"
+					class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+					data-form="url-input"
+					role="combobox"
+					aria-invalid="false"
+					aria-expanded="false"
+					aria-autocomplete="list"
+					aria-haspopup="listbox"
+					aria-controls="url-history"
+					aria-describedby="url-form-error"
+				/>
+			</div>
+			<ul
+				id="url-history"
+				class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
+				role="listbox"
+				aria-label="Recent URLs"
+				data-form="history"
+				hidden
+			>
+			</ul>
 		</div>
-		<ul
-			id="url-history"
-			class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
-			role="listbox"
-			aria-label="Recent URLs"
-			data-form="history"
+		<button
+			type="submit"
+			class="btn w-full sm:w-auto sm:min-w-[148px]"
+			data-form="submit"
+		>
+			<span class="spinner shrink-0" aria-hidden="true" data-form="submit-spinner" hidden></span>
+			<span data-form="submit-label">Shorten URL</span>
+		</button>
+	</div>
+	<div
+		class="flex flex-col gap-2 text-[13px] leading-5 text-ink-2 sm:flex-row sm:items-center sm:justify-between"
+	>
+		<label class="inline-flex items-center gap-2">
+			<input
+				type="checkbox"
+				class="h-4 w-4 accent-accent"
+				data-form="remember-history"
+			/>
+			<span>Remember recent URLs on this device</span>
+		</label>
+		<button
+			type="button"
+			class="self-start text-link underline-offset-2 hover:underline sm:self-auto"
+			data-form="clear-history"
 			hidden
 		>
-		</ul>
+			Clear recent URLs
+		</button>
 	</div>
-	<button
-		type="submit"
-		class="btn w-full sm:w-auto sm:min-w-[148px]"
-		data-form="submit"
-	>
-		<span class="spinner shrink-0" aria-hidden="true" data-form="submit-spinner" hidden></span>
-		<span data-form="submit-label">Shorten URL</span>
-	</button>
 </form>
 <p
 	id="url-form-error"

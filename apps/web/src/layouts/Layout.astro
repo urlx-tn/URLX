@@ -1,7 +1,6 @@
 ---
 import "../styles/global.css";
-import { Image } from "astro:assets";
-import logo from "../assets/logo.png";
+import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
 
 interface Props {
@@ -19,8 +18,6 @@ const {
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
 const canonical = new URL(Astro.url.pathname, siteUrl || Astro.url).toString();
 const ogImage = image.startsWith("http") ? image : `${siteUrl}${image}`;
-
-const year = new Date().getFullYear();
 
 const websiteSchema = {
 	"@context": "https://schema.org",
@@ -99,71 +96,6 @@ const organizationSchema = {
 		<main class="flex flex-1 flex-col">
 			<slot />
 		</main>
-		<footer class="border-t border-hair bg-surface">
-			<div class="mx-auto w-full max-w-[980px] px-6 py-16">
-				<div
-					class="flex flex-col gap-10 sm:flex-row sm:items-start sm:justify-between"
-				>
-					<div class="max-w-[440px]">
-						<Image
-							src={logo}
-							alt="URLX"
-							width="1033"
-							height="274"
-							class="h-[34px] w-auto"
-							loading="lazy"
-						/>
-						<p class="mt-5 text-[15px] font-medium text-ink">
-							Clean links, instantly.
-						</p>
-						<p class="mt-2 text-[15px] leading-7 text-ink-2">
-							A fast, private URL shortener. Paste a long link, get a clean
-							short one, and share it anywhere. No sign-up, no tracking.
-						</p>
-					</div>
-					<div class="text-[14px] leading-7 text-ink-2 sm:text-right">
-						<p class="font-semibold text-ink">Private by default</p>
-						<p>No sign-up required.</p>
-						<p>No destination fetching.</p>
-					</div>
-				</div>
-				<div
-					class="mt-12 flex flex-col gap-2 border-t border-hair pt-6 text-[13px] text-[#86868b] sm:flex-row sm:items-center sm:justify-between"
-				>
-					<span>© {year}
-					<a
-						href="https://v1.chames.dhibi.tn"
-						class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
-						target="_blank"
-						rel="noopener noreferrer">Chames Eddine Dhibi</a
-					>
-					&amp;
-					<a
-						href="https://youssef.tn"
-						class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
-						target="_blank"
-						rel="noopener noreferrer">Youssef Dhibi</a
-					>
-				</span>
-					<span>
-						Made by
-						<a
-							href="https://youssef.tn"
-							class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
-							target="_blank"
-							rel="noopener noreferrer">Youssef</a
-						>
-						&amp;
-						<a
-							href="https://v1.chames.dhibi.tn"
-							class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
-							target="_blank"
-							rel="noopener noreferrer">Chames</a
-						>
-						· MIT Licensed
-					</span>
-				</div>
-			</div>
-		</footer>
+		<Footer />
 	</body>
 </html>

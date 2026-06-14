@@ -1,0 +1,146 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+	title="Privacy Policy | URLX"
+	description="Privacy policy for URLX, a no-account URL shortener."
+>
+	<section class="bg-white">
+		<div class="mx-auto w-full max-w-[800px] px-6 py-16">
+			<p class="text-[14px] font-semibold uppercase tracking-[0.06em] text-ink-2">
+				Last updated June 14, 2026
+			</p>
+			<h1 class="mt-3 text-[40px] font-semibold leading-tight text-ink">
+				Privacy Policy
+			</h1>
+			<div class="mt-8 space-y-8 text-[16px] leading-7 text-ink-2">
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Overview</h2>
+					<p class="mt-3">
+						URLX is a no-account URL shortener. You do not need to create an
+						account, provide an email address, or make a payment to create a
+						short link.
+					</p>
+					<p class="mt-3">
+						This policy describes the data URLX handles when you use the site
+						and API. It is written for the current product behavior: no ads, no
+						analytics SDK, and no cookies set by URLX.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Data We Handle</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6">
+						<li>
+							Submitted URLs: when you shorten a link, URLX stores the original
+							URL, a normalized version, a URL hash, the generated short code,
+							and timestamps so the short link can work.
+						</li>
+						<li>
+							Redirect data: when someone opens a short link, URLX looks up the
+							short code and redirects the visitor to the stored destination.
+						</li>
+						<li>
+							Optional browser history: if you choose "Remember recent URLs on
+							this device", recent submitted URLs are stored in your browser's
+							local storage. They are not sent to URLX as a separate history
+							list.
+						</li>
+						<li>
+							Operational logs: the server and hosting provider may process
+							request metadata such as request path, response status, IP address,
+							user agent, timing, and security-related metadata for operations,
+							debugging, abuse prevention, and security.
+						</li>
+					</ul>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Cookies And Storage</h2>
+					<p class="mt-3">
+						URLX does not currently set cookies and does not currently use ad or
+						analytics trackers.
+					</p>
+					<p class="mt-3">
+						URLX can use browser local storage only if you opt in to remembering
+						recent URLs on your device. You can turn this off or clear recent
+						URLs from the homepage controls.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">How We Use Data</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6">
+						<li>Create and serve short links.</li>
+						<li>Return an existing short link for the same normalized URL.</li>
+						<li>Prevent local, private-network, and unsupported URL schemes.</li>
+						<li>Operate, secure, debug, and improve the service.</li>
+						<li>Investigate abuse reports and disable harmful links.</li>
+					</ul>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Third-Party Processing</h2>
+					<p class="mt-3">
+						URLX is built for Cloudflare infrastructure, including Cloudflare
+						Workers and Cloudflare D1. Cloudflare may process hosting,
+						security, database, and request metadata needed to provide the
+						service.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Retention</h2>
+					<p class="mt-3">
+						Short-link records are kept while the short link remains active or
+						as needed for operations, security, abuse handling, or legal
+						requirements. Recent URLs saved in your browser remain on your
+						device until you clear them, turn off the feature, clear site data,
+						or use browser controls to remove local storage.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Your Choices</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6">
+						<li>You can use URLX without creating an account.</li>
+						<li>You can leave recent URL history disabled.</li>
+						<li>You can clear recent URLs from the homepage.</li>
+						<li>You can avoid submitting URLs that contain sensitive personal data.</li>
+						<li>
+							You can report an abusive short link to the URLX maintainers using
+							the maintainer links in the footer.
+						</li>
+					</ul>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Security</h2>
+					<p class="mt-3">
+						URLX validates submitted destination URLs, rejects unsupported
+						schemes, rejects localhost and private-network addresses, and uses
+						security headers on server responses. No internet service can be
+						guaranteed to be perfectly secure.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Children</h2>
+					<p class="mt-3">
+						URLX is not directed to children and does not knowingly collect
+						children's personal information.
+					</p>
+				</section>
+
+				<section>
+					<h2 class="text-[22px] font-semibold text-ink">Changes</h2>
+					<p class="mt-3">
+						If URLX changes how it collects, stores, or shares data, this policy
+						should be updated before or when those changes go live.
+					</p>
+				</section>
+			</div>
+		</div>
+	</section>
+</Layout>
