@@ -1,12 +1,12 @@
 # Contributing to URLX
 
-Thanks for your interest in improving URLX — a fast, private URL shortener.
+Thanks for your interest in improving URLX - a fast, private URL shortener.
 Contributions of all sizes are welcome: bug reports, fixes, docs, and features.
 
 ## Maintainers
 
-- **Youssef Dhibi** — https://youssef.tn
-- **Chames Eddine Dhibi** — https://v1.chames.dhibi.tn
+- **Youssef Dhibi** - https://youssef.tn
+- **Chames Eddine Dhibi** - https://v1.chames.dhibi.tn
 
 ## Prerequisites
 
@@ -24,8 +24,8 @@ This is a pnpm + Turborepo monorepo.
 
 ```text
 apps/
-  web/        Astro 5 frontend (the shortener UI)
-  server/     oRPC API worker
+  web/        Astro frontend (the shortener UI)
+  server/     Hono/oRPC API worker
 packages/
   api/        oRPC routers, link domain logic, schemas
   db/         Drizzle schema and migrations
@@ -36,18 +36,18 @@ packages/
 
 ## Development
 
-Run everything through Turborepo from the repo root:
+Run the Cloudflare-compatible stack through Alchemy from the repo root:
 
 ```bash
-pnpm dev            # run all apps in dev
-pnpm dev:web        # frontend only
-pnpm dev:server     # API only
+pnpm run dev            # web, API, D1 binding, and local Workers runtime
+pnpm run dev:web        # frontend only, without Alchemy-managed bindings
+pnpm run dev:server     # API Worker only, through Alchemy
 ```
 
 To work on just the frontend without the full pipeline:
 
 ```bash
-pnpm -F web dev:bare   # http://127.0.0.1:4321
+pnpm --filter web dev:bare   # http://127.0.0.1:4321
 ```
 
 ## Quality gates
@@ -55,15 +55,16 @@ pnpm -F web dev:bare   # http://127.0.0.1:4321
 Please make sure these pass before opening a pull request:
 
 ```bash
-pnpm check          # Biome lint + format (auto-fixes)
-pnpm check-types    # TypeScript across the workspace
-pnpm build          # build all packages and apps
+pnpm run check          # Biome lint and format checks
+pnpm run check-types    # configured TypeScript checks
+pnpm run build          # build packages and apps
 ```
 
 ## Code style
 
-- Formatting and linting are handled by **Biome** — run `pnpm check`; do not
+- Formatting and linting are handled by **Biome** - run `pnpm run check`; do not
   hand-format against it.
+- Use `pnpm run check:write` when you want Biome to apply safe fixes.
 - Keep changes focused. Match the conventions of the surrounding code.
 - Prefer small, self-explanatory code over inline comments.
 

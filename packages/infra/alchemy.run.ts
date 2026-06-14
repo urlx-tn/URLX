@@ -2,6 +2,32 @@ import alchemy from "alchemy";
 import { Astro, D1Database, Worker } from "alchemy/cloudflare";
 import { config } from "dotenv";
 
+function getCliStage() {
+	const stageIndex = process.argv.indexOf("--stage");
+	const stageValue = stageIndex >= 0 ? process.argv[stageIndex + 1] : undefined;
+
+	if (!stageValue || stageValue.startsWith("-")) {
+		return undefined;
+	}
+
+	return stageValue;
+}
+
+const cliStage = getCliStage();
+const stageEnvFile =
+	cliStage === "prod"
+		? "../../.env.production"
+		: cliStage === "dev"
+			? "../../.env.development"
+			: cliStage
+				? `../../.env.${cliStage}`
+				: undefined;
+
+if (stageEnvFile) {
+	config({ path: stageEnvFile });
+}
+
+config({ path: "../../.env" });
 config({ path: "./.env" });
 config({ path: "../../apps/web/.env" });
 config({ path: "../../apps/server/.env" });
