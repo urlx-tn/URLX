@@ -71,7 +71,7 @@ select {
 	border-color: #b0b0b8;
 }
 
-.field:focus-visible {
+.field:focus-within {
 	border-color: #0071e3;
 	box-shadow: 0 0 0 4px rgb(0 113 227 / 0.18);
 }
@@ -80,7 +80,7 @@ select {
 	border-color: #d70015;
 }
 
-.field[aria-invalid="true"]:focus-visible {
+.field[aria-invalid="true"]:focus-within {
 	box-shadow: 0 0 0 4px rgb(215 0 21 / 0.16);
 }
 
@@ -102,7 +102,7 @@ select {
 	color: #ffffff;
 	background-color: #0071e3;
 	border: 1px solid #0071e3;
-	border-radius: 980px;
+	border-radius: 12px;
 	cursor: pointer;
 	white-space: nowrap;
 	user-select: none;
@@ -172,6 +172,39 @@ select {
 	}
 }
 
+.qr-collapse {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows 240ms ease;
+}
+
+.qr-collapse-inner {
+	overflow: hidden;
+	min-height: 0;
+	opacity: 0;
+	transform: translateY(-4px);
+	transition:
+		opacity 200ms ease,
+		transform 240ms ease;
+}
+
+.qr-collapse[data-open="true"] {
+	grid-template-rows: 1fr;
+}
+
+.qr-collapse[data-open="true"] > .qr-collapse-inner {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.copy-label {
+	transition: opacity 180ms ease;
+}
+
+.copy-label[data-swapping="true"] {
+	opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	html {
 		scroll-behavior: auto;
@@ -179,6 +212,12 @@ select {
 
 	.reveal {
 		animation: none;
+	}
+
+	.qr-collapse,
+	.qr-collapse-inner,
+	.copy-label {
+		transition: none;
 	}
 
 	.spinner {

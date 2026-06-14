@@ -1,18 +1,42 @@
 ---
 import "../styles/global.css";
+import { Image } from "astro:assets";
+import logo from "../assets/logo.png";
 import Header from "../components/Header.astro";
 
 interface Props {
 	title?: string;
 	description?: string;
+	image?: string;
 }
 
 const {
-	title = "URLX — Shorten links. Share them beautifully.",
-	description = "Create clean, reliable short links in seconds. No sign-up required.",
+	title = "URLX | Shorten links. Share them beautifully.",
+	description = "Create clean, reliable short links in seconds. No sign-up required. Free, private, and no sign-up required.",
+	image = "/og-image.png",
 } = Astro.props;
 
+const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const canonical = new URL(Astro.url.pathname, siteUrl || Astro.url).toString();
+const ogImage = image.startsWith("http") ? image : `${siteUrl}${image}`;
+
 const year = new Date().getFullYear();
+
+const websiteSchema = {
+	"@context": "https://schema.org",
+	"@type": "WebSite",
+	name: "URLX",
+	url: siteUrl || "/",
+	description,
+};
+
+const organizationSchema = {
+	"@context": "https://schema.org",
+	"@type": "Organization",
+	name: "URLX",
+	url: siteUrl || "/",
+	logo: `${siteUrl}/favicons/android-chrome-512x512.png`,
+};
 ---
 
 <!doctype html>
@@ -21,11 +45,54 @@ const year = new Date().getFullYear();
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="color-scheme" content="light" />
-		<link rel="icon" type="image/png" href="/favicon.png" />
-		<link rel="apple-touch-icon" href="/favicon.png" />
+		<meta name="theme-color" content="#0071e3" />
+		<meta name="apple-mobile-web-app-title" content="URLX" />
+		<meta name="application-name" content="URLX" />
 		<meta name="generator" content={Astro.generator} />
 		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+
+		<link rel="icon" href="/favicons/favicon.ico" sizes="any" />
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="32x32"
+			href="/favicons/favicon-32x32.png"
+		/>
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="16x16"
+			href="/favicons/favicon-16x16.png"
+		/>
+		<link
+			rel="apple-touch-icon"
+			sizes="180x180"
+			href="/favicons/apple-touch-icon.png"
+		/>
+		<link rel="manifest" href="/favicons/site.webmanifest" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="URLX" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="URLX — Shorten links and share them beautifully." />
+		<meta property="og:locale" content="en_US" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+		<meta name="twitter:image:alt" content="URLX — Shorten links and share them beautifully." />
+
 		<title>{title}</title>
+
+		<script type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+		<script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
 	</head>
 	<body class="flex min-h-[100dvh] flex-col antialiased">
 		<Header />
@@ -38,19 +105,20 @@ const year = new Date().getFullYear();
 					class="flex flex-col gap-10 sm:flex-row sm:items-start sm:justify-between"
 				>
 					<div class="max-w-[440px]">
-						<img
-							src="/logo.png"
+						<Image
+							src={logo}
 							alt="URLX"
 							width="1033"
 							height="274"
 							class="h-[34px] w-auto"
+							loading="lazy"
 						/>
 						<p class="mt-5 text-[15px] font-medium text-ink">
 							Clean links, instantly.
 						</p>
 						<p class="mt-2 text-[15px] leading-7 text-ink-2">
 							A fast, private URL shortener. Paste a long link, get a clean
-							short one, and share it anywhere — no sign-up, no tracking.
+							short one, and share it anywhere. No sign-up, no tracking.
 						</p>
 					</div>
 					<div class="text-[14px] leading-7 text-ink-2 sm:text-right">
@@ -62,7 +130,21 @@ const year = new Date().getFullYear();
 				<div
 					class="mt-12 flex flex-col gap-2 border-t border-hair pt-6 text-[13px] text-[#86868b] sm:flex-row sm:items-center sm:justify-between"
 				>
-					<span>© {year} Chames Eddine Dhibi &amp; Youssef Dhibi</span>
+					<span>© {year}
+					<a
+						href="https://v1.chames.dhibi.tn"
+						class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+						target="_blank"
+						rel="noopener noreferrer">Chames Eddine Dhibi</a
+					>
+					&amp;
+					<a
+						href="https://youssef.tn"
+						class="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+						target="_blank"
+						rel="noopener noreferrer">Youssef Dhibi</a
+					>
+				</span>
 					<span>
 						Made by
 						<a

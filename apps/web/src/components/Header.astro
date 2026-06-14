@@ -1,4 +1,6 @@
 ---
+import { Image } from "astro:assets";
+import logo from "../assets/logo.png";
 ---
 
 <header
@@ -12,17 +14,19 @@
 			class="inline-flex items-center no-underline"
 			aria-label="URLX home"
 		>
-			<img
-				src="/logo.png"
+			<Image
+				src={logo}
 				alt="URLX"
 				width="1033"
 				height="274"
 				class="h-[26px] w-auto"
+				loading="eager"
+				fetchpriority="high"
 			/>
 		</a>
 		<a
 			href="#url-input"
-			class="btn-secondary inline-flex h-9 items-center justify-center rounded-full border px-4 text-[14px] font-medium no-underline"
+			class="btn-secondary inline-flex h-9 items-center justify-center rounded-xl border px-4 text-[14px] font-medium no-underline"
 		>
 			Shorten a link
 		</a>

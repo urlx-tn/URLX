@@ -11,6 +11,7 @@
 	},
 	"dependencies": {
 		"@astrojs/node": "^10.0.0-beta.9",
+		"@astrojs/sitemap": "^3.7.3",
 		"@orpc/client": "catalog:",
 		"@urlx/api": "workspace:*",
 		"@urlx/env": "workspace:*",
@@ -26,6 +27,7 @@
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
+		"sharp": "^0.34.0",
 		"tailwindcss": "^4.1.18",
 		"typescript": "catalog:"
 	}

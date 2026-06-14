@@ -28,17 +28,17 @@ import QrCodePanel from "./QrCodePanel.astro";
 		</a>
 		<button
 			type="button"
-			class="btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-[15px] sm:self-stretch"
+			class="btn-secondary inline-flex items-center justify-center gap-2 self-stretch rounded-xl border px-5 py-3 text-[15px]"
 			data-result="copy"
 			aria-label="Copy short link to clipboard"
 		>
-			<span data-result="copy-label">Copy</span>
+			<span class="copy-label" data-result="copy-label">Copy</span>
 		</button>
 	</div>
 
 	<button
 		type="button"
-		class="btn-secondary mt-4 inline-flex h-11 items-center justify-center rounded-full border px-5 text-[15px]"
+		class="btn-secondary mt-4 inline-flex h-11 items-center justify-center rounded-xl border px-5 text-[15px]"
 		data-result="qr-toggle"
 		aria-expanded="false"
 		aria-controls="qr-panel"
