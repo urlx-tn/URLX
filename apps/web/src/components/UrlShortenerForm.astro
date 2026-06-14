@@ -8,25 +8,37 @@
 >
 	<label class="sr-only" for="url-input">Long URL to shorten</label>
 	<div class="relative flex-1" data-form="input-wrap">
-		<input
-			id="url-input"
-			name="url"
-			type="url"
-			inputmode="url"
-			autocomplete="off"
-			spellcheck="false"
-			autocapitalize="off"
-			placeholder="Paste your long URL"
-			class="field w-full"
-			data-form="url-input"
-			role="combobox"
-			aria-invalid="false"
-			aria-expanded="false"
-			aria-autocomplete="list"
-			aria-haspopup="listbox"
-			aria-controls="url-history"
-			aria-describedby="url-form-error"
-		/>
+		<div
+			class="field flex w-full items-center gap-2 overflow-hidden pl-4"
+			data-form="input-shell"
+		>
+			<span
+				class="shrink-0 select-none text-[15px] text-ink-2"
+				data-form="scheme-prefix"
+				aria-hidden="true"
+			>
+				https://
+			</span>
+			<input
+				id="url-input"
+				name="url"
+				type="url"
+				inputmode="url"
+				autocomplete="off"
+				spellcheck="false"
+				autocapitalize="off"
+				placeholder="example.com"
+				class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+				data-form="url-input"
+				role="combobox"
+				aria-invalid="false"
+				aria-expanded="false"
+				aria-autocomplete="list"
+				aria-haspopup="listbox"
+				aria-controls="url-history"
+				aria-describedby="url-form-error"
+			/>
+		</div>
 		<ul
 			id="url-history"
 			class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
