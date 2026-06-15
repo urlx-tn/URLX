@@ -269,7 +269,7 @@ import Layout from "../layouts/Layout.astro";
 		labelInput.maxLength = 60;
 		labelInput.placeholder = "Label (e.g. Instagram)";
 		labelInput.autocomplete = "off";
-		labelInput.className = "field sm:w-[38%] sm:flex-none";
+		labelInput.className = "field min-w-0 sm:flex-1";
 		labelInput.dataset.field = "label";
 		labelInput.value = label;
 
@@ -279,7 +279,7 @@ import Layout from "../layouts/Layout.astro";
 		urlInput.placeholder = "example.com/you";
 		urlInput.autocomplete = "off";
 		urlInput.spellcheck = false;
-		urlInput.className = "field min-w-0 sm:flex-1";
+		urlInput.className = "field min-w-0 sm:flex-[2]";
 		urlInput.dataset.field = "url";
 		urlInput.value = url;
 
