@@ -46,6 +46,7 @@ export default defineConfig({
 		svgOptimizer: svgoOptimizer(),
 	},
 	vite: {
+		envDir: "../..",
 		plugins: [tailwindcss()],
 		resolve: { alias: cloudflareWorkersAlias },
 	},
