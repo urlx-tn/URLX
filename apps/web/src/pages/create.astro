@@ -1,0 +1,439 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+	title="Create a link page | URLX"
+	description="Make one link that opens a page with all of your links — perfect for your social media bio."
+>
+	<section class="flex flex-1 items-start bg-gradient-to-b from-surface to-white">
+		<div class="mx-auto w-full max-w-[600px] px-6 py-14 sm:py-16">
+			<header class="text-center">
+				<h1
+					class="text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[42px]"
+				>
+					One link for everything.
+				</h1>
+				<p class="mx-auto mt-4 max-w-[40ch] text-[16px] leading-7 text-ink-2 sm:text-[17px]">
+					Build a page that holds all your links, then share a single URL in
+					your bio.
+				</p>
+			</header>
+
+			<form class="mt-9 flex flex-col gap-5" data-bio="form" novalidate>
+				<div
+					class="flex flex-col gap-5 rounded-2xl border border-hair bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-6"
+				>
+					<div class="flex flex-col gap-1.5">
+						<label class="text-[14px] font-medium text-ink" for="bio-title">
+							Page title
+						</label>
+						<input
+							id="bio-title"
+							name="title"
+							type="text"
+							maxlength="80"
+							autocomplete="off"
+							placeholder="Jane Doe"
+							class="field"
+							data-bio="title"
+							required
+						/>
+					</div>
+
+					<div class="flex flex-col gap-1.5">
+						<label class="text-[14px] font-medium text-ink" for="bio-handle">
+							Handle <span class="font-normal text-ink-2">(optional)</span>
+						</label>
+						<div class="field flex items-center gap-1 overflow-hidden">
+							<span
+								class="shrink-0 select-none text-[15px] text-ink-2"
+								data-bio="handle-prefix"
+								aria-hidden="true">/p/</span
+							>
+							<input
+								id="bio-handle"
+								name="handle"
+								type="text"
+								maxlength="30"
+								autocomplete="off"
+								spellcheck="false"
+								autocapitalize="off"
+								placeholder="janedoe"
+								class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+								data-bio="handle"
+							/>
+						</div>
+						<p class="text-[13px] text-ink-2">
+							Leave blank and we’ll generate one for you.
+						</p>
+					</div>
+
+					<div class="flex flex-col gap-1.5">
+						<label class="text-[14px] font-medium text-ink" for="bio-description">
+							Bio <span class="font-normal text-ink-2">(optional)</span>
+						</label>
+						<textarea
+							id="bio-description"
+							name="description"
+							maxlength="300"
+							rows="2"
+							placeholder="A short line about you."
+							class="field !h-auto py-3 leading-6"
+							data-bio="description"></textarea>
+					</div>
+
+					<div class="border-t border-hair/70 pt-5">
+						<div class="flex items-center justify-between">
+							<span class="text-[14px] font-medium text-ink">Links</span>
+							<span class="text-[13px] tabular-nums text-ink-2" data-bio="link-count"
+								>0/25</span
+							>
+						</div>
+						<ul class="mt-3 flex flex-col gap-2.5" data-bio="links"></ul>
+						<button
+							type="button"
+							class="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-hair py-3 text-[14px] font-medium text-ink-2 transition hover:border-ink/25 hover:bg-surface hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-hair disabled:hover:bg-transparent disabled:hover:text-ink-2"
+							data-bio="add-link"
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="h-4 w-4"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								aria-hidden="true"
+							>
+								<path d="M8 3v10M3 8h10"></path>
+							</svg>
+							Add link
+						</button>
+					</div>
+				</div>
+
+				<button type="submit" class="btn w-full" data-bio="submit">
+					<span
+						class="spinner shrink-0"
+						aria-hidden="true"
+						data-bio="submit-spinner"
+						hidden></span>
+					<span data-bio="submit-label">Create page</span>
+				</button>
+
+				<p
+					class="text-center text-[14px] leading-5 text-[#d70015]"
+					role="alert"
+					aria-live="assertive"
+					data-bio="error"
+					hidden
+				>
+					<span data-bio="error-message"></span>
+				</p>
+			</form>
+
+			<section
+				class="reveal mt-8 rounded-2xl border border-hair bg-white p-6 text-center shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-7"
+				data-bio="result"
+				aria-live="polite"
+				hidden
+			>
+				<div
+					class="mx-auto grid size-12 place-items-center rounded-full bg-accent/10 text-accent"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="size-6"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M5 13l4 4L19 7" />
+					</svg>
+				</div>
+				<h2 class="mt-4 text-[20px] font-semibold tracking-[-0.01em] text-ink">
+					Your page is live
+				</h2>
+				<p class="mx-auto mt-1 max-w-[34ch] text-[14px] leading-6 text-ink-2">
+					Share this link anywhere — it opens your link page.
+				</p>
+
+				<div
+					class="mt-5 flex items-center gap-2 rounded-xl border border-hair bg-surface px-3 py-2.5 text-left"
+				>
+					<span
+						class="min-w-0 flex-1 truncate text-[14px] text-ink"
+						data-bio="result-url"></span>
+					<button
+						type="button"
+						class="btn-secondary inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-3.5 text-[14px]"
+						data-bio="copy"
+						aria-label="Copy link page URL to clipboard"
+					>
+						<span class="copy-label" data-bio="copy-label">Copy</span>
+					</button>
+				</div>
+
+				<a
+					href="#"
+					class="btn mt-3 w-full no-underline"
+					data-bio="result-link"
+					rel="noopener noreferrer"
+					target="_blank"
+				>
+					View page
+				</a>
+				<button
+					type="button"
+					class="mt-3 text-[13px] font-medium text-ink-2 underline-offset-2 transition hover:text-ink hover:underline"
+					data-bio="reset"
+				>
+					Create another page
+				</button>
+			</section>
+		</div>
+	</section>
+</Layout>
+
+<script>
+	import { copyToClipboard } from "../lib/copy-to-clipboard";
+	import { friendlyErrorMessage } from "../lib/form-errors";
+	import { orpc } from "../lib/orpc";
+
+	const MAX_LINKS = 25;
+
+	const selectRequired = <T extends Element>(selector: string): T => {
+		const element = document.querySelector<T>(selector);
+		if (!element) {
+			throw new Error(`Missing required element: ${selector}`);
+		}
+		return element;
+	};
+
+	const form = selectRequired<HTMLFormElement>('[data-bio="form"]');
+	const titleInput = selectRequired<HTMLInputElement>('[data-bio="title"]');
+	const handleInput = selectRequired<HTMLInputElement>('[data-bio="handle"]');
+	const descriptionInput = selectRequired<HTMLTextAreaElement>(
+		'[data-bio="description"]',
+	);
+	const linksList = selectRequired<HTMLUListElement>('[data-bio="links"]');
+	const linkCount = selectRequired<HTMLElement>('[data-bio="link-count"]');
+	const addLinkButton = selectRequired<HTMLButtonElement>(
+		'[data-bio="add-link"]',
+	);
+	const submitButton = selectRequired<HTMLButtonElement>('[data-bio="submit"]');
+	const submitLabel = selectRequired<HTMLElement>('[data-bio="submit-label"]');
+	const submitSpinner = selectRequired<HTMLElement>(
+		'[data-bio="submit-spinner"]',
+	);
+	const errorEl = selectRequired<HTMLElement>('[data-bio="error"]');
+	const errorMessageEl = selectRequired<HTMLElement>(
+		'[data-bio="error-message"]',
+	);
+	const resultPanel = selectRequired<HTMLElement>('[data-bio="result"]');
+	const resultLink = selectRequired<HTMLAnchorElement>(
+		'[data-bio="result-link"]',
+	);
+	const resultUrl = selectRequired<HTMLElement>('[data-bio="result-url"]');
+	const copyButton = selectRequired<HTMLButtonElement>('[data-bio="copy"]');
+	const copyLabel = selectRequired<HTMLElement>('[data-bio="copy-label"]');
+	const resetButton = selectRequired<HTMLButtonElement>('[data-bio="reset"]');
+
+	let submitting = false;
+	let copyResetTimer: number | null = null;
+
+	const ensureScheme = (value: string): string => {
+		const trimmed = value.trim();
+		if (!trimmed) return "";
+		return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+			? trimmed
+			: `https://${trimmed}`;
+	};
+
+	const addLinkRow = (label = "", url = "") => {
+		if (linksList.children.length >= MAX_LINKS) return;
+
+		const row = document.createElement("li");
+		row.className =
+			"flex items-start gap-2 rounded-xl border border-hair bg-surface p-2.5";
+		row.dataset.row = "link";
+
+		const fields = document.createElement("div");
+		fields.className = "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row";
+
+		const labelInput = document.createElement("input");
+		labelInput.type = "text";
+		labelInput.maxLength = 60;
+		labelInput.placeholder = "Label (e.g. Instagram)";
+		labelInput.autocomplete = "off";
+		labelInput.className = "field sm:w-[38%] sm:flex-none";
+		labelInput.dataset.field = "label";
+		labelInput.value = label;
+
+		const urlInput = document.createElement("input");
+		urlInput.type = "text";
+		urlInput.inputMode = "url";
+		urlInput.placeholder = "example.com/you";
+		urlInput.autocomplete = "off";
+		urlInput.spellcheck = false;
+		urlInput.className = "field min-w-0 sm:flex-1";
+		urlInput.dataset.field = "url";
+		urlInput.value = url;
+
+		fields.append(labelInput, urlInput);
+
+		const remove = document.createElement("button");
+		remove.type = "button";
+		remove.className =
+			"inline-flex h-[54px] w-10 shrink-0 items-center justify-center rounded-xl text-ink-2 transition hover:bg-white hover:text-[#d70015]";
+		remove.setAttribute("aria-label", "Remove link");
+		remove.innerHTML =
+			'<svg viewBox="0 0 16 16" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4 12 12M12 4 4 12"/></svg>';
+		remove.addEventListener("click", () => {
+			if (linksList.children.length <= 1) {
+				labelInput.value = "";
+				urlInput.value = "";
+				labelInput.focus();
+				return;
+			}
+			row.remove();
+			updateAddState();
+		});
+
+		row.append(fields, remove);
+		linksList.appendChild(row);
+		updateAddState();
+	};
+
+	const updateAddState = () => {
+		const count = linksList.children.length;
+		addLinkButton.disabled = count >= MAX_LINKS;
+		linkCount.textContent = `${count}/${MAX_LINKS}`;
+	};
+
+	const showError = (message: string) => {
+		errorEl.hidden = false;
+		errorMessageEl.textContent = message;
+	};
+
+	const clearError = () => {
+		errorEl.hidden = true;
+		errorMessageEl.textContent = "";
+	};
+
+	const setSubmitting = (value: boolean) => {
+		submitting = value;
+		submitButton.disabled = value;
+		submitLabel.textContent = value ? "Creating..." : "Create page";
+		submitSpinner.hidden = !value;
+	};
+
+	const collectLinks = () => {
+		const rows = Array.from(
+			linksList.querySelectorAll<HTMLLIElement>('[data-row="link"]'),
+		);
+		return rows
+			.map((row) => {
+				const label =
+					row
+						.querySelector<HTMLInputElement>('[data-field="label"]')
+						?.value.trim() ?? "";
+				const rawUrl =
+					row.querySelector<HTMLInputElement>('[data-field="url"]')?.value ??
+					"";
+				return { label, url: ensureScheme(rawUrl) };
+			})
+			.filter((link) => link.label !== "" || link.url !== "");
+	};
+
+	const handleSubmit = async (event: Event) => {
+		event.preventDefault();
+		if (submitting) return;
+		clearError();
+
+		const title = titleInput.value.trim();
+		if (!title) {
+			showError("Please enter a title for your page.");
+			titleInput.focus();
+			return;
+		}
+
+		const links = collectLinks();
+		if (links.length === 0) {
+			showError("Please add at least one link with a label and URL.");
+			return;
+		}
+		if (links.some((link) => link.label === "" || link.url === "")) {
+			showError("Each link needs both a label and a URL.");
+			return;
+		}
+
+		const handle = handleInput.value.trim();
+		const description = descriptionInput.value.trim();
+
+		setSubmitting(true);
+		try {
+			const result = await orpc.bio.create({
+				title,
+				description: description || undefined,
+				slug: handle || undefined,
+				links,
+			});
+			const pageUrl = `${window.location.origin}/p/${result.slug}`;
+			resultUrl.textContent = pageUrl;
+			resultLink.href = pageUrl;
+			resultLink.title = pageUrl;
+			resultPanel.hidden = false;
+			form.hidden = true;
+			resultPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+		} catch (err) {
+			showError(friendlyErrorMessage(err));
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	const handleCopy = async () => {
+		const ok = await copyToClipboard(resultUrl.textContent ?? "");
+		if (!ok) return;
+		copyLabel.textContent = "Copied";
+		if (copyResetTimer !== null) window.clearTimeout(copyResetTimer);
+		copyResetTimer = window.setTimeout(() => {
+			copyLabel.textContent = "Copy";
+			copyResetTimer = null;
+		}, 1600);
+	};
+
+	const handleReset = () => {
+		form.reset();
+		linksList.replaceChildren();
+		addLinkRow();
+		addLinkRow();
+		clearError();
+		resultPanel.hidden = true;
+		form.hidden = false;
+		titleInput.focus();
+	};
+
+	handleInput.addEventListener("input", () => {
+		handleInput.value = handleInput.value
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, "");
+	});
+	addLinkButton.addEventListener("click", () => {
+		addLinkRow();
+		const rows = linksList.querySelectorAll<HTMLLIElement>('[data-row="link"]');
+		rows[rows.length - 1]
+			?.querySelector<HTMLInputElement>('[data-field="label"]')
+			?.focus();
+	});
+	form.addEventListener("submit", handleSubmit);
+	copyButton.addEventListener("click", handleCopy);
+	resetButton.addEventListener("click", handleReset);
+
+	addLinkRow();
+	addLinkRow();
+</script>

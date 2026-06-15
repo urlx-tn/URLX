@@ -7,12 +7,14 @@ interface Props {
 	title?: string;
 	description?: string;
 	image?: string;
+	chrome?: boolean;
 }
 
 const {
 	title = "URLX | Shorten links. Share them beautifully.",
 	description = "Create clean, reliable short links in seconds. No sign-up required. Free, private, and no sign-up required.",
 	image = "/og-image.png",
+	chrome = true,
 } = Astro.props;
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
@@ -92,10 +94,10 @@ const organizationSchema = {
 		<script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
 	</head>
 	<body class="flex min-h-[100dvh] flex-col antialiased">
-		<Header />
+		{chrome && <Header />}
 		<main class="flex flex-1 flex-col">
 			<slot />
 		</main>
-		<Footer />
+		{chrome && <Footer />}
 	</body>
 </html>

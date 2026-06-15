@@ -61,6 +61,70 @@ Success response:
 
 In production, `shortUrl` uses the configured `SHORT_URL_BASE`.
 
+### `bio.create`
+
+Creates a "link in bio" page: one slug that renders a page listing several links.
+
+Request:
+
+```json
+{
+	"title": "Jane Doe",
+	"description": "Designer & maker",
+	"slug": "janedoe",
+	"links": [
+		{ "label": "Instagram", "url": "https://instagram.com/janedoe" },
+		{ "label": "Portfolio", "url": "https://janedoe.example" }
+	]
+}
+```
+
+- `title` is required (1–80 characters).
+- `description` is optional (≤300 characters).
+- `slug` is optional. When provided it must be 3–30 characters of lowercase
+  letters, digits, and single hyphens (not leading/trailing). When omitted, a
+  random slug is generated.
+- `links` must contain 1–25 entries. Each `label` is 1–60 characters and each
+  `url` is validated with the same rules as `links.shorten` (see URL Rules).
+
+Success response:
+
+```json
+{
+	"slug": "janedoe"
+}
+```
+
+The page is served by the web app at `<<web-origin>>/p/<slug>`.
+
+### `bio.getBySlug`
+
+Returns a bio page and its links, ordered as created. Used by the web app to
+server-render `/p/:slug`.
+
+Request:
+
+```json
+{
+	"slug": "janedoe"
+}
+```
+
+Success response:
+
+```json
+{
+	"slug": "janedoe",
+	"title": "Jane Doe",
+	"description": "Designer & maker",
+	"links": [
+		{ "label": "Instagram", "url": "https://instagram.com/janedoe" }
+	]
+}
+```
+
+Unknown or disabled slugs return a `PAGE_NOT_FOUND` error.
+
 ## Redirect Endpoint
 
 ```text
@@ -95,6 +159,8 @@ Rejected destination URLs:
 - Unsupported schemes such as `javascript:`, `data:`, `file:`, `ftp:`, and `mailto:`
 - `localhost` and `*.localhost`
 - Private, loopback, and link-local IP addresses
+- Named hosts without a valid public TLD (for example `https://ddd/`); public IP
+  literals are still accepted
 - URLs longer than 2048 characters
 
 The server does not fetch submitted URLs during shortening.
@@ -106,6 +172,7 @@ Frontend-safe error codes:
 ```text
 EMPTY_URL
 INVALID_URL
+INVALID_DOMAIN
 UNSUPPORTED_PROTOCOL
 LOCAL_URL_NOT_ALLOWED
 PRIVATE_IP_NOT_ALLOWED
@@ -114,6 +181,24 @@ RATE_LIMITED
 SHORT_CODE_NOT_FOUND
 SERVER_ERROR
 ```
+
+Bio-page error codes:
+
+```text
+EMPTY_TITLE
+TITLE_TOO_LONG
+DESCRIPTION_TOO_LONG
+INVALID_SLUG
+RESERVED_SLUG
+SLUG_TAKEN
+NO_LINKS
+TOO_MANY_LINKS
+INVALID_LINK_LABEL
+PAGE_NOT_FOUND
+```
+
+`bio.create` may also return any URL Rules error code (for example `INVALID_URL`)
+when a link's destination is rejected.
 
 Typical error payload data:
 
