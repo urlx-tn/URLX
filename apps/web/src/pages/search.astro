@@ -1,0 +1,396 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+	title="Search link pages | URLX"
+	description="Search URLX link pages by title or handle."
+>
+	<section class="flex flex-1 bg-gradient-to-b from-surface to-white">
+		<div class="mx-auto w-full max-w-[760px] px-6 py-12 sm:py-16">
+			<header>
+				<h1 class="text-[32px] font-semibold leading-tight text-ink sm:text-[42px]">
+					Search link pages
+				</h1>
+				<p class="mt-3 max-w-[48ch] text-[16px] leading-7 text-ink-2">
+					Find pages by title or handle.
+				</p>
+			</header>
+
+			<form
+				class="hover-border mt-8 flex flex-col gap-3 rounded-2xl border border-hair bg-white p-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-start"
+				data-search="form"
+				role="search"
+			>
+				<label class="sr-only" for="bio-search-input">Search title or handle</label>
+				<div class="relative flex-1">
+					<div class="field flex items-center gap-2">
+						<svg
+							viewBox="0 0 24 24"
+							class="size-5 shrink-0 text-ink-2"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<circle cx="11" cy="11" r="7" />
+							<path d="m16.5 16.5 4 4" />
+						</svg>
+						<input
+							id="bio-search-input"
+							name="q"
+							type="search"
+							maxlength="80"
+							autocomplete="off"
+							spellcheck="false"
+							placeholder="Search title or handle"
+							class="min-w-0 flex-1 bg-transparent text-[16px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+							data-search="input"
+						/>
+					</div>
+				</div>
+				<button type="submit" class="btn h-[54px] shrink-0 px-6" data-search="submit">
+					<span
+						class="spinner shrink-0"
+						aria-hidden="true"
+						data-search="spinner"
+						hidden></span>
+					<span data-search="submit-label">Search</span>
+				</button>
+			</form>
+
+			<div class="mt-5 flex items-center justify-between gap-3">
+				<p class="min-h-5 text-[14px] text-ink-2" data-search="summary" aria-live="polite">
+					&nbsp;
+				</p>
+				<a
+					href="/create"
+					class="hidden text-[14px] font-medium text-link underline-offset-2 hover:underline sm:inline"
+				>
+					Create page
+				</a>
+			</div>
+
+			<ul
+				class="mt-4 grid gap-3 transition-opacity duration-150"
+				data-search="results"
+			></ul>
+
+			<div
+				class="mt-6 flex items-center justify-between gap-3"
+				data-search="pagination"
+				hidden
+			>
+				<button
+					type="button"
+					class="btn-secondary inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+					data-search="prev"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="size-4"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="m15 18-6-6 6-6" />
+					</svg>
+					Prev
+				</button>
+				<span class="text-[14px] tabular-nums text-ink-2" data-search="page-label">
+					Page 1 of 1
+				</span>
+				<button
+					type="button"
+					class="btn-secondary inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+					data-search="next"
+				>
+					Next
+					<svg
+						viewBox="0 0 24 24"
+						class="size-4"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="m9 18 6-6-6-6" />
+					</svg>
+				</button>
+			</div>
+		</div>
+	</section>
+</Layout>
+
+<script>
+	import { friendlyErrorMessage } from "../lib/form-errors";
+	import { orpc } from "../lib/orpc";
+
+	const PAGE_SIZE = 5;
+	const SEARCH_DELAY = 180;
+
+	type SearchItem = {
+		slug: string;
+		title: string;
+		description: string | null;
+		createdAt: number;
+	};
+
+	type SearchResult = {
+		query: string;
+		page: number;
+		pageSize: number;
+		totalItems: number;
+		totalPages: number;
+		items: SearchItem[];
+	};
+
+	const selectRequired = <T extends Element>(selector: string): T => {
+		const element = document.querySelector<T>(selector);
+		if (!element) {
+			throw new Error(`Missing required element: ${selector}`);
+		}
+		return element;
+	};
+
+	const form = selectRequired<HTMLFormElement>('[data-search="form"]');
+	const input = selectRequired<HTMLInputElement>('[data-search="input"]');
+	const submitButton = selectRequired<HTMLButtonElement>(
+		'[data-search="submit"]',
+	);
+	const submitLabel = selectRequired<HTMLElement>(
+		'[data-search="submit-label"]',
+	);
+	const spinner = selectRequired<HTMLElement>('[data-search="spinner"]');
+	const summary = selectRequired<HTMLElement>('[data-search="summary"]');
+	const resultsList = selectRequired<HTMLUListElement>('[data-search="results"]');
+	const pagination = selectRequired<HTMLElement>('[data-search="pagination"]');
+	const prevButton = selectRequired<HTMLButtonElement>('[data-search="prev"]');
+	const nextButton = selectRequired<HTMLButtonElement>('[data-search="next"]');
+	const pageLabel = selectRequired<HTMLElement>('[data-search="page-label"]');
+
+	let query = "";
+	let page = 1;
+	let loading = false;
+	let requestToken = 0;
+	let searchTimer: number | null = null;
+
+	const readUrlState = () => {
+		const params = new URLSearchParams(window.location.search);
+		query = (params.get("q") ?? "").trim().slice(0, 80);
+		page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
+		input.value = query;
+	};
+
+	const writeUrlState = (mode: "push" | "replace") => {
+		const url = new URL(window.location.href);
+		if (query) {
+			url.searchParams.set("q", query);
+		} else {
+			url.searchParams.delete("q");
+		}
+
+		if (page > 1) {
+			url.searchParams.set("page", String(page));
+		} else {
+			url.searchParams.delete("page");
+		}
+
+		window.history[mode === "push" ? "pushState" : "replaceState"](
+			{},
+			"",
+			url,
+		);
+	};
+
+	const setLoading = (value: boolean) => {
+		loading = value;
+		submitButton.disabled = value;
+		submitLabel.textContent = "Search";
+		spinner.hidden = !value;
+	};
+
+	const setResultsRefreshing = (value: boolean) => {
+		resultsList.classList.toggle("opacity-60", value);
+		resultsList.setAttribute("aria-busy", value ? "true" : "false");
+	};
+
+	const normalizeQueryInput = (value: string) =>
+		value
+			.trim()
+			.replace(/^https?:\/\/[^/]+\/p\//i, "")
+			.replace(/^\/?p\//i, "")
+			.replace(/^@/, "")
+			.slice(0, 80);
+
+	const formatSummary = (result: SearchResult) => {
+		if (result.totalItems === 0) {
+			return result.query
+				? `No pages found for "${result.query}".`
+				: "No searchable pages yet.";
+		}
+
+		const start = (result.page - 1) * result.pageSize + 1;
+		const end = Math.min(result.totalItems, start + result.items.length - 1);
+		const noun = result.totalItems === 1 ? "page" : "pages";
+		const scope = result.query ? ` for "${result.query}"` : "";
+		return `${start}-${end} of ${result.totalItems} ${noun}${scope}`;
+	};
+
+	const createResultCard = (item: SearchItem) => {
+		const row = document.createElement("li");
+		const link = document.createElement("a");
+		link.href = `/p/${item.slug}`;
+		link.className =
+			"group flex items-center gap-3 rounded-2xl border border-hair bg-white p-4 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:-translate-y-0.5 hover:border-ink/15 hover:shadow-[0_12px_30px_rgb(0_0_0/0.08)]";
+
+		const avatar = document.createElement("span");
+		avatar.className =
+			"grid size-11 shrink-0 place-items-center rounded-xl bg-surface text-[15px] font-semibold uppercase text-ink-2 ring-1 ring-black/5";
+		avatar.textContent = item.title.trim().charAt(0) || "#";
+		avatar.setAttribute("aria-hidden", "true");
+
+		const content = document.createElement("span");
+		content.className = "min-w-0 flex-1";
+
+		const title = document.createElement("span");
+		title.className = "block truncate text-[16px] font-semibold text-ink";
+		title.textContent = item.title;
+
+		const handle = document.createElement("span");
+		handle.className = "mt-0.5 block truncate text-[13px] font-medium text-ink-2";
+		handle.textContent = `@${item.slug}`;
+
+		content.append(title, handle);
+		if (item.description) {
+			const description = document.createElement("span");
+			description.className =
+				"mt-1 block line-clamp-2 text-[14px] leading-5 text-ink-2";
+			description.textContent = item.description;
+			content.appendChild(description);
+		}
+
+		const arrow = document.createElement("span");
+		arrow.className =
+			"grid size-9 shrink-0 place-items-center text-ink-2/45 transition group-hover:translate-x-0.5 group-hover:text-ink-2";
+		arrow.setAttribute("aria-hidden", "true");
+		arrow.innerHTML =
+			'<svg viewBox="0 0 24 24" class="size-[18px]" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>';
+
+		link.append(avatar, content, arrow);
+		row.appendChild(link);
+		return row;
+	};
+
+	const renderResults = (result: SearchResult) => {
+		summary.textContent = formatSummary(result);
+		resultsList.replaceChildren();
+
+		const fragment = document.createDocumentFragment();
+		for (const item of result.items) {
+			fragment.appendChild(createResultCard(item));
+		}
+		resultsList.appendChild(fragment);
+
+		pagination.hidden = result.totalItems === 0;
+		prevButton.disabled = result.page <= 1;
+		nextButton.disabled = result.page >= result.totalPages;
+		pageLabel.textContent = `Page ${result.page} of ${result.totalPages}`;
+	};
+
+	const search = async (
+		mode: "push" | "replace" = "push",
+		visibility: "button" | "quiet" = "button",
+	) => {
+		requestToken += 1;
+		const token = requestToken;
+		setLoading(false);
+		setResultsRefreshing(false);
+		if (visibility === "button") {
+			setLoading(true);
+		} else {
+			setResultsRefreshing(true);
+		}
+		writeUrlState(mode);
+
+		try {
+			const result = await orpc.bio.search({
+				query,
+				page,
+				pageSize: PAGE_SIZE,
+			});
+
+			if (token !== requestToken) return;
+
+			if (result.page !== page) {
+				page = result.page;
+				writeUrlState("replace");
+			}
+
+			renderResults(result);
+		} catch (error) {
+			if (token !== requestToken) return;
+			summary.textContent = friendlyErrorMessage(error);
+			resultsList.replaceChildren();
+			pagination.hidden = true;
+		} finally {
+			if (token === requestToken) {
+				if (visibility === "button") {
+					setLoading(false);
+				} else {
+					setResultsRefreshing(false);
+				}
+			}
+		}
+	};
+
+	const scheduleSearch = () => {
+		if (searchTimer !== null) {
+			window.clearTimeout(searchTimer);
+		}
+
+		searchTimer = window.setTimeout(() => {
+			searchTimer = null;
+			query = normalizeQueryInput(input.value);
+			page = 1;
+			void search("replace", "quiet");
+		}, SEARCH_DELAY);
+	};
+
+	form.addEventListener("submit", (event) => {
+		event.preventDefault();
+		if (searchTimer !== null) {
+			window.clearTimeout(searchTimer);
+			searchTimer = null;
+		}
+		query = normalizeQueryInput(input.value);
+		page = 1;
+		void search("push");
+	});
+
+	input.addEventListener("input", scheduleSearch);
+	prevButton.addEventListener("click", () => {
+		if (loading || page <= 1) return;
+		page -= 1;
+		void search("push");
+	});
+	nextButton.addEventListener("click", () => {
+		if (loading) return;
+		page += 1;
+		void search("push");
+	});
+	window.addEventListener("popstate", () => {
+		readUrlState();
+		void search("replace");
+	});
+
+	readUrlState();
+	void search("replace");
+</script>

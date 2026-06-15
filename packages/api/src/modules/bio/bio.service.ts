@@ -4,11 +4,20 @@ import { validateDestinationUrl } from "../../lib/validate-url";
 import { BioError } from "./bio.errors";
 import type { BioRepository, UrlxDb } from "./bio.repository";
 import { BioRepository as Repository } from "./bio.repository";
-import type { CreateBioInput, GetBioOutput } from "./bio.schema";
+import type {
+	CheckBioSlugOutput,
+	CreateBioInput,
+	GetBioOutput,
+	SearchBioInput,
+	SearchBioOutput,
+} from "./bio.schema";
 import {
+	defaultBioSearchPageSize,
 	maxBioDescriptionLength,
 	maxBioLinkLabelLength,
 	maxBioLinks,
+	maxBioSearchPageSize,
+	maxBioSearchQueryLength,
 	maxBioTitleLength,
 } from "./bio.schema";
 import type { NewBioLink, NewBioPage } from "./bio.types";
@@ -105,6 +114,71 @@ export class BioService {
 		return { slug };
 	}
 
+	async checkSlugAvailability(rawSlug: string): Promise<CheckBioSlugOutput> {
+		const validation = validateSlug(rawSlug);
+
+		if (!validation.ok) {
+			return {
+				slug: rawSlug.trim().toLowerCase(),
+				available: false,
+				reason: validation.reason,
+			};
+		}
+
+		const exists = await this.repository.slugExists(validation.slug);
+
+		return {
+			slug: validation.slug,
+			available: !exists,
+			reason: exists ? "SLUG_TAKEN" : null,
+		};
+	}
+
+	async searchBioPages(input: SearchBioInput): Promise<SearchBioOutput> {
+		const query = normalizeSearchQuery(input.query ?? "");
+		const pageSize = clamp(
+			input.pageSize ?? defaultBioSearchPageSize,
+			1,
+			maxBioSearchPageSize,
+		);
+		const requestedPage = Math.max(1, input.page ?? 1);
+
+		const firstPass = await this.repository.searchPages({
+			query,
+			limit: pageSize,
+			offset: (requestedPage - 1) * pageSize,
+		});
+
+		const totalPages = Math.max(1, Math.ceil(firstPass.total / pageSize));
+		const page = Math.min(requestedPage, totalPages);
+
+		if (page === requestedPage) {
+			return {
+				query,
+				page,
+				pageSize,
+				totalItems: firstPass.total,
+				totalPages,
+				items: firstPass.items,
+			};
+		}
+
+		const clamped = await this.repository.searchPages({
+			query,
+			limit: pageSize,
+			offset: (page - 1) * pageSize,
+		});
+
+		return {
+			query,
+			page,
+			pageSize,
+			totalItems: clamped.total,
+			totalPages,
+			items: clamped.items,
+		};
+	}
+
 	async getBioPage(rawSlug: string): Promise<GetBioOutput> {
 		const slug = rawSlug.trim().toLowerCase();
 		const result = await this.repository.findBySlug(slug);
@@ -149,6 +223,19 @@ export class BioService {
 
 		throw new BioError("SERVER_ERROR");
 	}
+}
+
+function clamp(value: number, min: number, max: number) {
+	return Math.min(max, Math.max(min, value));
+}
+
+function normalizeSearchQuery(rawQuery: string) {
+	return rawQuery
+		.trim()
+		.replace(/^https?:\/\/[^/]+\/p\//i, "")
+		.replace(/^\/?p\//i, "")
+		.replace(/^@/, "")
+		.slice(0, maxBioSearchQueryLength);
 }
 
 function isSlugConflict(error: unknown) {

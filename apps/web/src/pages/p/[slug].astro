@@ -1,4 +1,6 @@
 ---
+import QRCode from "qrcode/lib/browser.js";
+
 import Layout from "../../layouts/Layout.astro";
 import { orpc } from "../../lib/orpc";
 
@@ -24,6 +26,14 @@ const title = page ? `${page.title} | URLX` : "Page not found | URLX";
 const description =
 	page?.description ?? "A collection of links shared on URLX.";
 
+function canFetchFavicon(host: string) {
+	const labels = host.split(".");
+	const tld = labels.at(-1) ?? "";
+	return (
+		labels.length > 1 && (/^[a-z]{2,}$/i.test(tld) || tld.startsWith("xn--"))
+	);
+}
+
 const links = (page?.links ?? []).map((link) => {
 	let host = "";
 	try {
@@ -36,8 +46,8 @@ const links = (page?.links ?? []).map((link) => {
 		label: link.label,
 		url: link.url,
 		host,
-		favicon: host
-			? `https://www.google.com/s2/favicons?sz=64&domain=${host}`
+		favicon: canFetchFavicon(host)
+			? `/api/favicon?host=${encodeURIComponent(host)}`
 			: null,
 	};
 });
@@ -64,6 +74,16 @@ function hueFromString(value: string) {
 const hue = page ? hueFromString(page.slug) : 210;
 const avatarStyle = `background-color: hsl(${hue} 64% 52%)`;
 const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85% 60% / 0.18), transparent 72%)`;
+const pageUrl = new URL(Astro.url.pathname, Astro.url.origin).toString();
+const qrColor = { dark: "#1d1d1f", light: "#ffffff" };
+const qrSvg = page
+	? await QRCode.toString(pageUrl, {
+			type: "svg",
+			errorCorrectionLevel: "M",
+			margin: 1,
+			color: qrColor,
+		})
+	: "";
 ---
 
 <Layout title={title} description={description} chrome={false}>
@@ -120,7 +140,7 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 					</header>
 
 					<ul class="mt-9 flex flex-col gap-3">
-						{links.map((link) => (
+						{links.map((link, index) => (
 							<li>
 								<a
 									href={link.url}
@@ -140,18 +160,23 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 											<circle cx="12" cy="12" r="9" />
 											<path d="M3 12h18M12 3c2.6 2.7 2.6 15.3 0 18M12 3c-2.6 2.7-2.6 15.3 0 18" />
 										</svg>
-										{link.favicon && (
+										<span class="absolute inset-0 grid place-items-center bg-white text-[13px] font-semibold uppercase text-ink-2">
+											{link.host.charAt(0) || "#"}
+										</span>
+										{link.favicon ? (
 											<img
 												src={link.favicon}
 												alt=""
 												width="40"
 												height="40"
-												loading="lazy"
+												loading={index < 6 ? "eager" : "lazy"}
+												decoding="async"
 												referrerpolicy="no-referrer"
 												data-favicon
-												class="absolute inset-0 size-full bg-white object-contain p-1.5"
+												hidden
+												class="absolute inset-0 size-full object-cover"
 											/>
-										)}
+										) : null}
 									</span>
 									<span class="min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-ink">
 										{link.label}
@@ -263,6 +288,11 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 						/>
 					</div>
 				</div>
+				<script
+					type="application/json"
+					data-qr-data
+					set:html={JSON.stringify({ pageUrl, qrSvg })}
+				></script>
 			</section>
 		) : (
 			<section class="flex flex-1 items-center justify-center bg-white px-6">
@@ -296,17 +326,47 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 </Layout>
 
 <script>
-	import { renderQrPngDataUrl, renderQrSvg } from "../../lib/qr-code";
-
-	// Reveal the globe placeholder behind a favicon that fails to load.
+	// Reveal the local placeholder behind a favicon that fails to load.
 	const favicons =
 		document.querySelectorAll<HTMLImageElement>("img[data-favicon]");
 	for (const img of favicons) {
-		img.addEventListener("error", () => img.remove());
-		if (img.complete && img.naturalWidth === 0) {
+		const showFavicon = () => {
+			img.hidden = false;
+		};
+
+		const showFallback = () => {
+			window.clearTimeout(fallbackTimer);
 			img.remove();
+		};
+
+		const fallbackTimer = window.setTimeout(showFallback, 4000);
+		const handleLoad = () => {
+			window.clearTimeout(fallbackTimer);
+			if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+				showFavicon();
+			} else {
+				showFallback();
+			}
+		};
+
+		img.addEventListener("error", showFallback, { once: true });
+		img.addEventListener("load", handleLoad, { once: true });
+		if (img.complete && img.naturalWidth === 0) {
+			showFallback();
+		} else if (img.complete) {
+			handleLoad();
 		}
 	}
+
+	const qrDataEl = document.querySelector<HTMLScriptElement>("[data-qr-data]");
+	const qrData = qrDataEl
+		? (JSON.parse(qrDataEl.textContent ?? "{}") as {
+				pageUrl?: string;
+				qrSvg?: string;
+			})
+		: {};
+	const pageUrl = qrData.pageUrl ?? window.location.href;
+	const qrSvg = qrData.qrSvg ?? "";
 
 	const openButton = document.querySelector<HTMLButtonElement>("[data-qr-open]");
 	const modal = document.querySelector<HTMLElement>("[data-qr-modal]");
@@ -331,8 +391,6 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 		pngLabel &&
 		statusEl
 	) {
-		const qrColor = { dark: "#1d1d1f", light: "#ffffff" };
-		const pageUrl = window.location.href;
 		const fileSlug = window.location.pathname.split("/").pop() || "page";
 		let currentSvg: string | null = null;
 		let generated = false;
@@ -346,13 +404,54 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 			anchor.remove();
 		};
 
+		const svgToPngDataUrl = (svg: string) =>
+			new Promise<string>((resolve, reject) => {
+				const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+				const imageUrl = URL.createObjectURL(blob);
+				const image = new Image();
+				image.width = 1024;
+				image.height = 1024;
+				image.addEventListener(
+					"load",
+					() => {
+						try {
+							const canvas = document.createElement("canvas");
+							canvas.width = 1024;
+							canvas.height = 1024;
+							const context = canvas.getContext("2d");
+							if (!context) {
+								reject(new Error("Canvas is not available."));
+								return;
+							}
+							context.fillStyle = "#ffffff";
+							context.fillRect(0, 0, canvas.width, canvas.height);
+							context.drawImage(image, 0, 0, canvas.width, canvas.height);
+							resolve(canvas.toDataURL("image/png"));
+						} catch (error) {
+							reject(error);
+						} finally {
+							URL.revokeObjectURL(imageUrl);
+						}
+					},
+					{ once: true },
+				);
+				image.addEventListener(
+					"error",
+					() => {
+						URL.revokeObjectURL(imageUrl);
+						reject(new Error("Could not load QR SVG."));
+					},
+					{ once: true },
+				);
+				image.src = imageUrl;
+			});
+
 		const generate = async () => {
 			if (generated) return;
 			generated = true;
 			try {
-				const svg = await renderQrSvg(pageUrl, { margin: 1, color: qrColor });
-				currentSvg = svg;
-				canvas.innerHTML = svg;
+				currentSvg = qrSvg;
+				canvas.innerHTML = qrSvg;
 				const svgEl = canvas.querySelector("svg");
 				if (svgEl) {
 					svgEl.setAttribute("width", "100%");
@@ -399,14 +498,11 @@ const glowStyle = `background: radial-gradient(60% 70% at 50% 0%, hsl(${hue} 85%
 		});
 
 		pngButton.addEventListener("click", async () => {
+			if (!currentSvg) return;
 			pngButton.disabled = true;
 			pngLabel.textContent = "...";
 			try {
-				const dataUrl = await renderQrPngDataUrl(pageUrl, {
-					margin: 1,
-					width: 1024,
-					color: qrColor,
-				});
+				const dataUrl = await svgToPngDataUrl(currentSvg);
 				triggerDownload(`urlx-qr-${fileSlug}.png`, dataUrl);
 			} catch {
 				statusEl.textContent = "Could not export PNG. Try again.";

@@ -3,10 +3,14 @@ import { ORPCError } from "@orpc/server";
 import { publicProcedure } from "../index";
 import { BioError, toBioError } from "../modules/bio/bio.errors";
 import {
+	checkBioSlugInputSchema,
+	checkBioSlugOutputSchema,
 	createBioInputSchema,
 	createBioOutputSchema,
 	getBioInputSchema,
 	getBioOutputSchema,
+	searchBioInputSchema,
+	searchBioOutputSchema,
 } from "../modules/bio/bio.schema";
 import { BioService } from "../modules/bio/bio.service";
 import { LinkError } from "../modules/links/link.errors";
@@ -40,6 +44,42 @@ export const bioRouter = {
 			try {
 				const service = new BioService({ db: context.db });
 				return await service.createBioPage(input);
+			} catch (error) {
+				const clientError = toClientError(error);
+
+				throw new ORPCError(clientError.code, {
+					data: { code: clientError.code, message: clientError.message },
+					message: clientError.message,
+					status: clientError.status,
+				});
+			}
+		}),
+
+	checkSlug: publicProcedure
+		.input(checkBioSlugInputSchema)
+		.output(checkBioSlugOutputSchema)
+		.handler(async ({ context, input }) => {
+			try {
+				const service = new BioService({ db: context.db });
+				return await service.checkSlugAvailability(input.slug);
+			} catch (error) {
+				const clientError = toClientError(error);
+
+				throw new ORPCError(clientError.code, {
+					data: { code: clientError.code, message: clientError.message },
+					message: clientError.message,
+					status: clientError.status,
+				});
+			}
+		}),
+
+	search: publicProcedure
+		.input(searchBioInputSchema)
+		.output(searchBioOutputSchema)
+		.handler(async ({ context, input }) => {
+			try {
+				const service = new BioService({ db: context.db });
+				return await service.searchBioPages(input);
 			} catch (error) {
 				const clientError = toClientError(error);
 

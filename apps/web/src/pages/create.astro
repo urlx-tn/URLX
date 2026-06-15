@@ -45,7 +45,7 @@ import Layout from "../layouts/Layout.astro";
 						<label class="text-[14px] font-medium text-ink" for="bio-handle">
 							Handle <span class="font-normal text-ink-2">(optional)</span>
 						</label>
-						<div class="field flex items-center gap-1 overflow-hidden">
+						<div class="field flex items-center gap-2 overflow-hidden">
 							<span
 								class="shrink-0 select-none text-[15px] text-ink-2"
 								data-bio="handle-prefix"
@@ -56,6 +56,7 @@ import Layout from "../layouts/Layout.astro";
 								name="handle"
 								type="text"
 								maxlength="30"
+								aria-describedby="bio-handle-status"
 								autocomplete="off"
 								spellcheck="false"
 								autocapitalize="off"
@@ -63,8 +64,25 @@ import Layout from "../layouts/Layout.astro";
 								class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
 								data-bio="handle"
 							/>
+							<span
+								class="hidden shrink-0 items-center gap-1.5 text-[12px] font-medium leading-none"
+								aria-live="polite"
+								data-bio="handle-indicator"
+								hidden
+							>
+								<span
+									class="size-1.5 rounded-full bg-current"
+									aria-hidden="true"
+									data-bio="handle-indicator-dot"></span>
+								<span data-bio="handle-indicator-label"></span>
+							</span>
 						</div>
-						<p class="text-[13px] text-ink-2">
+						<p
+							id="bio-handle-status"
+							class="text-[13px] text-ink-2"
+							aria-live="polite"
+							data-bio="handle-status"
+						>
 							Leave blank and we’ll generate one for you.
 						</p>
 					</div>
@@ -162,7 +180,7 @@ import Layout from "../layouts/Layout.astro";
 				</p>
 
 				<div
-					class="mt-5 flex items-center gap-2 rounded-xl border border-hair bg-surface px-3 py-2.5 text-left"
+					class="hover-border mt-5 flex items-center gap-2 rounded-xl border border-hair bg-surface px-3 py-2.5 text-left"
 				>
 					<span
 						class="min-w-0 flex-1 truncate text-[14px] text-ink"
@@ -204,6 +222,8 @@ import Layout from "../layouts/Layout.astro";
 	import { orpc } from "../lib/orpc";
 
 	const MAX_LINKS = 25;
+	const HANDLE_CHECK_DELAY = 350;
+	const defaultHandleStatus = "Leave blank and we'll generate one for you.";
 
 	const selectRequired = <T extends Element>(selector: string): T => {
 		const element = document.querySelector<T>(selector);
@@ -216,6 +236,16 @@ import Layout from "../layouts/Layout.astro";
 	const form = selectRequired<HTMLFormElement>('[data-bio="form"]');
 	const titleInput = selectRequired<HTMLInputElement>('[data-bio="title"]');
 	const handleInput = selectRequired<HTMLInputElement>('[data-bio="handle"]');
+	const handleField = handleInput.closest<HTMLElement>(".field");
+	const handleStatus = selectRequired<HTMLElement>(
+		'[data-bio="handle-status"]',
+	);
+	const handleIndicator = selectRequired<HTMLElement>(
+		'[data-bio="handle-indicator"]',
+	);
+	const handleIndicatorLabel = selectRequired<HTMLElement>(
+		'[data-bio="handle-indicator-label"]',
+	);
 	const descriptionInput = selectRequired<HTMLTextAreaElement>(
 		'[data-bio="description"]',
 	);
@@ -244,13 +274,125 @@ import Layout from "../layouts/Layout.astro";
 
 	let submitting = false;
 	let copyResetTimer: number | null = null;
+	let handleCheckTimer: number | null = null;
+	let handleCheckSequence = 0;
+	let latestHandleCheck: {
+		slug: string;
+		available: boolean;
+		reason: string | null;
+	} | null = null;
+
+	const handleStatusClasses = {
+		idle: "text-ink-2",
+		checking: "text-ink-2",
+		available: "text-ink-2",
+		unavailable: "text-[#d70015]",
+		error: "text-[#d70015]",
+	};
+
+	const handleIndicatorClasses = {
+		checking: "text-ink-2",
+		available: "text-[#248a3d]",
+		unavailable: "text-[#d70015]",
+		error: "text-[#d70015]",
+	};
+
+	const handleUnavailableMessages: Record<string, string> = {
+		INVALID_SLUG:
+			"Use 3-30 letters, numbers, and hyphens. No leading, trailing, or doubled hyphens.",
+		RESERVED_SLUG: "That handle is reserved. Please choose another.",
+		SLUG_TAKEN: "That handle is already taken. Please choose another.",
+	};
 
 	const ensureScheme = (value: string): string => {
 		const trimmed = value.trim();
 		if (!trimmed) return "";
-		return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-			? trimmed
-			: `https://${trimmed}`;
+		return `https://${stripScheme(trimmed)}`;
+	};
+
+	const stripScheme = (value: string): string =>
+		value.replace(/^\s*(https?|ftp):\/\//i, "");
+
+	const isValidUrl = (raw: string): boolean => {
+		const trimmed = raw.trim();
+		if (!trimmed) return false;
+		const candidate = `https://${stripScheme(trimmed)}`;
+		if (!URL.canParse(candidate)) return false;
+		const { hostname } = new URL(candidate);
+		if (!hostname) return false;
+		if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+			return false;
+		}
+
+		const bare = hostname.replace(/^\[|\]$/g, "");
+		if (isPrivateOrLocalHost(bare)) return false;
+		if (isIpv6Literal(bare)) return true;
+		if (isIpv4Literal(bare)) return true;
+
+		const labels = hostname.split(".");
+		if (labels.length < 2) return false;
+		if (labels.some((label) => label.length === 0)) return false;
+		const tld = labels[labels.length - 1];
+		return /^[a-z]{2,}$/i.test(tld) || /^xn--[a-z0-9]+$/i.test(tld);
+	};
+
+	const isIpv4Literal = (hostname: string) => {
+		const parts = hostname.split(".");
+		if (parts.length !== 4) return false;
+		return parts.every((part) => {
+			if (!/^\d+$/.test(part)) return false;
+			const octet = Number(part);
+			return octet >= 0 && octet <= 255;
+		});
+	};
+
+	const isIpv6Literal = (hostname: string) =>
+		hostname.includes(":") && URL.canParse(`http://[${hostname}]`);
+
+	const isPrivateOrLocalHost = (hostname: string) =>
+		isPrivateIpv4(hostname) || isPrivateIpv6(hostname);
+
+	const isPrivateIpv4 = (hostname: string) => {
+		const parts = hostname.split(".");
+		if (parts.length !== 4) return false;
+
+		const octets = parts.map((part) => {
+			if (!/^\d+$/.test(part)) return Number.NaN;
+			const octet = Number(part);
+			return octet >= 0 && octet <= 255 ? octet : Number.NaN;
+		});
+
+		if (octets.some(Number.isNaN)) return false;
+
+		const [first = 0, second = 0] = octets;
+		return (
+			first === 0 ||
+			first === 10 ||
+			first === 127 ||
+			(first === 169 && second === 254) ||
+			(first === 172 && second >= 16 && second <= 31) ||
+			(first === 192 && second === 168)
+		);
+	};
+
+	const isPrivateIpv6 = (hostname: string) => {
+		if (!hostname.includes(":")) return false;
+
+		const withoutZone = hostname.split("%")[0] ?? hostname;
+		const ipv4Tail = withoutZone.split(":").at(-1);
+
+		if (ipv4Tail && isPrivateIpv4(ipv4Tail)) return true;
+		if (withoutZone === "::1" || /^0(?::0){0,7}:1$/.test(withoutZone)) {
+			return true;
+		}
+
+		const firstGroup = withoutZone
+			.split(":")
+			.find((group) => group.length > 0);
+		if (!firstGroup || !/^[0-9a-f]{1,4}$/i.test(firstGroup)) return false;
+
+		const firstValue = Number.parseInt(firstGroup, 16);
+		return (firstValue & 0xfe00) === 0xfc00 || (firstValue & 0xffc0) === 0xfe80;
 	};
 
 	const addLinkRow = (label = "", url = "") => {
@@ -258,7 +400,7 @@ import Layout from "../layouts/Layout.astro";
 
 		const row = document.createElement("li");
 		row.className =
-			"flex items-start gap-2 rounded-xl border border-hair bg-surface p-2.5";
+			"hover-border flex items-start gap-2 rounded-xl border border-hair bg-surface p-2.5";
 		row.dataset.row = "link";
 
 		const fields = document.createElement("div");
@@ -282,6 +424,14 @@ import Layout from "../layouts/Layout.astro";
 		urlInput.className = "field min-w-0 sm:flex-[2]";
 		urlInput.dataset.field = "url";
 		urlInput.value = url;
+		urlInput.setAttribute("aria-invalid", "false");
+
+		labelInput.addEventListener("input", updateSubmitState);
+		urlInput.addEventListener("input", updateSubmitState);
+		urlInput.addEventListener("blur", () => {
+			urlInput.value = stripScheme(urlInput.value);
+			updateSubmitState();
+		});
 
 		fields.append(labelInput, urlInput);
 
@@ -296,11 +446,14 @@ import Layout from "../layouts/Layout.astro";
 			if (linksList.children.length <= 1) {
 				labelInput.value = "";
 				urlInput.value = "";
+				urlInput.setAttribute("aria-invalid", "false");
 				labelInput.focus();
+				updateSubmitState();
 				return;
 			}
 			row.remove();
 			updateAddState();
+			updateSubmitState();
 		});
 
 		row.append(fields, remove);
@@ -314,6 +467,64 @@ import Layout from "../layouts/Layout.astro";
 		linkCount.textContent = `${count}/${MAX_LINKS}`;
 	};
 
+	const getLinkRows = () =>
+		Array.from(linksList.querySelectorAll<HTMLLIElement>('[data-row="link"]'));
+
+	const readLinkRow = (row: HTMLLIElement) => {
+		const labelInput = row.querySelector<HTMLInputElement>(
+			'[data-field="label"]',
+		);
+		const urlInput = row.querySelector<HTMLInputElement>('[data-field="url"]');
+
+		return {
+			labelInput,
+			urlInput,
+			label: labelInput?.value.trim() ?? "",
+			rawUrl: urlInput?.value.trim() ?? "",
+		};
+	};
+
+	const hasValidHandleState = () => {
+		const handle = handleInput.value.trim().toLowerCase();
+		if (!handle) return true;
+		return (
+			latestHandleCheck?.slug === handle && latestHandleCheck.available === true
+		);
+	};
+
+	const updateSubmitState = () => {
+		const rows = getLinkRows();
+		let completeLinks = 0;
+		let linksValid = true;
+
+		for (const row of rows) {
+			const { label, rawUrl, urlInput } = readLinkRow(row);
+			const hasAnyValue = label !== "" || rawUrl !== "";
+			const rowComplete = label !== "" && rawUrl !== "";
+			const urlValid = rawUrl === "" ? false : isValidUrl(rawUrl);
+
+			if (rowComplete && urlValid) {
+				completeLinks += 1;
+			}
+
+			if (hasAnyValue && (!rowComplete || !urlValid)) {
+				linksValid = false;
+			}
+
+			urlInput?.setAttribute(
+				"aria-invalid",
+				rawUrl !== "" && !urlValid ? "true" : "false",
+			);
+		}
+
+		submitButton.disabled =
+			submitting ||
+			titleInput.value.trim() === "" ||
+			completeLinks === 0 ||
+			!linksValid ||
+			!hasValidHandleState();
+	};
+
 	const showError = (message: string) => {
 		errorEl.hidden = false;
 		errorMessageEl.textContent = message;
@@ -324,26 +535,121 @@ import Layout from "../layouts/Layout.astro";
 		errorMessageEl.textContent = "";
 	};
 
+	const setHandleStatus = (
+		state: keyof typeof handleStatusClasses,
+		message: string,
+		indicatorLabel = "",
+	) => {
+		const showProblemDetails = state === "unavailable" || state === "error";
+
+		handleStatus.textContent = showProblemDetails
+			? message
+			: defaultHandleStatus;
+		handleStatus.className = `text-[13px] ${handleStatusClasses[state]}`;
+		handleIndicator.hidden = state === "idle";
+
+		if (state === "idle") {
+			handleIndicator.className =
+				"hidden shrink-0 items-center gap-1.5 text-[12px] font-medium leading-none";
+			handleIndicatorLabel.textContent = "";
+		} else {
+			handleIndicator.className = `inline-flex shrink-0 items-center gap-1.5 text-[12px] font-medium leading-none ${
+				handleIndicatorClasses[state]
+			}`;
+			handleIndicatorLabel.textContent = indicatorLabel;
+		}
+
+		if (state === "unavailable") {
+			handleField?.setAttribute("aria-invalid", "true");
+			updateSubmitState();
+			return;
+		}
+
+		handleField?.removeAttribute("aria-invalid");
+		updateSubmitState();
+	};
+
+	const clearHandleCheckTimer = () => {
+		if (handleCheckTimer !== null) {
+			window.clearTimeout(handleCheckTimer);
+			handleCheckTimer = null;
+		}
+	};
+
+	const normalizeHandleInput = () => {
+		const sanitized = handleInput.value
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, "");
+
+		if (handleInput.value !== sanitized) {
+			handleInput.value = sanitized;
+		}
+
+		return sanitized.trim();
+	};
+
+	const checkHandleAvailability = async (slug: string, sequence: number) => {
+		try {
+			const result = await orpc.bio.checkSlug({ slug });
+
+			if (sequence !== handleCheckSequence || slug !== normalizeHandleInput()) {
+				return;
+			}
+
+			latestHandleCheck = result;
+
+			if (result.available) {
+				setHandleStatus("available", "", "Available");
+				return;
+			}
+
+			setHandleStatus(
+				"unavailable",
+				result.reason
+					? handleUnavailableMessages[result.reason]
+					: "That handle is not available.",
+				result.reason === "SLUG_TAKEN" ? "Taken" : "Unavailable",
+			);
+		} catch {
+			if (sequence !== handleCheckSequence) {
+				return;
+			}
+
+			latestHandleCheck = null;
+			setHandleStatus("error", "Could not check that handle right now.", "Retry");
+		}
+	};
+
+	const scheduleHandleAvailabilityCheck = () => {
+		const slug = normalizeHandleInput();
+		handleCheckSequence += 1;
+		const sequence = handleCheckSequence;
+		latestHandleCheck = null;
+		clearHandleCheckTimer();
+
+		if (!slug) {
+			setHandleStatus("idle", defaultHandleStatus);
+			return;
+		}
+
+		setHandleStatus("checking", "", "Checking");
+		handleCheckTimer = window.setTimeout(() => {
+			handleCheckTimer = null;
+			void checkHandleAvailability(slug, sequence);
+		}, HANDLE_CHECK_DELAY);
+	};
+
 	const setSubmitting = (value: boolean) => {
 		submitting = value;
-		submitButton.disabled = value;
 		submitLabel.textContent = value ? "Creating..." : "Create page";
 		submitSpinner.hidden = !value;
+		updateSubmitState();
 	};
 
 	const collectLinks = () => {
-		const rows = Array.from(
-			linksList.querySelectorAll<HTMLLIElement>('[data-row="link"]'),
-		);
-		return rows
+		return getLinkRows()
 			.map((row) => {
-				const label =
-					row
-						.querySelector<HTMLInputElement>('[data-field="label"]')
-						?.value.trim() ?? "";
-				const rawUrl =
-					row.querySelector<HTMLInputElement>('[data-field="url"]')?.value ??
-					"";
+				const { label, rawUrl } = readLinkRow(row);
 				return { label, url: ensureScheme(rawUrl) };
 			})
 			.filter((link) => link.label !== "" || link.url !== "");
@@ -370,9 +676,26 @@ import Layout from "../layouts/Layout.astro";
 			showError("Each link needs both a label and a URL.");
 			return;
 		}
+		if (links.some((link) => !isValidUrl(link.url))) {
+			showError("Please enter valid URLs for every link.");
+			return;
+		}
 
 		const handle = handleInput.value.trim();
 		const description = descriptionInput.value.trim();
+		if (
+			handle &&
+			latestHandleCheck?.slug === handle.toLowerCase() &&
+			!latestHandleCheck.available
+		) {
+			showError(
+				latestHandleCheck.reason
+					? handleUnavailableMessages[latestHandleCheck.reason]
+					: "That handle is not available.",
+			);
+			handleInput.focus();
+			return;
+		}
 
 		setSubmitting(true);
 		try {
@@ -413,16 +736,18 @@ import Layout from "../layouts/Layout.astro";
 		addLinkRow();
 		addLinkRow();
 		clearError();
+		clearHandleCheckTimer();
+		handleCheckSequence += 1;
+		latestHandleCheck = null;
+		setHandleStatus("idle", defaultHandleStatus);
+		updateSubmitState();
 		resultPanel.hidden = true;
 		form.hidden = false;
 		titleInput.focus();
 	};
 
-	handleInput.addEventListener("input", () => {
-		handleInput.value = handleInput.value
-			.toLowerCase()
-			.replace(/[^a-z0-9-]/g, "");
-	});
+	handleInput.addEventListener("input", scheduleHandleAvailabilityCheck);
+	titleInput.addEventListener("input", updateSubmitState);
 	addLinkButton.addEventListener("click", () => {
 		addLinkRow();
 		const rows = linksList.querySelectorAll<HTMLLIElement>('[data-row="link"]');
@@ -436,4 +761,5 @@ import Layout from "../layouts/Layout.astro";
 
 	addLinkRow();
 	addLinkRow();
+	updateSubmitState();
 </script>

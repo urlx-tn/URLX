@@ -67,10 +67,11 @@ select {
 	color: #86868b;
 }
 
-.field:hover:not(:focus):not(:disabled) {
+.field:hover:not(:disabled) {
 	border-color: #b0b0b8;
 }
 
+.field:focus,
 .field:focus-within {
 	border-color: #0071e3;
 	box-shadow: 0 0 0 4px rgb(0 113 227 / 0.18);
@@ -80,6 +81,7 @@ select {
 	border-color: #d70015;
 }
 
+.field[aria-invalid="true"]:focus,
 .field[aria-invalid="true"]:focus-within {
 	box-shadow: 0 0 0 4px rgb(215 0 21 / 0.16);
 }
@@ -87,6 +89,51 @@ select {
 .field:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+}
+
+.field-compact {
+	color: #1d1d1f;
+	background-color: #ffffff;
+	border: 1px solid #d2d2d7;
+	border-radius: 12px;
+	outline: none;
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.field-compact:hover:not(:disabled) {
+	border-color: #b0b0b8;
+}
+
+.field-compact:focus,
+.field-compact:focus-within {
+	border-color: #0071e3;
+	box-shadow: 0 0 0 4px rgb(0 113 227 / 0.18);
+}
+
+.field-compact[aria-invalid="true"] {
+	border-color: #d70015;
+}
+
+.field-compact[aria-invalid="true"]:focus,
+.field-compact[aria-invalid="true"]:focus-within {
+	box-shadow: 0 0 0 4px rgb(215 0 21 / 0.16);
+}
+
+.field-compact:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.hover-border {
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.hover-border:hover {
+	border-color: #b0b0b8;
 }
 
 .btn {
