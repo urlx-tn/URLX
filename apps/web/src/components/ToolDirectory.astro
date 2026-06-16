@@ -1,5 +1,6 @@
 ---
 import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
+import QRCodeGeneratorIcon from "./icons/QRCodeGeneratorIcon.astro";
 import UrlShortenerIcon from "./icons/UrlShortenerIcon.astro";
 
 const tools = [
@@ -9,6 +10,13 @@ const tools = [
 		description: "Create clean, reliable short links in seconds.",
 		href: "/tools/url-shortener",
 		Icon: UrlShortenerIcon,
+	},
+	{
+		slug: "qr-code-generator",
+		title: "QR Code Generator",
+		description: "Create a downloadable QR code from any link.",
+		href: "/tools/qr-code-generator",
+		Icon: QRCodeGeneratorIcon,
 	},
 	{
 		slug: "link-in-bio",
@@ -21,7 +29,7 @@ const tools = [
 ---
 
 <section class="flex flex-1 bg-white">
-	<div class="mx-auto w-full max-w-[980px] px-6 py-16 sm:py-24">
+	<div class="mx-auto w-full max-w-[1500px] px-5 py-14 sm:px-8 sm:py-20 xl:px-10">
 		<header class="text-center">
 			<h1
 				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
@@ -36,20 +44,20 @@ const tools = [
 		</header>
 
 		<ul
-			class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-2"
+			class="mt-12 flex flex-wrap justify-center gap-4"
 			role="list"
 		>
 			{
 				tools.map((tool) => (
-					<li>
+					<li class="flex w-full min-[520px]:basis-[calc((100%-1rem)/2)] lg:basis-[calc((100%-2rem)/3)] 2xl:basis-[calc((100%-4rem)/5)]">
 						<a
 							href={tool.href}
-							class="group flex h-full flex-col rounded-2xl border border-hair bg-surface p-6 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:border-accent/60 sm:p-7"
+							class="group flex min-h-[240px] w-full flex-col rounded-2xl border border-hair bg-surface p-5 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:border-accent/60 sm:p-6"
 						>
-							<span class="inline-flex h-24 w-40 items-start justify-start overflow-visible transition group-hover:scale-[1.03]">
+							<span class="inline-flex h-24 w-full max-w-40 items-start justify-start overflow-visible transition group-hover:scale-[1.03]">
 								<tool.Icon />
 							</span>
-							<span class="mt-5 text-[20px] font-semibold tracking-[-0.01em] text-ink sm:text-[22px]">
+							<span class="mt-4 text-[19px] font-semibold tracking-[-0.01em] text-ink sm:text-[20px]">
 								{tool.title}
 							</span>
 							<span class="mt-1 text-[15px] leading-6 text-ink-2">
