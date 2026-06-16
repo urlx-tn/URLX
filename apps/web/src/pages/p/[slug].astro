@@ -89,7 +89,10 @@ const qrSvg = page
 <Layout title={title} description={description} chrome={false}>
 	{
 		page ? (
-			<section class="relative isolate flex flex-1 flex-col items-center overflow-hidden bg-white px-5 pb-16 pt-14 sm:pt-20">
+			<section
+				data-page-root="bio-page"
+				class="relative isolate flex flex-1 flex-col items-center overflow-hidden bg-white px-5 pb-16 pt-14 sm:pt-20"
+			>
 				<div
 					class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96"
 					style={glowStyle}
@@ -326,71 +329,81 @@ const qrSvg = page
 </Layout>
 
 <script>
+	import { registerPageScript } from "../../lib/page-script";
+
 	// Reveal the local placeholder behind a favicon that fails to load.
-	const favicons =
-		document.querySelectorAll<HTMLImageElement>("img[data-favicon]");
-	for (const img of favicons) {
-		const showFavicon = () => {
-			img.hidden = false;
-		};
+	registerPageScript<HTMLElement>('[data-page-root="bio-page"]', (root, signal) => {
+		const favicons = root.querySelectorAll<HTMLImageElement>("img[data-favicon]");
+		for (const img of favicons) {
+			const showFavicon = () => {
+				img.hidden = false;
+			};
 
-		const showFallback = () => {
-			window.clearTimeout(fallbackTimer);
-			img.remove();
-		};
+			const showFallback = () => {
+				window.clearTimeout(fallbackTimer);
+				img.remove();
+			};
 
-		const fallbackTimer = window.setTimeout(showFallback, 4000);
-		const handleLoad = () => {
-			window.clearTimeout(fallbackTimer);
-			if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-				showFavicon();
-			} else {
+			const fallbackTimer = window.setTimeout(showFallback, 4000);
+			const handleLoad = () => {
+				window.clearTimeout(fallbackTimer);
+				if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+					showFavicon();
+				} else {
+					showFallback();
+				}
+			};
+
+			img.addEventListener("error", showFallback, { once: true, signal });
+			img.addEventListener("load", handleLoad, { once: true, signal });
+			signal.addEventListener(
+				"abort",
+				() => window.clearTimeout(fallbackTimer),
+				{ once: true },
+			);
+			if (img.complete && img.naturalWidth === 0) {
 				showFallback();
+			} else if (img.complete) {
+				handleLoad();
 			}
-		};
-
-		img.addEventListener("error", showFallback, { once: true });
-		img.addEventListener("load", handleLoad, { once: true });
-		if (img.complete && img.naturalWidth === 0) {
-			showFallback();
-		} else if (img.complete) {
-			handleLoad();
 		}
-	}
 
-	const qrDataEl = document.querySelector<HTMLScriptElement>("[data-qr-data]");
-	const qrData = qrDataEl
-		? (JSON.parse(qrDataEl.textContent ?? "{}") as {
-				pageUrl?: string;
-				qrSvg?: string;
-			})
-		: {};
-	const pageUrl = qrData.pageUrl ?? window.location.href;
-	const qrSvg = qrData.qrSvg ?? "";
+		const qrDataEl = root.querySelector<HTMLScriptElement>("[data-qr-data]");
+		const qrData = qrDataEl
+			? (JSON.parse(qrDataEl.textContent ?? "{}") as {
+					pageUrl?: string;
+					qrSvg?: string;
+				})
+			: {};
+		const pageUrl = qrData.pageUrl ?? window.location.href;
+		const qrSvg = qrData.qrSvg ?? "";
 
-	const openButton = document.querySelector<HTMLButtonElement>("[data-qr-open]");
-	const modal = document.querySelector<HTMLElement>("[data-qr-modal]");
-	const closeButton = document.querySelector<HTMLButtonElement>("[data-qr-close]");
-	const canvas = document.querySelector<HTMLElement>("[data-qr-canvas]");
-	const urlEl = document.querySelector<HTMLElement>("[data-qr-url]");
-	const actions = document.querySelector<HTMLElement>("[data-qr-actions]");
-	const svgButton = document.querySelector<HTMLButtonElement>("[data-qr-svg]");
-	const pngButton = document.querySelector<HTMLButtonElement>("[data-qr-png]");
-	const pngLabel = document.querySelector<HTMLElement>("[data-qr-png-label]");
-	const statusEl = document.querySelector<HTMLElement>("[data-qr-status]");
+		const openButton = root.querySelector<HTMLButtonElement>("[data-qr-open]");
+		const modal = root.querySelector<HTMLElement>("[data-qr-modal]");
+		const closeButton = root.querySelector<HTMLButtonElement>("[data-qr-close]");
+		const canvas = root.querySelector<HTMLElement>("[data-qr-canvas]");
+		const urlEl = root.querySelector<HTMLElement>("[data-qr-url]");
+		const actions = root.querySelector<HTMLElement>("[data-qr-actions]");
+		const svgButton = root.querySelector<HTMLButtonElement>("[data-qr-svg]");
+		const pngButton = root.querySelector<HTMLButtonElement>("[data-qr-png]");
+		const pngLabel = root.querySelector<HTMLElement>("[data-qr-png-label]");
+		const statusEl = root.querySelector<HTMLElement>("[data-qr-status]");
 
-	if (
-		openButton &&
-		modal &&
-		closeButton &&
-		canvas &&
-		urlEl &&
-		actions &&
-		svgButton &&
-		pngButton &&
-		pngLabel &&
-		statusEl
-	) {
+		if (
+			!openButton ||
+			!modal ||
+			!closeButton ||
+			!canvas ||
+			!urlEl ||
+			!actions ||
+			!svgButton ||
+			!pngButton ||
+			!pngLabel ||
+			!statusEl
+		) {
+			return;
+		}
+
 		const fileSlug = window.location.pathname.split("/").pop() || "page";
 		let currentSvg: string | null = null;
 		let generated = false;
@@ -478,14 +491,14 @@ const qrSvg = page
 			openButton.focus();
 		};
 
-		openButton.addEventListener("click", openModal);
-		closeButton.addEventListener("click", closeModal);
+		openButton.addEventListener("click", openModal, { signal });
+		closeButton.addEventListener("click", closeModal, { signal });
 		modal.addEventListener("click", (event) => {
 			if (event.target === modal) closeModal();
-		});
+		}, { signal });
 		document.addEventListener("keydown", (event) => {
 			if (event.key === "Escape" && !modal.hidden) closeModal();
-		});
+		}, { signal });
 
 		svgButton.addEventListener("click", () => {
 			if (!currentSvg) return;
@@ -495,7 +508,7 @@ const qrSvg = page
 			const href = URL.createObjectURL(blob);
 			triggerDownload(`urlx-qr-${fileSlug}.svg`, href);
 			window.setTimeout(() => URL.revokeObjectURL(href), 1000);
-		});
+		}, { signal });
 
 		pngButton.addEventListener("click", async () => {
 			if (!currentSvg) return;
@@ -510,6 +523,6 @@ const qrSvg = page
 				pngButton.disabled = false;
 				pngLabel.textContent = "PNG";
 			}
-		});
-	}
+		}, { signal });
+	});
 </script>

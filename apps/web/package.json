@@ -16,6 +16,7 @@
 		"@urlx/api": "workspace:*",
 		"@urlx/env": "workspace:*",
 		"astro": "^6.0.1",
+		"astro-loading-indicator": "^0.8.0",
 		"dotenv": "catalog:",
 		"qrcode": "^1.5.4",
 		"zod": "catalog:"

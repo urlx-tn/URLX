@@ -10,6 +10,7 @@ const showCreateLink = Astro.url.pathname !== "/create";
 ---
 
 <header
+	data-header-root
 	class="sticky top-0 z-20 border-b border-hair/70 bg-white/75 backdrop-blur-xl backdrop-saturate-150"
 >
 	<div
@@ -121,7 +122,9 @@ const showCreateLink = Astro.url.pathname !== "/create";
 </header>
 
 <script>
+	import { navigate } from "astro:transitions/client";
 	import { orpc } from "../lib/orpc";
+	import { registerPageScript } from "../lib/page-script";
 
 	const FINDINGS_SIZE = 3;
 	const FINDINGS_DELAY = 180;
@@ -133,17 +136,21 @@ const showCreateLink = Astro.url.pathname !== "/create";
 		createdAt: number;
 	};
 
-	const form = document.querySelector<HTMLFormElement>(
-		'[data-header-search="form"]',
-	);
-	const input = document.querySelector<HTMLInputElement>(
-		'[data-header-search="input"]',
-	);
-	const findingsList = document.querySelector<HTMLUListElement>(
-		'[data-header-search="findings"]',
-	);
+	registerPageScript<HTMLElement>("[data-header-root]", (header, signal) => {
+		const form = header.querySelector<HTMLFormElement>(
+			'[data-header-search="form"]',
+		);
+		const input = header.querySelector<HTMLInputElement>(
+			'[data-header-search="input"]',
+		);
+		const findingsList = header.querySelector<HTMLUListElement>(
+			'[data-header-search="findings"]',
+		);
 
-	if (form && input && findingsList) {
+		if (!form || !input || !findingsList) {
+			return;
+		}
+
 		let timer: number | null = null;
 		let requestToken = 0;
 		let activeIndex = -1;
@@ -196,12 +203,11 @@ const showCreateLink = Astro.url.pathname !== "/create";
 		};
 
 		const openPage = (item: HeaderSearchItem) => {
-			window.location.href = `/p/${item.slug}`;
+			navigate(`/p/${item.slug}`);
 		};
 
 		const openAllResults = () => {
-			window.location.href =
-				currentItems.length === 0 ? "/search" : searchUrl(currentQuery);
+			navigate(currentItems.length === 0 ? "/search" : searchUrl(currentQuery));
 		};
 
 		const createFindingOption = (item: HeaderSearchItem, index: number) => {
@@ -337,10 +343,10 @@ const showCreateLink = Astro.url.pathname !== "/create";
 		form.addEventListener("submit", () => {
 			closeFindings();
 			input.value = normalizeQueryInput(input.value);
-		});
+		}, { signal });
 
-		input.addEventListener("input", scheduleFindings);
-		input.addEventListener("focus", scheduleFindings);
+		input.addEventListener("input", scheduleFindings, { signal });
+		input.addEventListener("focus", scheduleFindings, { signal });
 		input.addEventListener("keydown", (event) => {
 			if (findingsList.hidden) return;
 
@@ -373,11 +379,21 @@ const showCreateLink = Astro.url.pathname !== "/create";
 				event.preventDefault();
 				closeFindings();
 			}
-		});
+		}, { signal });
 		document.addEventListener("mousedown", (event) => {
 			if (!form.contains(event.target as Node)) {
 				closeFindings();
 			}
-		});
-	}
+		}, { signal });
+
+		signal.addEventListener(
+			"abort",
+			() => {
+				if (timer !== null) {
+					window.clearTimeout(timer);
+				}
+			},
+			{ once: true },
+		);
+	});
 </script>
