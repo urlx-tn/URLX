@@ -1,8 +1,13 @@
-let qrPromise: Promise<typeof import("qrcode")> | null = null;
+type QrCodeBrowserModule = typeof import("qrcode/lib/browser.js");
+type QrCodeBrowser = QrCodeBrowserModule["default"];
 
-const loadQrCode = (): Promise<typeof import("qrcode")> => {
+let qrPromise: Promise<QrCodeBrowser> | null = null;
+
+const loadQrCode = async (): Promise<QrCodeBrowser> => {
 	if (!qrPromise) {
-		qrPromise = import("qrcode");
+		qrPromise = import("qrcode/lib/browser.js").then(
+			(module) => module.default,
+		);
 	}
 	return qrPromise;
 };

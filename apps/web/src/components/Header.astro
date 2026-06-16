@@ -2,11 +2,17 @@
 import logo from "../assets/logo.png";
 
 const headerSearchQuery =
-	Astro.url.pathname === "/search"
+	Astro.url.pathname === "/tools/link-in-bio/search"
 		? (Astro.url.searchParams.get("q") ?? "")
 		: "";
-const showHeaderSearch = Astro.url.pathname === "/create";
-const showCreateLink = Astro.url.pathname !== "/create";
+const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
+const isUrlShortenerPage = currentPath === "/tools/url-shortener";
+const isLinkInBioPage =
+	currentPath === "/tools/link-in-bio" ||
+	currentPath.startsWith("/tools/link-in-bio/");
+const showHeaderSearch = currentPath === "/tools/link-in-bio";
+const showUrlShortenerLink = !isUrlShortenerPage;
+const showCreateLink = !isLinkInBioPage;
 ---
 
 <header
@@ -36,7 +42,7 @@ const showCreateLink = Astro.url.pathname !== "/create";
 				showHeaderSearch && (
 					<>
 						<form
-							action="/search"
+							action="/tools/link-in-bio/search"
 							method="get"
 							class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
 							data-header-search="form"
@@ -78,7 +84,7 @@ const showCreateLink = Astro.url.pathname !== "/create";
 							></ul>
 						</form>
 						<a
-							href="/search"
+							href="/tools/link-in-bio/search"
 							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
 						>
 							Search
@@ -87,12 +93,22 @@ const showCreateLink = Astro.url.pathname !== "/create";
 				)
 			}
 			{
-				showCreateLink && (
+				showUrlShortenerLink && (
 					<a
-						href="/create"
+						href="/tools/url-shortener"
 						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
 					>
-						Link in bio
+						URL Shortener
+					</a>
+				)
+			}
+			{
+				showCreateLink && (
+					<a
+						href="/tools/link-in-bio"
+						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+					>
+						Link in Bio
 					</a>
 				)
 			}
@@ -199,7 +215,9 @@ const showCreateLink = Astro.url.pathname !== "/create";
 			}
 
 			const suffix = params.toString();
-			return suffix ? `/search?${suffix}` : "/search";
+			return suffix
+				? `/tools/link-in-bio/search?${suffix}`
+				: "/tools/link-in-bio/search";
 		};
 
 		const openPage = (item: HeaderSearchItem) => {
@@ -207,7 +225,11 @@ const showCreateLink = Astro.url.pathname !== "/create";
 		};
 
 		const openAllResults = () => {
-			navigate(currentItems.length === 0 ? "/search" : searchUrl(currentQuery));
+			navigate(
+				currentItems.length === 0
+					? "/tools/link-in-bio/search"
+					: searchUrl(currentQuery),
+			);
 		};
 
 		const createFindingOption = (item: HeaderSearchItem, index: number) => {
@@ -235,8 +257,10 @@ const showCreateLink = Astro.url.pathname !== "/create";
 			handle.className = "mt-0.5 block truncate text-[12px] text-ink-2";
 			handle.textContent = `@${item.slug}`;
 
-			content.append(title, handle);
-			option.append(avatar, content);
+			content.appendChild(title);
+			content.appendChild(handle);
+			option.appendChild(avatar);
+			option.appendChild(content);
 			option.addEventListener("mousedown", (event) => event.preventDefault());
 			option.addEventListener("mousemove", () => setActiveFinding(index));
 			option.addEventListener("click", () => openPage(item));
@@ -280,8 +304,10 @@ const showCreateLink = Astro.url.pathname !== "/create";
 				meta.textContent = "Open the full search page";
 			}
 
-			content.append(title, meta);
-			option.append(icon, content);
+			content.appendChild(title);
+			content.appendChild(meta);
+			option.appendChild(icon);
+			option.appendChild(content);
 			option.addEventListener("mousedown", (event) => event.preventDefault());
 			option.addEventListener("mousemove", () => setActiveFinding(index));
 			option.addEventListener("click", openAllResults);

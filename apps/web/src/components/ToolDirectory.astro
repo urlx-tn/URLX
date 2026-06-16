@@ -1,0 +1,79 @@
+---
+import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
+import UrlShortenerIcon from "./icons/UrlShortenerIcon.astro";
+
+const tools = [
+	{
+		slug: "url-shortener",
+		title: "URL Shortener",
+		description: "Create clean, reliable short links in seconds.",
+		href: "/tools/url-shortener",
+		Icon: UrlShortenerIcon,
+	},
+	{
+		slug: "link-in-bio",
+		title: "Link in Bio",
+		description: "Build a page that holds all your links in one shareable URL.",
+		href: "/tools/link-in-bio",
+		Icon: LinkInBioIcon,
+	},
+];
+---
+
+<section class="flex flex-1 bg-white">
+	<div class="mx-auto w-full max-w-[980px] px-6 py-16 sm:py-24">
+		<header class="text-center">
+			<h1
+				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
+			>
+				Free URL tools.
+			</h1>
+			<p
+				class="mx-auto mt-5 max-w-[40ch] text-[19px] leading-7 text-ink-2 sm:text-[21px]"
+			>
+				Simple, focused tools for links. Pick one and get started.
+			</p>
+		</header>
+
+		<ul
+			class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-2"
+			role="list"
+		>
+			{
+				tools.map((tool) => (
+					<li>
+						<a
+							href={tool.href}
+							class="group flex h-full flex-col rounded-2xl border border-hair bg-surface p-6 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:border-accent/60 sm:p-7"
+						>
+							<span class="inline-flex h-24 w-40 items-start justify-start overflow-visible transition group-hover:scale-[1.03]">
+								<tool.Icon />
+							</span>
+							<span class="mt-5 text-[20px] font-semibold tracking-[-0.01em] text-ink sm:text-[22px]">
+								{tool.title}
+							</span>
+							<span class="mt-1 text-[15px] leading-6 text-ink-2">
+								{tool.description}
+							</span>
+							<span class="mt-4 inline-flex items-center gap-1.5 text-[15px] font-medium text-link">
+								Open tool
+								<svg
+									viewBox="0 0 24 24"
+									class="size-4 transition group-hover:translate-x-0.5"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<path d="M7 17 17 7M9 7h8v8" />
+								</svg>
+							</span>
+						</a>
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</section>

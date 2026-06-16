@@ -102,7 +102,7 @@ const qrSvg = page
 					<button
 						type="button"
 						data-qr-open
-						class="absolute right-0 top-0 z-10 inline-flex h-9 items-center gap-1.5 rounded-full border border-hair bg-white pl-2.5 pr-3 text-[13px] font-medium text-ink-2 shadow-sm transition hover:text-ink hover:shadow-md"
+						class="absolute right-0 top-0 z-10 inline-flex h-9 items-center gap-1.5 rounded-full border border-hair bg-white pl-2.5 pr-3 text-[13px] font-medium text-ink-2 shadow-sm transition hover:border-accent/60 hover:text-ink"
 						aria-label="Show QR code for this page"
 						aria-haspopup="dialog"
 					>
@@ -149,7 +149,7 @@ const qrSvg = page
 									href={link.url}
 									target="_blank"
 									rel="noopener noreferrer nofollow"
-									class="group flex items-center gap-3 rounded-2xl border border-hair/80 bg-white px-3.5 py-3.5 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-ink/15 hover:shadow-[0_10px_30px_rgb(0_0_0/0.10)] active:translate-y-0 active:shadow-[0_1px_2px_rgb(0_0_0/0.05)]"
+									class="group flex items-center gap-3 rounded-2xl border border-hair bg-white px-3.5 py-3.5 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:border-accent/60"
 								>
 									<span class="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface text-ink-2 ring-1 ring-black/5">
 										<svg
@@ -207,8 +207,8 @@ const qrSvg = page
 
 					<footer class="mt-auto pt-14 text-center">
 						<a
-							href="/create"
-							class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-white/80 px-4 py-2 text-[13px] font-medium text-ink-2 no-underline shadow-sm backdrop-blur transition hover:text-ink hover:shadow"
+							href="/tools/link-in-bio"
+							class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-white/80 px-4 py-2 text-[13px] font-medium text-ink-2 no-underline shadow-sm backdrop-blur transition hover:border-accent/60 hover:text-ink"
 						>
 							<img
 								src="/favicons/favicon-32x32.png"
@@ -292,6 +292,7 @@ const qrSvg = page
 					</div>
 				</div>
 				<script
+					is:inline
 					type="application/json"
 					data-qr-data
 					set:html={JSON.stringify({ pageUrl, qrSvg })}
@@ -319,7 +320,7 @@ const qrSvg = page
 					<p class="mx-auto mt-3 max-w-[34ch] text-[16px] leading-7 text-ink-2">
 						This link page doesn’t exist or has been removed.
 					</p>
-					<a href="/create" class="btn mt-7 inline-flex no-underline">
+					<a href="/tools/link-in-bio" class="btn mt-7 inline-flex no-underline">
 						Create a page
 					</a>
 				</div>

@@ -13,8 +13,8 @@ interface Props {
 }
 
 const {
-	title = "URLX | Shorten links. Share them beautifully.",
-	description = "Create clean, reliable short links in seconds. No sign-up required. Free, private, and no sign-up required.",
+	title = "URLX | Free URL Tools",
+	description = "A growing collection of free, simple URL tools. Shorten links and build link-in-bio pages — no sign-up required.",
 	image = "/og-image.png",
 	chrome = true,
 } = Astro.props;
@@ -92,8 +92,8 @@ const organizationSchema = {
 
 		<title>{title}</title>
 
-		<script type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
-		<script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
 		<ClientRouter />
 		<LoadingIndicator
 			color="var(--color-accent)"

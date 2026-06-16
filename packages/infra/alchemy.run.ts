@@ -40,10 +40,12 @@ function requireValue(name: string, value: string | undefined) {
 }
 
 const db = await D1Database("database", {
+	adopt: true,
 	migrationsDir: "../../packages/db/src/migrations",
 });
 
 export const server = await Worker("server", {
+	adopt: true,
 	cwd: "../../apps/server",
 	entrypoint: "src/index.ts",
 	compatibility: "node",
@@ -61,6 +63,7 @@ export const server = await Worker("server", {
 const publicServerUrl = requireValue("server URL", server.url);
 
 export const web = await Astro("web", {
+	adopt: true,
 	cwd: "../../apps/web",
 	entrypoint: "dist/server/entry.mjs",
 	assets: "dist/client",
