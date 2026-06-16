@@ -5,7 +5,7 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout>
-	<section class="flex flex-1 items-center bg-white">
+	<section data-page-root="home" class="flex flex-1 items-center bg-white">
 		<div class="mx-auto w-full max-w-[800px] px-6 pt-16 pb-24 text-center sm:pb-28">
 			<h1
 				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
@@ -31,6 +31,7 @@ import Layout from "../layouts/Layout.astro";
 	import { copyToClipboard } from "../lib/copy-to-clipboard";
 	import { friendlyErrorMessage } from "../lib/form-errors";
 	import { orpc } from "../lib/orpc";
+	import { registerPageScript } from "../lib/page-script";
 	import { renderQrPngDataUrl, renderQrSvg } from "../lib/qr-code";
 	import {
 		addRecentUrl,
@@ -47,60 +48,65 @@ import Layout from "../layouts/Layout.astro";
 		| { status: "success"; shortCode: string; shortUrl: string }
 		| { status: "error"; code: string; message: string };
 
-	const selectRequired = <T extends Element>(selector: string): T => {
-		const element = document.querySelector<T>(selector);
-		if (!element) {
-			throw new Error(`Missing required element: ${selector}`);
-		}
-		return element;
-	};
+	registerPageScript<HTMLElement>('[data-page-root="home"]', (root, signal) => {
+		const selectRequired = <T extends Element>(selector: string): T => {
+			const element = root.querySelector<T>(selector);
+			if (!element) {
+				throw new Error(`Missing required element: ${selector}`);
+			}
+			return element;
+		};
 
-	const form = selectRequired<HTMLFormElement>('[data-form="url-shortener"]');
-	const input = selectRequired<HTMLInputElement>('[data-form="url-input"]');
-	const submitButton = selectRequired<HTMLButtonElement>('[data-form="submit"]');
-	const submitLabel = selectRequired<HTMLElement>('[data-form="submit-label"]');
-	const submitSpinner = selectRequired<HTMLElement>(
-		'[data-form="submit-spinner"]',
-	);
-	const errorEl = selectRequired<HTMLElement>('[data-form="error"]');
-	const errorMessageEl = selectRequired<HTMLElement>(
-		'[data-form="error-message"]',
-	);
+		const form = selectRequired<HTMLFormElement>('[data-form="url-shortener"]');
+		const input = selectRequired<HTMLInputElement>('[data-form="url-input"]');
+		const submitButton =
+			selectRequired<HTMLButtonElement>('[data-form="submit"]');
+		const submitLabel =
+			selectRequired<HTMLElement>('[data-form="submit-label"]');
+		const submitSpinner = selectRequired<HTMLElement>(
+			'[data-form="submit-spinner"]',
+		);
+		const errorEl = selectRequired<HTMLElement>('[data-form="error"]');
+		const errorMessageEl = selectRequired<HTMLElement>(
+			'[data-form="error-message"]',
+		);
 
-	const resultPanel = selectRequired<HTMLElement>('[data-result="panel"]');
-	const resultUrl = selectRequired<HTMLElement>('[data-result="url"]');
-	const resultUrlLink = selectRequired<HTMLAnchorElement>(
-		'[data-result="url-link"]',
-	);
-	const copyButton = selectRequired<HTMLButtonElement>('[data-result="copy"]');
-	const copyLabel = selectRequired<HTMLElement>('[data-result="copy-label"]');
-	const qrToggle = selectRequired<HTMLButtonElement>('[data-result="qr-toggle"]');
-	const qrToggleLabel = selectRequired<HTMLElement>(
-		'[data-result="qr-toggle-label"]',
-	);
-	const qrPanel = selectRequired<HTMLElement>('[data-qr="panel"]');
-	const qrCanvas = selectRequired<HTMLElement>('[data-qr="canvas"]');
-	const qrStatus = selectRequired<HTMLElement>('[data-qr="status"]');
-	const qrActions = selectRequired<HTMLElement>('[data-qr="actions"]');
-	const downloadSvgButton = selectRequired<HTMLButtonElement>(
-		'[data-qr="download-svg"]',
-	);
-	const downloadPngButton = selectRequired<HTMLButtonElement>(
-		'[data-qr="download-png"]',
-	);
-	const downloadPngLabel = selectRequired<HTMLElement>(
-		'[data-qr="download-png-label"]',
-	);
-	const inputWrap = selectRequired<HTMLElement>('[data-form="input-wrap"]');
-	const historyList = selectRequired<HTMLUListElement>('[data-form="history"]');
-	const rememberHistory = selectRequired<HTMLInputElement>(
-		'[data-form="remember-history"]',
-	);
-	const clearHistoryButton = selectRequired<HTMLButtonElement>(
-		'[data-form="clear-history"]',
-	);
+		const resultPanel = selectRequired<HTMLElement>('[data-result="panel"]');
+		const resultUrl = selectRequired<HTMLElement>('[data-result="url"]');
+		const resultUrlLink = selectRequired<HTMLAnchorElement>(
+			'[data-result="url-link"]',
+		);
+		const copyButton =
+			selectRequired<HTMLButtonElement>('[data-result="copy"]');
+		const copyLabel = selectRequired<HTMLElement>('[data-result="copy-label"]');
+		const qrToggle =
+			selectRequired<HTMLButtonElement>('[data-result="qr-toggle"]');
+		const qrToggleLabel = selectRequired<HTMLElement>(
+			'[data-result="qr-toggle-label"]',
+		);
+		const qrPanel = selectRequired<HTMLElement>('[data-qr="panel"]');
+		const qrCanvas = selectRequired<HTMLElement>('[data-qr="canvas"]');
+		const qrStatus = selectRequired<HTMLElement>('[data-qr="status"]');
+		const qrActions = selectRequired<HTMLElement>('[data-qr="actions"]');
+		const downloadSvgButton = selectRequired<HTMLButtonElement>(
+			'[data-qr="download-svg"]',
+		);
+		const downloadPngButton = selectRequired<HTMLButtonElement>(
+			'[data-qr="download-png"]',
+		);
+		const downloadPngLabel = selectRequired<HTMLElement>(
+			'[data-qr="download-png-label"]',
+		);
+		const inputWrap = selectRequired<HTMLElement>('[data-form="input-wrap"]');
+		const historyList =
+			selectRequired<HTMLUListElement>('[data-form="history"]');
+		const rememberHistory = selectRequired<HTMLInputElement>(
+			'[data-form="remember-history"]',
+		);
+		const clearHistoryButton = selectRequired<HTMLButtonElement>(
+			'[data-form="clear-history"]',
+		);
 
-	{
 		let state: State = { status: "idle" };
 		let copyResetTimer: number | null = null;
 		let qrRequestToken = 0;
@@ -505,7 +511,7 @@ import Layout from "../layouts/Layout.astro";
 			}
 		};
 
-		form.addEventListener("submit", handleSubmit);
+		form.addEventListener("submit", handleSubmit, { signal });
 		rememberHistory.addEventListener("change", () => {
 			setUrlHistoryEnabled(rememberHistory.checked);
 			if (!rememberHistory.checked) {
@@ -513,20 +519,20 @@ import Layout from "../layouts/Layout.astro";
 			}
 			closeHistory();
 			updateHistoryControls();
-		});
+		}, { signal });
 		clearHistoryButton.addEventListener("click", () => {
 			clearRecentUrls();
 			closeHistory();
 			updateHistoryControls();
 			input.focus();
-		});
-		copyButton.addEventListener("click", handleCopy);
-		qrToggle.addEventListener("click", handleQrToggle);
-		downloadSvgButton.addEventListener("click", handleDownloadSvg);
-		downloadPngButton.addEventListener("click", handleDownloadPng);
-		input.addEventListener("focus", renderHistory);
-		input.addEventListener("input", renderHistory);
-		input.addEventListener("input", updateSubmitState);
+		}, { signal });
+		copyButton.addEventListener("click", handleCopy, { signal });
+		qrToggle.addEventListener("click", handleQrToggle, { signal });
+		downloadSvgButton.addEventListener("click", handleDownloadSvg, { signal });
+		downloadPngButton.addEventListener("click", handleDownloadPng, { signal });
+		input.addEventListener("focus", renderHistory, { signal });
+		input.addEventListener("input", renderHistory, { signal });
+		input.addEventListener("input", updateSubmitState, { signal });
 		input.addEventListener("input", () => {
 			const stripped = stripScheme(input.value);
 			if (stripped !== input.value) {
@@ -541,15 +547,25 @@ import Layout from "../layouts/Layout.astro";
 					);
 				}
 			}
-		});
-		input.addEventListener("keydown", handleHistoryKeydown);
+		}, { signal });
+		input.addEventListener("keydown", handleHistoryKeydown, { signal });
 		document.addEventListener("mousedown", (event) => {
 			if (!inputWrap.contains(event.target as Node)) {
 				closeHistory();
 			}
-		});
+		}, { signal });
 
 		updateHistoryControls();
 		render();
-	}
+		signal.addEventListener(
+			"abort",
+			() => {
+				if (copyResetTimer !== null) {
+					window.clearTimeout(copyResetTimer);
+				}
+				qrRequestToken += 1;
+			},
+			{ once: true },
+		);
+	});
 </script>

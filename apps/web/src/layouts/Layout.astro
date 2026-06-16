@@ -1,4 +1,6 @@
 ---
+import { ClientRouter, fade } from "astro:transitions";
+import LoadingIndicator from "astro-loading-indicator/component";
 import "../styles/global.css";
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
@@ -92,10 +94,20 @@ const organizationSchema = {
 
 		<script type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
 		<script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
+		<ClientRouter />
+		<LoadingIndicator
+			color="var(--color-accent)"
+			height="3px"
+			animationDuration={240}
+			threshold={false}
+		/>
 	</head>
 	<body class="flex min-h-[100dvh] flex-col antialiased">
 		{chrome && <Header />}
-		<main class="flex flex-1 flex-col">
+		<main
+			class="flex flex-1 flex-col"
+			transition:animate={fade({ duration: "0.2s" })}
+		>
 			<slot />
 		</main>
 		{chrome && <Footer />}
