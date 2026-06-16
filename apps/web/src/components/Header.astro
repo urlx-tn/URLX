@@ -5,8 +5,14 @@ const headerSearchQuery =
 	Astro.url.pathname === "/tools/link-in-bio/search"
 		? (Astro.url.searchParams.get("q") ?? "")
 		: "";
-const showHeaderSearch = Astro.url.pathname === "/tools/link-in-bio";
-const showCreateLink = Astro.url.pathname !== "/tools/link-in-bio";
+const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
+const isUrlShortenerPage = currentPath === "/tools/url-shortener";
+const isLinkInBioPage =
+	currentPath === "/tools/link-in-bio" ||
+	currentPath.startsWith("/tools/link-in-bio/");
+const showHeaderSearch = currentPath === "/tools/link-in-bio";
+const showUrlShortenerLink = !isUrlShortenerPage;
+const showCreateLink = !isLinkInBioPage;
 ---
 
 <header
@@ -86,12 +92,16 @@ const showCreateLink = Astro.url.pathname !== "/tools/link-in-bio";
 					</>
 				)
 			}
-			<a
-				href="/tools/url-shortener"
-				class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
-			>
-				URL Shortener
-			</a>
+			{
+				showUrlShortenerLink && (
+					<a
+						href="/tools/url-shortener"
+						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+					>
+						URL Shortener
+					</a>
+				)
+			}
 			{
 				showCreateLink && (
 					<a
