@@ -5,6 +5,8 @@ const headerSearchQuery =
 	Astro.url.pathname === "/search"
 		? (Astro.url.searchParams.get("q") ?? "")
 		: "";
+const showHeaderSearch = Astro.url.pathname === "/create";
+const showCreateLink = Astro.url.pathname !== "/create";
 ---
 
 <header
@@ -29,60 +31,70 @@ const headerSearchQuery =
 			/>
 		</a>
 		<nav class="flex items-center gap-2">
-			<form
-				action="/search"
-				method="get"
-				class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
-				data-header-search="form"
-				role="search"
-			>
-				<label class="sr-only" for="header-search">Search link pages</label>
-				<svg
-					viewBox="0 0 24 24"
-					class="size-4 shrink-0 text-ink-2"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.7"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<circle cx="11" cy="11" r="7" />
-					<path d="m16.5 16.5 4 4" />
-				</svg>
-				<input
-					id="header-search"
-					name="q"
-					type="search"
-					maxlength="80"
-					value={headerSearchQuery}
-					placeholder="Search"
-					autocomplete="off"
-					aria-controls="header-search-findings"
-					aria-expanded="false"
-					class="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-2/70 focus:outline-none"
-					data-header-search="input"
-				/>
-				<ul
-					id="header-search-findings"
-					class="absolute inset-x-0 top-full z-40 mt-2 max-h-[320px] overflow-auto rounded-xl border border-hair bg-white p-1.5 shadow-[0_16px_44px_rgb(0_0_0/0.14)]"
-					data-header-search="findings"
-					role="listbox"
-					hidden
-				></ul>
-			</form>
-			<a
-				href="/search"
-				class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
-			>
-				Search
-			</a>
-			<a
-				href="/create"
-				class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
-			>
-				Link in bio
-			</a>
+			{
+				showHeaderSearch && (
+					<>
+						<form
+							action="/search"
+							method="get"
+							class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
+							data-header-search="form"
+							role="search"
+						>
+							<label class="sr-only" for="header-search">Search link pages</label>
+							<svg
+								viewBox="0 0 24 24"
+								class="size-4 shrink-0 text-ink-2"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<circle cx="11" cy="11" r="7" />
+								<path d="m16.5 16.5 4 4" />
+							</svg>
+							<input
+								id="header-search"
+								name="q"
+								type="search"
+								maxlength="80"
+								value={headerSearchQuery}
+								placeholder="Search"
+								autocomplete="off"
+								aria-controls="header-search-findings"
+								aria-expanded="false"
+								class="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+								data-header-search="input"
+							/>
+							<ul
+								id="header-search-findings"
+								class="absolute inset-x-0 top-full z-40 mt-2 max-h-[320px] overflow-auto rounded-xl border border-hair bg-white p-1.5 shadow-[0_16px_44px_rgb(0_0_0/0.14)]"
+								data-header-search="findings"
+								role="listbox"
+								hidden
+							></ul>
+						</form>
+						<a
+							href="/search"
+							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
+						>
+							Search
+						</a>
+					</>
+				)
+			}
+			{
+				showCreateLink && (
+					<a
+						href="/create"
+						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+					>
+						Link in bio
+					</a>
+				)
+			}
 			<a
 				href="https://github.com/urlx-tn/URLX"
 				target="_blank"
