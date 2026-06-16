@@ -1,5 +1,5 @@
 ---
-import Layout from "../layouts/Layout.astro";
+import Layout from "../../../layouts/Layout.astro";
 ---
 
 <Layout
@@ -66,7 +66,7 @@ import Layout from "../layouts/Layout.astro";
 					&nbsp;
 				</p>
 				<a
-					href="/create"
+					href="/tools/link-in-bio"
 					class="hidden text-[14px] font-medium text-link underline-offset-2 hover:underline sm:inline"
 				>
 					Create page
@@ -130,9 +130,9 @@ import Layout from "../layouts/Layout.astro";
 </Layout>
 
 <script>
-	import { friendlyErrorMessage } from "../lib/form-errors";
-	import { orpc } from "../lib/orpc";
-	import { registerPageScript } from "../lib/page-script";
+	import { friendlyErrorMessage } from "../../../lib/form-errors";
+	import { orpc } from "../../../lib/orpc";
+	import { registerPageScript } from "../../../lib/page-script";
 
 	const PAGE_SIZE = 5;
 	const SEARCH_DELAY = 180;
@@ -254,7 +254,7 @@ import Layout from "../layouts/Layout.astro";
 			const link = document.createElement("a");
 			link.href = `/p/${item.slug}`;
 			link.className =
-				"group flex items-center gap-3 rounded-2xl border border-hair bg-white p-4 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:-translate-y-0.5 hover:border-ink/15 hover:shadow-[0_12px_30px_rgb(0_0_0/0.08)]";
+				"group flex items-center gap-3 rounded-2xl border border-hair bg-white p-4 no-underline shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition hover:border-accent/60";
 
 			const avatar = document.createElement("span");
 			avatar.className =

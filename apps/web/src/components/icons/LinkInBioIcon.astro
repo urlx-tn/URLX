@@ -1,0 +1,20 @@
+---
+import linkInBioIcon from "../../assets/icons/link-in-bio.png";
+
+interface Props {
+	class?: string;
+}
+
+const { class: className = "h-24 w-auto max-w-full object-contain" } =
+	Astro.props;
+---
+
+<img
+	src={linkInBioIcon.src}
+	width={linkInBioIcon.width}
+	height={linkInBioIcon.height}
+	alt=""
+	class={className}
+	aria-hidden="true"
+	decoding="async"
+/>

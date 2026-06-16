@@ -2,11 +2,11 @@
 import logo from "../assets/logo.png";
 
 const headerSearchQuery =
-	Astro.url.pathname === "/search"
+	Astro.url.pathname === "/tools/link-in-bio/search"
 		? (Astro.url.searchParams.get("q") ?? "")
 		: "";
-const showHeaderSearch = Astro.url.pathname === "/create";
-const showCreateLink = Astro.url.pathname !== "/create";
+const showHeaderSearch = Astro.url.pathname === "/tools/link-in-bio";
+const showCreateLink = Astro.url.pathname !== "/tools/link-in-bio";
 ---
 
 <header
@@ -36,7 +36,7 @@ const showCreateLink = Astro.url.pathname !== "/create";
 				showHeaderSearch && (
 					<>
 						<form
-							action="/search"
+							action="/tools/link-in-bio/search"
 							method="get"
 							class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
 							data-header-search="form"
@@ -78,7 +78,7 @@ const showCreateLink = Astro.url.pathname !== "/create";
 							></ul>
 						</form>
 						<a
-							href="/search"
+							href="/tools/link-in-bio/search"
 							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
 						>
 							Search
@@ -86,13 +86,19 @@ const showCreateLink = Astro.url.pathname !== "/create";
 					</>
 				)
 			}
+			<a
+				href="/tools/url-shortener"
+				class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+			>
+				URL Shortener
+			</a>
 			{
 				showCreateLink && (
 					<a
-						href="/create"
+						href="/tools/link-in-bio"
 						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
 					>
-						Link in bio
+						Link in Bio
 					</a>
 				)
 			}
@@ -199,7 +205,9 @@ const showCreateLink = Astro.url.pathname !== "/create";
 			}
 
 			const suffix = params.toString();
-			return suffix ? `/search?${suffix}` : "/search";
+			return suffix
+				? `/tools/link-in-bio/search?${suffix}`
+				: "/tools/link-in-bio/search";
 		};
 
 		const openPage = (item: HeaderSearchItem) => {
@@ -207,7 +215,11 @@ const showCreateLink = Astro.url.pathname !== "/create";
 		};
 
 		const openAllResults = () => {
-			navigate(currentItems.length === 0 ? "/search" : searchUrl(currentQuery));
+			navigate(
+				currentItems.length === 0
+					? "/tools/link-in-bio/search"
+					: searchUrl(currentQuery),
+			);
 		};
 
 		const createFindingOption = (item: HeaderSearchItem, index: number) => {
