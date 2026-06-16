@@ -25,12 +25,9 @@ const stageEnvFile =
 
 if (stageEnvFile) {
 	config({ path: stageEnvFile });
+} else {
+	config({ path: "../../.env" });
 }
-
-config({ path: "../../.env" });
-config({ path: "./.env" });
-config({ path: "../../apps/web/.env" });
-config({ path: "../../apps/server/.env" });
 
 const app = await alchemy("urlx");
 

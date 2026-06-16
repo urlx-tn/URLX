@@ -35,7 +35,34 @@ export function validateDestinationUrl(rawUrl: string) {
 		throw new LinkError("PRIVATE_IP_NOT_ALLOWED");
 	}
 
+	// Public IP literals are allowed; named hosts must look like a real domain
+	// (have a dot and an alphabetic TLD) so that values like "ddd" are rejected.
+	// This is purely structural — the server never resolves or fetches the host.
+	if (!isIpLiteral(hostname) && !hasPublicTld(hostname)) {
+		throw new LinkError("INVALID_DOMAIN");
+	}
+
 	return url;
+}
+
+function isIpLiteral(hostname: string) {
+	if (hostname.startsWith("[")) {
+		return true;
+	}
+
+	return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+}
+
+function hasPublicTld(hostname: string) {
+	const labels = hostname.split(".");
+
+	if (labels.length < 2 || labels.some((label) => label.length === 0)) {
+		return false;
+	}
+
+	const tld = labels[labels.length - 1] ?? "";
+
+	return /^[a-z]{2,}$/.test(tld) || /^xn--[a-z0-9]+$/.test(tld);
 }
 
 function isPrivateOrLocalHost(hostname: string) {

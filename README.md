@@ -85,7 +85,7 @@ Alchemy starts the local Workers stack and prints the web and server URLs. By de
 
 ## Environment
 
-The root `.env.example` contains the local values needed by the Alchemy stack:
+The root `.env.example` contains the local values needed by the stack and local tooling:
 
 | Variable | Required | Used by | Purpose |
 | --- | --- | --- | --- |
@@ -100,6 +100,14 @@ Deployment scripts select an Alchemy stage and the infra stack loads the matchin
 - `--stage prod` loads `.env.production`
 
 Keep `CORS_ORIGIN`, `SHORT_URL_BASE`, and `PUBLIC_SERVER_URL` aligned for each stage.
+
+Environment files are root-only by design:
+
+- `.env` for local development
+- `.env.development` for the deployed `dev` stage
+- `.env.production` for the deployed `prod` stage
+
+Do not create app-level or package-level `.env` files for normal workflows. The web app and infra tooling are configured to read from the repo root so there is a single source of truth.
 
 ## Development
 

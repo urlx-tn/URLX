@@ -1,6 +1,7 @@
 export const linkErrorCodes = [
 	"EMPTY_URL",
 	"INVALID_URL",
+	"INVALID_DOMAIN",
 	"UNSUPPORTED_PROTOCOL",
 	"LOCAL_URL_NOT_ALLOWED",
 	"PRIVATE_IP_NOT_ALLOWED",
@@ -15,6 +16,7 @@ export type LinkErrorCode = (typeof linkErrorCodes)[number];
 const defaultMessages: Record<LinkErrorCode, string> = {
 	EMPTY_URL: "Please enter a URL.",
 	INVALID_URL: "Please enter a valid http or https URL.",
+	INVALID_DOMAIN: "Please enter a valid domain, like example.com.",
 	UNSUPPORTED_PROTOCOL: "Only http and https URLs are supported.",
 	LOCAL_URL_NOT_ALLOWED: "Local URLs are not allowed.",
 	PRIVATE_IP_NOT_ALLOWED: "Private network URLs are not allowed.",
@@ -27,6 +29,7 @@ const defaultMessages: Record<LinkErrorCode, string> = {
 const defaultStatuses: Record<LinkErrorCode, number> = {
 	EMPTY_URL: 400,
 	INVALID_URL: 400,
+	INVALID_DOMAIN: 400,
 	UNSUPPORTED_PROTOCOL: 400,
 	LOCAL_URL_NOT_ALLOWED: 400,
 	PRIVATE_IP_NOT_ALLOWED: 400,

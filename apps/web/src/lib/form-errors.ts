@@ -1,11 +1,23 @@
 const friendlyMessages: Record<string, string> = {
 	EMPTY_URL: "Please enter a URL.",
 	INVALID_URL: "Please enter a valid http or https URL.",
+	INVALID_DOMAIN: "Please enter a valid domain, like example.com.",
 	UNSUPPORTED_PROTOCOL: "Please enter a valid http or https URL.",
 	LOCAL_URL_NOT_ALLOWED: "Local URLs cannot be shortened.",
 	PRIVATE_IP_NOT_ALLOWED: "Private network URLs cannot be shortened.",
 	URL_TOO_LONG: "This URL is too long.",
 	RATE_LIMITED: "Too many requests. Please try again shortly.",
+	EMPTY_TITLE: "Please enter a title for your page.",
+	TITLE_TOO_LONG: "Titles must be 80 characters or fewer.",
+	DESCRIPTION_TOO_LONG: "Descriptions must be 300 characters or fewer.",
+	INVALID_SLUG:
+		"Handles may use 3-30 letters, numbers, and hyphens, and cannot start or end with a hyphen.",
+	RESERVED_SLUG: "That handle is reserved. Please choose another.",
+	SLUG_TAKEN: "That handle is already taken. Please choose another.",
+	NO_LINKS: "Please add at least one link.",
+	TOO_MANY_LINKS: "You can add up to 25 links.",
+	INVALID_LINK_LABEL: "Each link needs a label of 60 characters or fewer.",
+	PAGE_NOT_FOUND: "Page not found.",
 	SERVER_ERROR: "Something went wrong. Please try again.",
 };
 

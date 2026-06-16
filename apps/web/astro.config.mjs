@@ -1,13 +1,11 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-
+import node from "@astrojs/node";
+import sitemap from "@astrojs/sitemap";
 // @ts-check
 import tailwindcss from "@tailwindcss/vite";
 import alchemy from "alchemy/cloudflare/astro";
-import sitemap from "@astrojs/sitemap";
 import { defineConfig, envField, svgoOptimizer } from "astro/config";
-
-import node from "@astrojs/node";
 
 const alchemyConfigPath = fileURLToPath(
 	new URL("./.alchemy/local/wrangler.jsonc", import.meta.url),
@@ -26,6 +24,7 @@ const cloudflareWorkersAlias = shouldUseAlchemy
 export default defineConfig({
 	site: "https://www.urlx.tn",
 	output: "server",
+	devToolbar: { enabled: false },
 	adapter: shouldUseAlchemy
 		? alchemy({ platformProxy: { configPath: alchemyConfigPath } })
 		: node({ mode: "standalone" }),
@@ -46,6 +45,7 @@ export default defineConfig({
 		svgOptimizer: svgoOptimizer(),
 	},
 	vite: {
+		envDir: "../..",
 		plugins: [tailwindcss()],
 		resolve: { alias: cloudflareWorkersAlias },
 	},

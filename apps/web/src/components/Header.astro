@@ -1,5 +1,12 @@
 ---
 import logo from "../assets/logo.png";
+
+const headerSearchQuery =
+	Astro.url.pathname === "/search"
+		? (Astro.url.searchParams.get("q") ?? "")
+		: "";
+const showHeaderSearch = Astro.url.pathname === "/create";
+const showCreateLink = Astro.url.pathname !== "/create";
 ---
 
 <header
@@ -23,26 +30,354 @@ import logo from "../assets/logo.png";
 				fetchpriority="high"
 			/>
 		</a>
-		<a
-			href="https://github.com/urlx-tn/URLX"
-			target="_blank"
-			rel="noopener noreferrer"
-			class="btn-secondary inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-4 text-[14px] font-medium no-underline"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="currentColor"
-				class="h-4 w-4"
-				aria-hidden="true"
+		<nav class="flex items-center gap-2">
+			{
+				showHeaderSearch && (
+					<>
+						<form
+							action="/search"
+							method="get"
+							class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
+							data-header-search="form"
+							role="search"
+						>
+							<label class="sr-only" for="header-search">Search link pages</label>
+							<svg
+								viewBox="0 0 24 24"
+								class="size-4 shrink-0 text-ink-2"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<circle cx="11" cy="11" r="7" />
+								<path d="m16.5 16.5 4 4" />
+							</svg>
+							<input
+								id="header-search"
+								name="q"
+								type="search"
+								maxlength="80"
+								value={headerSearchQuery}
+								placeholder="Search"
+								autocomplete="off"
+								aria-controls="header-search-findings"
+								aria-expanded="false"
+								class="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+								data-header-search="input"
+							/>
+							<ul
+								id="header-search-findings"
+								class="absolute inset-x-0 top-full z-40 mt-2 max-h-[320px] overflow-auto rounded-xl border border-hair bg-white p-1.5 shadow-[0_16px_44px_rgb(0_0_0/0.14)]"
+								data-header-search="findings"
+								role="listbox"
+								hidden
+							></ul>
+						</form>
+						<a
+							href="/search"
+							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
+						>
+							Search
+						</a>
+					</>
+				)
+			}
+			{
+				showCreateLink && (
+					<a
+						href="/create"
+						class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+					>
+						Link in bio
+					</a>
+				)
+			}
+			<a
+				href="https://github.com/urlx-tn/URLX"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="btn-secondary hidden h-9 items-center justify-center gap-2 rounded-xl border px-4 text-[14px] font-medium no-underline sm:inline-flex"
 			>
-				<path
-					fill-rule="evenodd"
-					clip-rule="evenodd"
-					d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"
-				/>
-			</svg>
-			Open Source
-		</a>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+					class="h-4 w-4"
+					aria-hidden="true"
+				>
+					<path
+						fill-rule="evenodd"
+						clip-rule="evenodd"
+						d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"
+					/>
+				</svg>
+				<span class="hidden sm:inline">Open Source</span>
+			</a>
+		</nav>
 	</div>
 </header>
+
+<script>
+	import { orpc } from "../lib/orpc";
+
+	const FINDINGS_SIZE = 3;
+	const FINDINGS_DELAY = 180;
+
+	type HeaderSearchItem = {
+		slug: string;
+		title: string;
+		description: string | null;
+		createdAt: number;
+	};
+
+	const form = document.querySelector<HTMLFormElement>(
+		'[data-header-search="form"]',
+	);
+	const input = document.querySelector<HTMLInputElement>(
+		'[data-header-search="input"]',
+	);
+	const findingsList = document.querySelector<HTMLUListElement>(
+		'[data-header-search="findings"]',
+	);
+
+	if (form && input && findingsList) {
+		let timer: number | null = null;
+		let requestToken = 0;
+		let activeIndex = -1;
+		let currentItems: HeaderSearchItem[] = [];
+		let currentQuery = "";
+
+		const normalizeQueryInput = (value: string) =>
+			value
+				.trim()
+				.replace(/^https?:\/\/[^/]+\/p\//i, "")
+				.replace(/^\/?p\//i, "")
+				.replace(/^@/, "")
+				.slice(0, 80);
+
+		const closeFindings = () => {
+			findingsList.hidden = true;
+			findingsList.replaceChildren();
+			currentItems = [];
+			activeIndex = -1;
+			input.setAttribute("aria-expanded", "false");
+			input.removeAttribute("aria-activedescendant");
+		};
+
+		const setActiveFinding = (index: number) => {
+			activeIndex = index;
+			const options = Array.from(findingsList.children);
+			options.forEach((option, optionIndex) => {
+				option.setAttribute(
+					"aria-selected",
+					optionIndex === activeIndex ? "true" : "false",
+				);
+			});
+
+			if (activeIndex >= 0 && options[activeIndex]) {
+				input.setAttribute("aria-activedescendant", options[activeIndex].id);
+				options[activeIndex].scrollIntoView({ block: "nearest" });
+			} else {
+				input.removeAttribute("aria-activedescendant");
+			}
+		};
+
+		const searchUrl = (searchQuery: string) => {
+			const params = new URLSearchParams();
+			if (searchQuery) {
+				params.set("q", searchQuery);
+			}
+
+			const suffix = params.toString();
+			return suffix ? `/search?${suffix}` : "/search";
+		};
+
+		const openPage = (item: HeaderSearchItem) => {
+			window.location.href = `/p/${item.slug}`;
+		};
+
+		const openAllResults = () => {
+			window.location.href =
+				currentItems.length === 0 ? "/search" : searchUrl(currentQuery);
+		};
+
+		const createFindingOption = (item: HeaderSearchItem, index: number) => {
+			const option = document.createElement("li");
+			option.id = `header-search-finding-${index}`;
+			option.setAttribute("role", "option");
+			option.setAttribute("aria-selected", "false");
+			option.className =
+				"flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left aria-selected:bg-surface hover:bg-surface";
+
+			const avatar = document.createElement("span");
+			avatar.className =
+				"grid size-8 shrink-0 place-items-center rounded-lg bg-surface text-[12px] font-semibold uppercase text-ink-2 ring-1 ring-black/5";
+			avatar.textContent = item.title.trim().charAt(0) || "#";
+			avatar.setAttribute("aria-hidden", "true");
+
+			const content = document.createElement("span");
+			content.className = "min-w-0 flex-1";
+
+			const title = document.createElement("span");
+			title.className = "block truncate text-[13px] font-semibold text-ink";
+			title.textContent = item.title;
+
+			const handle = document.createElement("span");
+			handle.className = "mt-0.5 block truncate text-[12px] text-ink-2";
+			handle.textContent = `@${item.slug}`;
+
+			content.append(title, handle);
+			option.append(avatar, content);
+			option.addEventListener("mousedown", (event) => event.preventDefault());
+			option.addEventListener("mousemove", () => setActiveFinding(index));
+			option.addEventListener("click", () => openPage(item));
+			return option;
+		};
+
+		const createViewAllOption = (index: number, totalItems: number) => {
+			const option = document.createElement("li");
+			option.id = `header-search-finding-${index}`;
+			option.setAttribute("role", "option");
+			option.setAttribute("aria-selected", "false");
+			option.className =
+				"mt-1 flex cursor-pointer items-center gap-3 rounded-lg border-t border-hair/70 px-3 py-2.5 pt-3 text-left aria-selected:bg-surface hover:bg-surface";
+
+			const icon = document.createElement("span");
+			icon.className =
+				"grid size-8 shrink-0 place-items-center rounded-lg bg-surface text-ink-2 ring-1 ring-black/5";
+			icon.innerHTML =
+				'<svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+			icon.setAttribute("aria-hidden", "true");
+
+			const content = document.createElement("span");
+			content.className = "min-w-0 flex-1";
+
+			const title = document.createElement("span");
+			title.className = "block truncate text-[13px] font-semibold text-ink";
+			title.textContent =
+				totalItems === 0 && currentQuery
+					? `No results for "${currentQuery}"`
+					: currentQuery
+						? `View all results for "${currentQuery}"`
+						: "View all link pages";
+
+			const meta = document.createElement("span");
+			meta.className = "mt-0.5 block truncate text-[12px] text-ink-2";
+			if (totalItems === 0 && currentQuery) {
+				meta.textContent = "See all link pages";
+			} else if (totalItems > currentItems.length) {
+				meta.textContent = `${totalItems} total matches`;
+			} else {
+				meta.textContent = "Open the full search page";
+			}
+
+			content.append(title, meta);
+			option.append(icon, content);
+			option.addEventListener("mousedown", (event) => event.preventDefault());
+			option.addEventListener("mousemove", () => setActiveFinding(index));
+			option.addEventListener("click", openAllResults);
+			return option;
+		};
+
+		const renderFindings = (items: HeaderSearchItem[], totalItems: number) => {
+			currentItems = items;
+			findingsList.replaceChildren();
+
+			const fragment = document.createDocumentFragment();
+			items.forEach((item, index) => {
+				fragment.appendChild(createFindingOption(item, index));
+			});
+			fragment.appendChild(createViewAllOption(items.length, totalItems));
+			findingsList.appendChild(fragment);
+			findingsList.hidden = false;
+			input.setAttribute("aria-expanded", "true");
+			setActiveFinding(-1);
+		};
+
+		const fetchFindings = async () => {
+			const query = normalizeQueryInput(input.value);
+			requestToken += 1;
+			const token = requestToken;
+			currentQuery = query;
+
+			if (!query) {
+				closeFindings();
+				return;
+			}
+
+			try {
+				const result = await orpc.bio.search({
+					query,
+					page: 1,
+					pageSize: FINDINGS_SIZE,
+				});
+
+				if (token !== requestToken) return;
+				renderFindings(result.items, result.totalItems);
+			} catch {
+				if (token !== requestToken) return;
+				closeFindings();
+			}
+		};
+
+		const scheduleFindings = () => {
+			if (timer !== null) {
+				window.clearTimeout(timer);
+			}
+
+			timer = window.setTimeout(() => {
+				timer = null;
+				void fetchFindings();
+			}, FINDINGS_DELAY);
+		};
+
+		form.addEventListener("submit", () => {
+			closeFindings();
+			input.value = normalizeQueryInput(input.value);
+		});
+
+		input.addEventListener("input", scheduleFindings);
+		input.addEventListener("focus", scheduleFindings);
+		input.addEventListener("keydown", (event) => {
+			if (findingsList.hidden) return;
+
+			if (event.key === "ArrowDown") {
+				event.preventDefault();
+				setActiveFinding(
+					Math.min(activeIndex + 1, findingsList.children.length - 1),
+				);
+				return;
+			}
+
+			if (event.key === "ArrowUp") {
+				event.preventDefault();
+				setActiveFinding(Math.max(activeIndex - 1, -1));
+				return;
+			}
+
+			if (event.key === "Enter" && activeIndex >= 0) {
+				event.preventDefault();
+				const item = currentItems[activeIndex];
+				if (item) {
+					openPage(item);
+				} else {
+					openAllResults();
+				}
+				return;
+			}
+
+			if (event.key === "Escape") {
+				event.preventDefault();
+				closeFindings();
+			}
+		});
+		document.addEventListener("mousedown", (event) => {
+			if (!form.contains(event.target as Node)) {
+				closeFindings();
+			}
+		});
+	}
+</script>

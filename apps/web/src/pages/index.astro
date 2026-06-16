@@ -6,7 +6,7 @@ import Layout from "../layouts/Layout.astro";
 
 <Layout>
 	<section class="flex flex-1 items-center bg-white">
-		<div class="mx-auto w-full max-w-[800px] px-6 py-16 text-center">
+		<div class="mx-auto w-full max-w-[800px] px-6 pt-16 pb-24 text-center sm:pb-28">
 			<h1
 				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
 			>
@@ -199,9 +199,10 @@ import Layout from "../layouts/Layout.astro";
 			if (URL.canParse(`http://[${bare}]`)) return true;
 			if (/^\d{1,3}(\.\d{1,3}){3}$/.test(bare)) return true;
 			const labels = hostname.split(".");
+			if (labels.length < 2) return false;
 			if (labels.some((label) => label.length === 0)) return false;
 			const tld = labels[labels.length - 1];
-			return /^[a-z]{2,}$/i.test(tld);
+			return /^[a-z]{2,}$/i.test(tld) || /^xn--[a-z0-9]+$/i.test(tld);
 		};
 
 		const updateSubmitState = () => {
