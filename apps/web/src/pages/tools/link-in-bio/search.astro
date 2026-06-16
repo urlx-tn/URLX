@@ -274,7 +274,8 @@ import Layout from "../../../layouts/Layout.astro";
 				"mt-0.5 block truncate text-[13px] font-medium text-ink-2";
 			handle.textContent = `@${item.slug}`;
 
-			content.append(title, handle);
+			content.appendChild(title);
+			content.appendChild(handle);
 			if (item.description) {
 				const description = document.createElement("span");
 				description.className =
@@ -290,7 +291,9 @@ import Layout from "../../../layouts/Layout.astro";
 			arrow.innerHTML =
 				'<svg viewBox="0 0 24 24" class="size-[18px]" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>';
 
-			link.append(avatar, content, arrow);
+			link.appendChild(avatar);
+			link.appendChild(content);
+			link.appendChild(arrow);
 			row.appendChild(link);
 			return row;
 		};

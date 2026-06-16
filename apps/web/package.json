@@ -22,6 +22,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@astrojs/check": "^0.9.9",
 		"@astrojs/cloudflare": "^13.0.1",
 		"@cloudflare/workers-types": "catalog:",
 		"@tailwindcss/vite": "^4.1.18",

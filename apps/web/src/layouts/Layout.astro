@@ -92,8 +92,8 @@ const organizationSchema = {
 
 		<title>{title}</title>
 
-		<script type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
-		<script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
 		<ClientRouter />
 		<LoadingIndicator
 			color="var(--color-accent)"

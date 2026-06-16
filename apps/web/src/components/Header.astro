@@ -257,8 +257,10 @@ const showCreateLink = !isLinkInBioPage;
 			handle.className = "mt-0.5 block truncate text-[12px] text-ink-2";
 			handle.textContent = `@${item.slug}`;
 
-			content.append(title, handle);
-			option.append(avatar, content);
+			content.appendChild(title);
+			content.appendChild(handle);
+			option.appendChild(avatar);
+			option.appendChild(content);
 			option.addEventListener("mousedown", (event) => event.preventDefault());
 			option.addEventListener("mousemove", () => setActiveFinding(index));
 			option.addEventListener("click", () => openPage(item));
@@ -302,8 +304,10 @@ const showCreateLink = !isLinkInBioPage;
 				meta.textContent = "Open the full search page";
 			}
 
-			content.append(title, meta);
-			option.append(icon, content);
+			content.appendChild(title);
+			content.appendChild(meta);
+			option.appendChild(icon);
+			option.appendChild(content);
 			option.addEventListener("mousedown", (event) => event.preventDefault());
 			option.addEventListener("mousemove", () => setActiveFinding(index));
 			option.addEventListener("click", openAllResults);

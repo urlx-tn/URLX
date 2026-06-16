@@ -514,7 +514,8 @@ const description =
 					{ signal },
 				);
 
-				fields.append(labelInput, urlInput);
+				fields.appendChild(labelInput);
+				fields.appendChild(urlInput);
 
 				const remove = document.createElement("button");
 				remove.type = "button";
@@ -541,7 +542,8 @@ const description =
 					{ signal },
 				);
 
-				row.append(fields, remove);
+				row.appendChild(fields);
+				row.appendChild(remove);
 				linksList.appendChild(row);
 				updateAddState();
 			};
