@@ -8,6 +8,7 @@ const headerSearchQuery =
 const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 const isUrlShortenerPage = currentPath === "/tools/url-shortener";
 const isQrCodeGeneratorPage = currentPath === "/tools/qr-code-generator";
+const isUrlCleanerPage = currentPath === "/tools/url-cleaner";
 const isLinkInBioPage =
 	currentPath === "/tools/link-in-bio" ||
 	currentPath.startsWith("/tools/link-in-bio/");
@@ -16,12 +17,14 @@ const showHeaderSearch = currentPath === "/tools/link-in-bio";
 const productLinks = [
 	{ label: "URL Shortener", href: "/tools/url-shortener" },
 	{ label: "QR Code Generator", href: "/tools/qr-code-generator" },
+	{ label: "URL Cleaner", href: "/tools/url-cleaner" },
 	{ label: "Link in Bio", href: "/tools/link-in-bio" },
 ];
 
 const visibleProductLinks = productLinks.filter((link) => {
 	if (link.href === "/tools/url-shortener") return !isUrlShortenerPage;
 	if (link.href === "/tools/qr-code-generator") return !isQrCodeGeneratorPage;
+	if (link.href === "/tools/url-cleaner") return !isUrlCleanerPage;
 	if (link.href === "/tools/link-in-bio") return !isLinkInBioPage;
 	return true;
 });

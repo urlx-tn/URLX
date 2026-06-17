@@ -228,6 +228,7 @@ const description =
 	import { friendlyErrorMessage } from "../../../lib/form-errors";
 	import { orpc } from "../../../lib/orpc";
 	import { registerPageScript } from "../../../lib/page-script";
+	import { stripScheme } from "../../../lib/url-tools";
 
 	const MAX_LINKS = 25;
 	const HANDLE_CHECK_DELAY = 350;
@@ -320,9 +321,6 @@ const description =
 				if (!trimmed) return "";
 				return `https://${stripScheme(trimmed)}`;
 			};
-
-			const stripScheme = (value: string): string =>
-				value.replace(/^\s*(https?|ftp):\/\//i, "");
 
 			const isIpv4Literal = (hostname: string) => {
 				const parts = hostname.split(".");
