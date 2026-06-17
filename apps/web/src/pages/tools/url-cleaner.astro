@@ -1,16 +1,16 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 
-const title = "QR Code Generator | URLX";
+const title = "URL Cleaner | URLX";
 const description =
-	"Create a downloadable QR code from any link. Free, private, and no sign-up required.";
+	"Remove tracking parameters from URLs and copy a cleaner link. Free, private, and no sign-up required.";
 
-const pageUrl = new URL("/tools/qr-code-generator", Astro.site).toString();
+const pageUrl = new URL("/tools/url-cleaner", Astro.site).toString();
 
 const softwareSchema = {
 	"@context": "https://schema.org",
 	"@type": "WebApplication",
-	name: "QR Code Generator",
+	name: "URL Cleaner",
 	applicationCategory: "UtilitiesApplication",
 	operatingSystem: "Web",
 	offers: {
@@ -26,33 +26,33 @@ const softwareSchema = {
 	<script is:inline type="application/ld+json" set:html={JSON.stringify(softwareSchema)} />
 
 	<section
-		data-page-root="qr-code-generator"
+		data-page-root="url-cleaner"
 		class="flex flex-1 items-center bg-white"
 	>
 		<div class="mx-auto w-full max-w-[800px] px-6 pt-16 pb-24 text-center sm:pb-28">
 			<h1
 				class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
 			>
-				QR code generator.
+				Clean tracking from URLs.
 			</h1>
 			<p
-				class="mx-auto mt-5 max-w-[32ch] text-[19px] leading-7 text-ink-2 sm:text-[21px]"
+				class="mx-auto mt-5 max-w-[34ch] text-[19px] leading-7 text-ink-2 sm:text-[21px]"
 			>
-				Paste a link and create a clean QR code you can download.
+				Strip common tracking parameters and keep the link that matters.
 			</p>
 
 			<div class="mx-auto mt-10 max-w-[560px] text-left">
 				<form
 					class="flex flex-col gap-3"
-					data-qr-generator="form"
+					data-url-cleaner="form"
 					novalidate
 				>
 					<div class="flex flex-col gap-3 sm:flex-row">
-						<label class="sr-only" for="qr-url-input">Link to encode</label>
-						<div class="relative flex-1" data-qr-generator="input-wrap">
+						<label class="sr-only" for="url-cleaner-input">URL to clean</label>
+						<div class="relative flex-1" data-url-cleaner="input-wrap">
 							<div
 								class="field flex w-full items-center gap-2 overflow-hidden pl-4"
-								data-qr-generator="input-shell"
+								data-url-cleaner="input-shell"
 							>
 								<span
 									class="shrink-0 select-none text-[15px] text-ink-2"
@@ -61,48 +61,48 @@ const softwareSchema = {
 									https://
 								</span>
 								<input
-									id="qr-url-input"
+									id="url-cleaner-input"
 									name="url"
 									type="url"
 									inputmode="url"
 									autocomplete="off"
 									spellcheck="false"
 									autocapitalize="off"
-									placeholder="example.com"
+									placeholder="example.com?utm_source=email"
 									class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
-									data-qr-generator="url-input"
+									data-url-cleaner="url-input"
 									role="combobox"
 									aria-invalid="false"
 									aria-expanded="false"
 									aria-autocomplete="list"
 									aria-haspopup="listbox"
-									aria-controls="qr-url-history"
-									aria-describedby="qr-generator-error"
+									aria-controls="url-cleaner-history"
+									aria-describedby="url-cleaner-error"
 								/>
 							</div>
 							<ul
-								id="qr-url-history"
+								id="url-cleaner-history"
 								class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
 								role="listbox"
 								aria-label="Recent URLs"
-								data-qr-generator="history"
+								data-url-cleaner="history"
 								hidden
 							>
 							</ul>
 						</div>
 						<button
 							type="submit"
-							class="btn w-full sm:w-auto sm:min-w-[168px]"
-							data-qr-generator="submit"
+							class="btn w-full sm:w-auto sm:min-w-[148px]"
+							data-url-cleaner="submit"
 						>
 							<span
 								class="spinner shrink-0"
 								aria-hidden="true"
-								data-qr-generator="submit-spinner"
+								data-url-cleaner="submit-spinner"
 								hidden
 							>
 							</span>
-							<span data-qr-generator="submit-label">Generate QR code</span>
+							<span data-url-cleaner="submit-label">Clean URL</span>
 						</button>
 					</div>
 					<div
@@ -112,14 +112,14 @@ const softwareSchema = {
 							<input
 								type="checkbox"
 								class="h-4 w-4 accent-accent"
-								data-qr-generator="remember-history"
+								data-url-cleaner="remember-history"
 							/>
 							<span>Remember recent URLs on this device</span>
 						</label>
 						<button
 							type="button"
 							class="self-start text-link underline-offset-2 hover:underline sm:self-auto"
-							data-qr-generator="clear-history"
+							data-url-cleaner="clear-history"
 							hidden
 						>
 							Clear recent URLs
@@ -128,55 +128,62 @@ const softwareSchema = {
 				</form>
 
 				<p
-					id="qr-generator-error"
+					id="url-cleaner-error"
 					class="mt-3 text-[14px] leading-5 text-[#d70015]"
 					role="alert"
 					aria-live="assertive"
-					data-qr-generator="error"
+					data-url-cleaner="error"
 					hidden
 				>
 				</p>
 
 				<section
 					class="surface reveal mt-8 p-6 text-left sm:p-7"
-					data-qr-generator="result"
-					aria-labelledby="qr-result-label"
+					data-url-cleaner="result"
+					aria-labelledby="url-cleaner-result-label"
 					aria-live="polite"
 					hidden
 				>
 					<h2
-						id="qr-result-label"
+						id="url-cleaner-result-label"
 						class="text-[13px] font-semibold uppercase tracking-[0.06em] text-ink-2"
 					>
-						Your QR code
+						Cleaned URL
 					</h2>
 
-					<div class="mt-5 flex justify-center">
-						<div
-							class="flex h-[232px] w-[232px] items-center justify-center rounded-xl border border-hair bg-white p-3"
-							data-qr-generator="canvas"
-							role="img"
-							aria-label="QR code"
+					<div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+						<a
+							href="#"
+							class="hover-border flex-1 break-all rounded-xl border border-hair bg-white px-4 py-3 text-[16px] text-link no-underline"
+							data-url-cleaner="result-url-link"
+							rel="noopener noreferrer"
+							target="_blank"
 						>
-						</div>
+							<span data-url-cleaner="result-url"></span>
+						</a>
+						<button
+							type="button"
+							class="btn-secondary inline-flex items-center justify-center gap-2 self-stretch rounded-xl border px-5 py-3 text-[15px]"
+							data-url-cleaner="copy"
+							aria-label="Copy cleaned URL to clipboard"
+						>
+							<span class="copy-label" data-url-cleaner="copy-label">Copy</span>
+						</button>
 					</div>
 
-					<div class="mt-5 flex flex-wrap justify-center gap-2.5">
-						<button
-							type="button"
-							class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px] font-medium"
-							data-qr-generator="download-svg"
-						>
-							Download SVG
-						</button>
-						<button
-							type="button"
-							class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px] font-medium"
-							data-qr-generator="download-png"
-						>
-							<span data-qr-generator="download-png-label">Download PNG</span>
-						</button>
-					</div>
+					<p
+						class="mt-4 text-[14px] leading-5 text-ink-2"
+						data-url-cleaner="result-meta"
+					>
+					</p>
+
+					<button
+						type="button"
+						class="btn-secondary mt-5 inline-flex h-11 items-center justify-center rounded-xl border px-5 text-[15px]"
+						data-url-cleaner="reset"
+					>
+						Clean another URL
+					</button>
 				</section>
 			</div>
 		</div>
@@ -184,8 +191,8 @@ const softwareSchema = {
 </Layout>
 
 <script>
+	import { copyToClipboard } from "../../lib/copy-to-clipboard";
 	import { registerPageScript } from "../../lib/page-script";
-	import { renderQrPngDataUrl, renderQrSvg } from "../../lib/qr-code";
 	import {
 		addRecentUrl,
 		clearRecentUrls,
@@ -194,38 +201,21 @@ const softwareSchema = {
 		removeRecentUrl,
 		setUrlHistoryEnabled,
 	} from "../../lib/url-history";
-	import {
-		isValidUrl,
-		normalizeUserUrlInput,
-		stripScheme,
-	} from "../../lib/url-tools";
+	import { normalizeUserUrlInput, stripHttpsScheme } from "../../lib/url-tools";
+	import { cleanUrl, isCleanableUrl } from "../../lib/url-cleaner";
 
 	type State =
 		| { status: "idle" }
-		| { status: "generating" }
-		| { status: "success"; url: string; svg: string }
+		| {
+				status: "success";
+				cleanedUrl: string;
+				removedCount: number;
+				removedNames: string[];
+		  }
 		| { status: "error"; message: string };
 
-	const sanitizeFileSlug = (value: string): string => {
-		const slug = value
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "")
-			.slice(0, 50);
-		return slug || "code";
-	};
-
-	const fileSlugFromUrl = (url: string): string => {
-		try {
-			const { hostname } = new URL(url);
-			return sanitizeFileSlug(hostname);
-		} catch {
-			return "code";
-		}
-	};
-
 	registerPageScript<HTMLElement>(
-		'[data-page-root="qr-code-generator"]',
+		'[data-page-root="url-cleaner"]',
 		(root, signal) => {
 			const selectRequired = <T extends Element>(selector: string): T => {
 				const element = root.querySelector<T>(selector);
@@ -236,56 +226,62 @@ const softwareSchema = {
 			};
 
 			const form = selectRequired<HTMLFormElement>(
-				'[data-qr-generator="form"]',
+				'[data-url-cleaner="form"]',
 			);
 			const input = selectRequired<HTMLInputElement>(
-				'[data-qr-generator="url-input"]',
+				'[data-url-cleaner="url-input"]',
 			);
 			const inputShell = selectRequired<HTMLElement>(
-				'[data-qr-generator="input-shell"]',
+				'[data-url-cleaner="input-shell"]',
 			);
 			const inputWrap = selectRequired<HTMLElement>(
-				'[data-qr-generator="input-wrap"]',
+				'[data-url-cleaner="input-wrap"]',
 			);
 			const submitButton = selectRequired<HTMLButtonElement>(
-				'[data-qr-generator="submit"]',
+				'[data-url-cleaner="submit"]',
 			);
 			const submitLabel = selectRequired<HTMLElement>(
-				'[data-qr-generator="submit-label"]',
+				'[data-url-cleaner="submit-label"]',
 			);
 			const submitSpinner = selectRequired<HTMLElement>(
-				'[data-qr-generator="submit-spinner"]',
+				'[data-url-cleaner="submit-spinner"]',
 			);
 			const errorEl = selectRequired<HTMLElement>(
-				'[data-qr-generator="error"]',
-			);
-			const canvas = selectRequired<HTMLElement>(
-				'[data-qr-generator="canvas"]',
+				'[data-url-cleaner="error"]',
 			);
 			const resultPanel = selectRequired<HTMLElement>(
-				'[data-qr-generator="result"]',
+				'[data-url-cleaner="result"]',
 			);
-			const downloadSvgButton = selectRequired<HTMLButtonElement>(
-				'[data-qr-generator="download-svg"]',
+			const resultUrl = selectRequired<HTMLElement>(
+				'[data-url-cleaner="result-url"]',
 			);
-			const downloadPngButton = selectRequired<HTMLButtonElement>(
-				'[data-qr-generator="download-png"]',
+			const resultUrlLink = selectRequired<HTMLAnchorElement>(
+				'[data-url-cleaner="result-url-link"]',
 			);
-			const downloadPngLabel = selectRequired<HTMLElement>(
-				'[data-qr-generator="download-png-label"]',
+			const resultMeta = selectRequired<HTMLElement>(
+				'[data-url-cleaner="result-meta"]',
+			);
+			const copyButton = selectRequired<HTMLButtonElement>(
+				'[data-url-cleaner="copy"]',
+			);
+			const copyLabel = selectRequired<HTMLElement>(
+				'[data-url-cleaner="copy-label"]',
+			);
+			const resetButton = selectRequired<HTMLButtonElement>(
+				'[data-url-cleaner="reset"]',
 			);
 			const historyList = selectRequired<HTMLUListElement>(
-				'[data-qr-generator="history"]',
+				'[data-url-cleaner="history"]',
 			);
 			const rememberHistory = selectRequired<HTMLInputElement>(
-				'[data-qr-generator="remember-history"]',
+				'[data-url-cleaner="remember-history"]',
 			);
 			const clearHistoryButton = selectRequired<HTMLButtonElement>(
-				'[data-qr-generator="clear-history"]',
+				'[data-url-cleaner="clear-history"]',
 			);
 
 			let state: State = { status: "idle" };
-			let generationToken = 0;
+			let copyResetTimer: number | null = null;
 			let historyItems: string[] = [];
 			let historyActive = -1;
 
@@ -311,7 +307,7 @@ const softwareSchema = {
 			};
 
 			const applyHistoryUrl = (url: string) => {
-				input.value = stripScheme(url);
+				input.value = stripHttpsScheme(url);
 				closeHistory();
 				input.focus();
 				const end = input.value.length;
@@ -327,7 +323,7 @@ const softwareSchema = {
 
 			const buildHistoryOption = (url: string, index: number) => {
 				const option = document.createElement("li");
-				option.id = `qr-url-history-opt-${index}`;
+				option.id = `url-cleaner-history-opt-${index}`;
 				option.setAttribute("role", "option");
 				option.setAttribute("aria-selected", "false");
 				option.className =
@@ -424,27 +420,36 @@ const softwareSchema = {
 			};
 
 			const updateSubmitState = () => {
-				submitButton.disabled =
-					state.status === "generating" || !isValidUrl(input.value);
+				submitButton.disabled = !isCleanableUrl(input.value);
 			};
 
-			const triggerDownload = (filename: string, href: string) => {
-				const anchor = document.createElement("a");
-				anchor.href = href;
-				anchor.download = filename;
-				document.body.appendChild(anchor);
-				anchor.click();
-				anchor.remove();
+			const resetCopyLabel = () => {
+				if (copyResetTimer !== null) {
+					window.clearTimeout(copyResetTimer);
+					copyResetTimer = null;
+				}
+				copyLabel.textContent = "Copy";
+				copyLabel.removeAttribute("data-swapping");
+			};
+
+			const swapCopyLabel = (next: string) => {
+				copyLabel.setAttribute("data-swapping", "true");
+				window.setTimeout(() => {
+					copyLabel.textContent = next;
+					copyLabel.removeAttribute("data-swapping");
+				}, 140);
+			};
+
+			const formatRemovedNames = (names: string[]): string => {
+				if (names.length === 0) return "";
+				if (names.length === 1) return names[0];
+				return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 			};
 
 			const render = () => {
-				const isGenerating = state.status === "generating";
-				input.disabled = isGenerating;
 				updateSubmitState();
-				submitLabel.textContent = isGenerating
-					? "Generating..."
-					: "Generate QR code";
-				submitSpinner.hidden = !isGenerating;
+				submitLabel.textContent = "Clean URL";
+				submitSpinner.hidden = true;
 
 				if (state.status === "error") {
 					errorEl.hidden = false;
@@ -459,57 +464,30 @@ const softwareSchema = {
 				}
 
 				if (state.status === "success") {
-					canvas.innerHTML = state.svg;
-					const svgEl = canvas.querySelector("svg");
-					if (svgEl) {
-						svgEl.setAttribute("width", "100%");
-						svgEl.setAttribute("height", "100%");
-						svgEl.setAttribute("aria-label", `QR code for ${state.url}`);
+					resultUrl.textContent = state.cleanedUrl;
+					resultUrlLink.setAttribute("href", state.cleanedUrl);
+					resultUrlLink.setAttribute("title", state.cleanedUrl);
+
+					if (state.removedCount === 0) {
+						resultMeta.textContent =
+							"No tracking parameters found. Your link is already clean.";
+					} else {
+						const names = formatRemovedNames(state.removedNames);
+						resultMeta.textContent = `Removed ${state.removedCount} parameter${state.removedCount === 1 ? "" : "s"}: ${names}.`;
 					}
+
 					resultPanel.hidden = false;
+					resetCopyLabel();
 				} else {
 					resultPanel.hidden = true;
-					canvas.innerHTML = "";
-				}
-			};
-
-			const generateQr = async (url: string) => {
-				const token = generationToken + 1;
-				generationToken = token;
-
-				state = { status: "generating" };
-				render();
-
-				try {
-					const svg = await renderQrSvg(url, {
-						margin: 1,
-						color: { dark: "#1d1d1f", light: "#ffffff" },
-					});
-					if (token !== generationToken) return;
-
-					if (isUrlHistoryEnabled()) {
-						addRecentUrl(url);
-						updateHistoryControls();
-					}
-
-					state = { status: "success", url, svg };
-					render();
-				} catch (error) {
-					if (token !== generationToken) return;
-					console.error("QR generation failed:", error);
-					state = {
-						status: "error",
-						message: "Could not generate QR code. Please try again.",
-					};
-					render();
+					resetCopyLabel();
 				}
 			};
 
 			const handleSubmit = (event: Event) => {
 				event.preventDefault();
-				if (state.status === "generating") return;
-
-				if (!isValidUrl(input.value)) {
+				closeHistory();
+				if (!isCleanableUrl(input.value)) {
 					state = {
 						status: "error",
 						message: "Please enter a valid URL.",
@@ -520,61 +498,55 @@ const softwareSchema = {
 					return;
 				}
 
-			closeHistory();
-			const url = normalizeUserUrlInput(input.value);
-			void generateQr(url);
-			};
-
-			const handleDownloadSvg = () => {
-				if (state.status !== "success") return;
-				const blob = new Blob([state.svg], {
-					type: "image/svg+xml;charset=utf-8",
-				});
-				const url = URL.createObjectURL(blob);
-				const slug = fileSlugFromUrl(state.url);
-				triggerDownload(`urlx-qr-${slug}.svg`, url);
-				window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-			};
-
-			const showExportError = (message: string) => {
-				errorEl.hidden = false;
-				errorEl.textContent = message;
-				input.setAttribute("aria-invalid", "false");
-				inputShell.setAttribute("aria-invalid", "false");
-			};
-
-			const clearExportError = () => {
-				if (state.status !== "error") {
-					errorEl.hidden = true;
-					errorEl.textContent = "";
+				const result = cleanUrl(input.value);
+				if (!result.ok) {
+					state = { status: "error", message: result.error };
+					render();
+					input.focus();
+					input.select();
+					return;
 				}
+
+				const normalizedUrl = normalizeUserUrlInput(input.value);
+				if (normalizedUrl && isUrlHistoryEnabled()) {
+					addRecentUrl(normalizedUrl);
+					updateHistoryControls();
+				}
+
+				state = {
+					status: "success",
+					cleanedUrl: result.cleanedUrl,
+					removedCount: result.removedCount,
+					removedNames: result.removedNames,
+				};
+				render();
+				copyButton.focus();
 			};
 
-			const handleDownloadPng = async () => {
+			const handleCopy = async () => {
 				if (state.status !== "success") return;
-				const targetUrl = state.url;
-				downloadPngButton.disabled = true;
-				downloadPngLabel.textContent = "Preparing...";
-				clearExportError();
-				try {
-					const dataUrl = await renderQrPngDataUrl(targetUrl, {
-						margin: 1,
-						width: 1024,
-						color: { dark: "#1d1d1f", light: "#ffffff" },
-					});
-					const slug = fileSlugFromUrl(targetUrl);
-					triggerDownload(`urlx-qr-${slug}.png`, dataUrl);
-				} catch {
-					showExportError("Could not export PNG. Please try again.");
-				} finally {
-					downloadPngButton.disabled = false;
-					downloadPngLabel.textContent = "Download PNG";
+				const ok = await copyToClipboard(state.cleanedUrl);
+				if (!ok) return;
+				swapCopyLabel("Copied");
+				if (copyResetTimer !== null) {
+					window.clearTimeout(copyResetTimer);
 				}
+				copyResetTimer = window.setTimeout(() => {
+					swapCopyLabel("Copy");
+					copyResetTimer = null;
+				}, 1600);
+			};
+
+			const handleReset = () => {
+				state = { status: "idle" };
+				input.value = "";
+				render();
+				input.focus();
 			};
 
 			form.addEventListener("submit", handleSubmit, { signal });
-			downloadSvgButton.addEventListener("click", handleDownloadSvg, { signal });
-			downloadPngButton.addEventListener("click", handleDownloadPng, { signal });
+			copyButton.addEventListener("click", handleCopy, { signal });
+			resetButton.addEventListener("click", handleReset, { signal });
 			rememberHistory.addEventListener(
 				"change",
 				() => {
@@ -599,7 +571,7 @@ const softwareSchema = {
 			input.addEventListener(
 				"input",
 				() => {
-					const stripped = stripScheme(input.value);
+					const stripped = stripHttpsScheme(input.value);
 					if (stripped !== input.value) {
 						const start = input.selectionStart;
 						const end = input.selectionEnd;
@@ -627,7 +599,9 @@ const softwareSchema = {
 			signal.addEventListener(
 				"abort",
 				() => {
-					generationToken += 1;
+					if (copyResetTimer !== null) {
+						window.clearTimeout(copyResetTimer);
+					}
 				},
 				{ once: true },
 			);
