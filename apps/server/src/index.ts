@@ -11,7 +11,6 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
 import { securityHeaders } from "./lib/security-headers";
-import { createRedirectRoute } from "./routes/redirect.route";
 
 type ServerHonoEnv = {
 	Bindings: ServerBindings;
@@ -84,7 +83,5 @@ app.use("/*", async (c, next) => {
 app.get("/", (c) => {
 	return c.text("OK");
 });
-
-app.route("/", createRedirectRoute());
 
 export default app;

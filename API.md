@@ -1,6 +1,6 @@
 # URLX Backend API
 
-URLX v1 exposes shortening through oRPC and redirects through a normal Hono route.
+URLX v1 exposes shortening and link resolution through oRPC. Short-link redirects are served by the web app at `<<web-origin>>/u/:shortCode`.
 
 ## Local Configuration
 
@@ -15,16 +15,16 @@ SHORT_URL_BASE
 Alchemy defaults `SHORT_URL_BASE` to:
 
 ```text
-http://localhost:3000
+http://localhost:4321
 ```
 
-Set `SHORT_URL_BASE` in production to the public short-link origin, for example:
+Set `SHORT_URL_BASE` in production to the public web origin, for example:
 
 ```text
 https://your-production-url.com
 ```
 
-Do not include a trailing slash.
+Do not include a trailing slash. Short links are built as `${SHORT_URL_BASE}/u/${shortCode}`.
 
 ## oRPC Endpoint
 
@@ -55,11 +55,33 @@ Success response:
 ```json
 {
 	"shortCode": "a8X2kPq",
-	"shortUrl": "http://localhost:3000/a8X2kPq"
+	"shortUrl": "http://localhost:4321/u/a8X2kPq"
 }
 ```
 
 In production, `shortUrl` uses the configured `SHORT_URL_BASE`.
+
+### `links.getByShortCode`
+
+Resolves a short code to its original URL. Used by the web app to server-render the redirect at `/u/:shortCode`.
+
+Request:
+
+```json
+{
+	"shortCode": "a8X2kPq"
+}
+```
+
+Success response:
+
+```json
+{
+	"originalUrl": "https://example.com/page"
+}
+```
+
+Unknown, malformed, or disabled short codes return a `SHORT_CODE_NOT_FOUND` error.
 
 ### `bio.create`
 
@@ -128,20 +150,21 @@ Unknown or disabled slugs return a `PAGE_NOT_FOUND` error.
 ## Redirect Endpoint
 
 ```text
-GET /:shortCode
+GET <<web-origin>>/u/:shortCode
 ```
+
+Served by the web app, which resolves the short code via `links.getByShortCode` and issues the redirect.
 
 Behavior:
 
 - Valid short codes redirect with `302 Found`.
-- Unknown or malformed short codes return `404`.
-- Disabled links return `410`.
+- Unknown, malformed, or disabled short codes return `404`.
 - Redirect responses include `Cache-Control: no-store`.
 
 Example:
 
 ```text
-GET /a8X2kPq
+GET /u/a8X2kPq
 Location: https://example.com/page
 ```
 

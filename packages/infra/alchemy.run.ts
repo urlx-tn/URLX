@@ -14,6 +14,7 @@ function getCliStage() {
 }
 
 const cliStage = getCliStage();
+
 const stageEnvFile =
 	cliStage === "prod"
 		? "../../.env.production"
@@ -53,14 +54,17 @@ export const server = await Worker("server", {
 	bindings: {
 		DB: db,
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
-		SHORT_URL_BASE: alchemy.env.SHORT_URL_BASE ?? "http://localhost:3000",
+		SHORT_URL_BASE: requireValue("SHORT_URL_BASE", alchemy.env.SHORT_URL_BASE),
 	},
 	dev: {
 		port: 3000,
 	},
 });
 
-const publicServerUrl = requireValue("server URL", server.url);
+const publicServerUrl = requireValue(
+	"PUBLIC_SERVER_URL",
+	alchemy.env.PUBLIC_SERVER_URL
+);
 
 export const web = await Astro("web", {
 	adopt: true,
@@ -74,5 +78,6 @@ export const web = await Astro("web", {
 
 console.log(`Web    -> ${web.url}`);
 console.log(`Server -> ${server.url}`);
+console.log(`API    -> ${publicServerUrl}`);
 
 await app.finalize();

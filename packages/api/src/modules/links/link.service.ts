@@ -5,9 +5,11 @@ import { validateDestinationUrl } from "../../lib/validate-url";
 import { LinkError } from "./link.errors";
 import type { LinkRepository, UrlxDb } from "./link.repository";
 import { LinkRepository as Repository } from "./link.repository";
+import type { GetLinkOutput } from "./link.schema";
 import type { Link } from "./link.types";
 
 const maxInsertAttempts = 5;
+const shortUrlPrefix = "/u";
 
 export type LinkServiceOptions = {
 	db: UrlxDb;
@@ -73,10 +75,20 @@ export class LinkService {
 		throw new LinkError("SERVER_ERROR");
 	}
 
+	async getByShortCode(shortCode: string): Promise<GetLinkOutput> {
+		const link = await this.repository.findByShortCode(shortCode);
+
+		if (!link || link.disabledAt !== null) {
+			throw new LinkError("SHORT_CODE_NOT_FOUND");
+		}
+
+		return { originalUrl: link.originalUrl };
+	}
+
 	private toShortenOutput(link: Pick<Link, "shortCode">) {
 		return {
 			shortCode: link.shortCode,
-			shortUrl: `${this.shortUrlBase}/${link.shortCode}`,
+			shortUrl: `${this.shortUrlBase}${shortUrlPrefix}/${link.shortCode}`,
 		};
 	}
 }

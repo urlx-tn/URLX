@@ -79,8 +79,8 @@ pnpm run dev
 
 Alchemy starts the local Workers stack and prints the web and server URLs. By default, the app uses:
 
-- Web: `http://localhost:4321`
-- API and short-link redirects: `http://localhost:3000`
+- Web and short-link redirects: `http://localhost:4321`
+- API: `http://localhost:3000`
 - API reference: `http://localhost:3000/api-reference`
 
 ## Environment
@@ -90,7 +90,7 @@ The root `.env.example` contains the local values needed by the stack and local 
 | Variable | Required | Used by | Purpose |
 | --- | --- | --- | --- |
 | `CORS_ORIGIN` | Yes | Server Worker | Allowed browser origin for API requests. |
-| `SHORT_URL_BASE` | No | Server Worker | Public origin used when returning shortened URLs. Defaults to `http://localhost:3000`. |
+| `SHORT_URL_BASE` | No | Server Worker | Public origin used when returning shortened URLs. Defaults to `http://localhost:4321`. |
 | `PUBLIC_SERVER_URL` | Yes | Web app | Public oRPC server URL used by the browser client. |
 | `SKIP_ENV_VALIDATION` | No | Env helpers | Optional escape hatch for public env validation. |
 

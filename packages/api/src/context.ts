@@ -1,7 +1,7 @@
 import { createDb } from "@urlx/db";
 import type { Context as HonoContext } from "hono";
 
-export const defaultShortUrlBase = "http://localhost:3000";
+export const defaultShortUrlBase = "http://localhost:4321";
 
 export type ServerBindings = {
 	DB: D1Database;
