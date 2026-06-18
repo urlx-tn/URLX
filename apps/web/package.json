@@ -16,7 +16,7 @@
 		"@orpc/client": "catalog:",
 		"@urlx/api": "workspace:*",
 		"@urlx/env": "workspace:*",
-		"astro": "^6.0.1",
+		"astro": "^6.4.8",
 		"astro-loading-indicator": "^0.8.0",
 		"dotenv": "catalog:",
 		"qrcode": "^1.5.4",
@@ -30,7 +30,7 @@
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
-		"sharp": "^0.34.0",
+		"sharp": "^0.35.1",
 		"tailwindcss": "^4.1.18",
 		"typescript": "catalog:"
 	}
