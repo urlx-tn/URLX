@@ -90,7 +90,12 @@ const qrSvg = page
 	: "";
 ---
 
-<Layout title={title} description={description} chrome={false}>
+<Layout
+	title={title}
+	description={description}
+	robots={page ? undefined : "noindex, follow"}
+	chrome={false}
+>
 	{
 		page ? (
 			<section

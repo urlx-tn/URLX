@@ -1,12 +1,33 @@
 {
 	"name": "urlx",
 	"private": true,
+	"description": "Free and open-source URL tools built for Cloudflare.",
 	"license": "MIT",
 	"author": "Chames Eddine Dhibi (https://v1.chames.dhibi.tn)",
 	"contributors": [
 		"Chames Eddine Dhibi (https://v1.chames.dhibi.tn)",
 		"Youssef Dhibi (https://youssef.tn)"
 	],
+	"homepage": "https://www.urlx.tn",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/urlx-tn/URLX.git"
+	},
+	"bugs": {
+		"url": "https://github.com/urlx-tn/URLX/issues"
+	},
+	"keywords": [
+		"url-tools",
+		"url-shortener",
+		"url-cleaner",
+		"qr-code",
+		"link-in-bio",
+		"cloudflare-workers",
+		"open-source"
+	],
+	"engines": {
+		"node": ">=20"
+	},
 	"workspaces": [
 		"apps/*",
 		"packages/*"
