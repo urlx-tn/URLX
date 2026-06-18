@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
+  <a href="https://github.com/urlx-tn/URLX/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/urlx-tn/URLX/actions/workflows/ci.yml/badge.svg" /></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178c6.svg?logo=typescript&logoColor=white" />
   <img alt="Astro" src="https://img.shields.io/badge/Astro-ff5d01.svg?logo=astro&logoColor=white" />
   <img alt="Hono" src="https://img.shields.io/badge/Hono-e36002.svg?logo=hono&logoColor=white" />
@@ -74,7 +75,7 @@ and database migrations from `packages/infra/alchemy.run.ts`.
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - pnpm 10.22.0 or newer
 - A Cloudflare account for deployed environments
 
@@ -165,12 +166,18 @@ Run all checks before opening a pull request:
 ```bash
 pnpm run check
 pnpm run check-types
+pnpm run test
 pnpm run build
 ```
 
-The repository does not currently have a dedicated automated test suite.
-Changes to server-backed features should also be verified against the full
-local stack.
+The unit suite covers core URL validation, normalization, slug, and short-code
+behavior. Changes to server-backed features should also be verified against the
+full local stack.
+
+GitHub Actions runs the same quality gates for pull requests targeting `main`
+and for pushes to `main`. CI caches the pnpm package store and Turborepo task
+outputs. Maintainers can optionally enable shared Turborepo Remote Cache by
+adding a `TURBO_TOKEN` Actions secret and a `TURBO_TEAM` Actions variable.
 
 ## Deployment
 
@@ -225,6 +232,7 @@ urlx/
 | `pnpm run check` | Run Biome formatting and lint checks. |
 | `pnpm run check:write` | Apply safe Biome fixes. |
 | `pnpm run check-types` | Run configured TypeScript checks. |
+| `pnpm run test` | Run the automated unit test suite. |
 | `pnpm run db:generate` | Generate Drizzle migrations. |
 | `pnpm run deploy:dev` | Deploy the development stage. |
 | `pnpm run deploy` | Deploy the production stage. |

@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 
 import { config } from "dotenv";
 

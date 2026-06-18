@@ -4,14 +4,20 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"inputs": ["$TURBO_DEFAULT$", ".env*"],
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.env*"],
 			"outputs": ["dist/**", ".astro/**"]
 		},
 		"lint": {
 			"dependsOn": ["^lint"]
 		},
+		"transit": {
+			"dependsOn": ["^transit"]
+		},
 		"check-types": {
-			"dependsOn": ["^check-types"]
+			"dependsOn": ["transit"]
+		},
+		"test": {
+			"dependsOn": ["transit"]
 		},
 		"dev": {
 			"cache": false,
