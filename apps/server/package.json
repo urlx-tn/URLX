@@ -23,8 +23,8 @@
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
-		"tsdown": "^0.21.9",
+		"tsdown": "^0.22.3",
 		"typescript": "catalog:",
-		"wrangler": "^4.77.0"
+		"wrangler": "^4.102.0"
 	}
 }
