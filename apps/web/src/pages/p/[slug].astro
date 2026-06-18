@@ -1,8 +1,10 @@
 ---
 import QRCode from "qrcode/lib/browser.js";
 
+import StatusPage from "../../components/StatusPage.astro";
 import Layout from "../../layouts/Layout.astro";
 import { orpc } from "../../lib/orpc";
+import { isOrpcErrorCode } from "../../lib/orpc-errors";
 
 const { slug } = Astro.params;
 
@@ -13,8 +15,10 @@ let page: BioPage | null = null;
 if (slug) {
 	try {
 		page = await orpc.bio.getBySlug({ slug });
-	} catch {
-		page = null;
+	} catch (error) {
+		if (!isOrpcErrorCode(error, "PAGE_NOT_FOUND")) {
+			throw error;
+		}
 	}
 }
 
@@ -298,35 +302,18 @@ const qrSvg = page
 					set:html={JSON.stringify({ pageUrl, qrSvg })}
 				></script>
 			</section>
-		) : (
-			<section class="flex flex-1 items-center justify-center bg-white px-6">
-				<div class="mx-auto w-full max-w-[420px] text-center">
-					<div class="mx-auto grid size-16 place-items-center rounded-2xl bg-surface text-ink-2">
-						<svg
-							viewBox="0 0 24 24"
-							class="size-7"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							aria-hidden="true"
-						>
-							<circle cx="12" cy="12" r="9" />
-							<path d="M9.5 9.5 14.5 14.5M14.5 9.5 9.5 14.5" />
-						</svg>
-					</div>
-					<h1 class="mt-6 text-[28px] font-semibold tracking-[-0.02em] text-ink">
-						Page not found
-					</h1>
-					<p class="mx-auto mt-3 max-w-[34ch] text-[16px] leading-7 text-ink-2">
-						This link page doesn’t exist or has been removed.
-					</p>
-					<a href="/tools/link-in-bio" class="btn mt-7 inline-flex no-underline">
-						Create a page
-					</a>
-				</div>
-			</section>
-		)
-	}
+			) : (
+				<StatusPage
+					code="404"
+					title="Page not found"
+					description="This link page doesn’t exist or has been removed."
+					primaryHref="/tools/link-in-bio"
+					primaryLabel="Create a page"
+					secondaryHref="/"
+					secondaryLabel="Return home"
+				/>
+			)
+		}
 </Layout>
 
 <script>

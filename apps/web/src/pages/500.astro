@@ -1,0 +1,25 @@
+---
+import StatusPage from "../components/StatusPage.astro";
+import Layout from "../layouts/Layout.astro";
+
+interface Props {
+	error: unknown;
+}
+
+Astro.response.status = 500;
+---
+
+<Layout
+	title="Something went wrong | URLX"
+	description="URLX encountered a temporary problem."
+>
+	<StatusPage
+		code="500"
+		title="Something went wrong"
+		description="We couldn’t complete your request. Please try again in a moment."
+		primaryHref={Astro.url.pathname}
+		primaryLabel="Try again"
+		secondaryHref="/"
+		secondaryLabel="Return home"
+	/>
+</Layout>

@@ -53,7 +53,7 @@ export const server = await Worker("server", {
 	bindings: {
 		DB: db,
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
-		SHORT_URL_BASE: alchemy.env.SHORT_URL_BASE ?? "http://localhost:3000",
+		SHORT_URL_BASE: alchemy.env.SHORT_URL_BASE ?? "http://localhost:4321",
 	},
 	dev: {
 		port: 3000,

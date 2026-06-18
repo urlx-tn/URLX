@@ -1,0 +1,53 @@
+---
+import { isValidShortCode } from "@urlx/api/lib/validate-short-code";
+import StatusPage from "../../components/StatusPage.astro";
+import Layout from "../../layouts/Layout.astro";
+import { orpc } from "../../lib/orpc";
+import { isOrpcErrorCode } from "../../lib/orpc-errors";
+
+const { shortCode } = Astro.params;
+
+let originalUrl: string | null = null;
+let isNotFound = !shortCode || !isValidShortCode(shortCode);
+
+if (shortCode && !isNotFound) {
+	try {
+		const link = await orpc.links.getByShortCode({ shortCode });
+		originalUrl = link.originalUrl;
+	} catch (error) {
+		if (isOrpcErrorCode(error, "SHORT_CODE_NOT_FOUND")) {
+			isNotFound = true;
+		} else {
+			throw error;
+		}
+	}
+}
+
+if (originalUrl) {
+	return new Response(null, {
+		status: 302,
+		headers: {
+			Location: originalUrl,
+			"Cache-Control": "no-store",
+			"Referrer-Policy": "no-referrer-when-downgrade",
+			"X-Content-Type-Options": "nosniff",
+		},
+	});
+}
+
+Astro.response.status = 404;
+const title = "Link not found | URLX";
+const description = "This short link doesn't exist or has been removed.";
+---
+
+<Layout title={title} description={description}>
+	<StatusPage
+		code="404"
+		title="Link not found"
+		description={description}
+		primaryHref="/tools/url-shortener"
+		primaryLabel="Shorten a URL"
+		secondaryHref="/"
+		secondaryLabel="Return home"
+	/>
+</Layout>

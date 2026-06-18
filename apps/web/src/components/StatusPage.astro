@@ -1,0 +1,56 @@
+---
+interface Props {
+	code: string;
+	title: string;
+	description: string;
+	primaryHref: string;
+	primaryLabel: string;
+	secondaryHref?: string;
+	secondaryLabel?: string;
+}
+
+const {
+	code,
+	title,
+	description,
+	primaryHref,
+	primaryLabel,
+	secondaryHref,
+	secondaryLabel,
+} = Astro.props;
+---
+
+<section
+	class="relative isolate flex flex-1 items-center justify-center overflow-hidden bg-white px-6 py-24"
+>
+	<p
+		class="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-[58%] select-none text-[clamp(11rem,32vw,24rem)] font-bold leading-none tracking-[-0.08em] text-surface"
+		aria-hidden="true"
+	>
+		{code}
+	</p>
+
+	<div class="mx-auto w-full max-w-[480px] text-center">
+		<h1 class="text-[32px] font-semibold tracking-[-0.025em] text-ink sm:text-[38px]">
+			{title}
+		</h1>
+		<p class="mx-auto mt-4 max-w-[40ch] text-[16px] leading-7 text-ink-2">
+			{description}
+		</p>
+		<div class="mt-8 flex flex-wrap justify-center gap-3">
+			<a href={primaryHref} class="btn inline-flex no-underline">
+				{primaryLabel}
+			</a>
+			{
+				secondaryHref && secondaryLabel ? (
+					<a
+						href={secondaryHref}
+						class="btn btn-secondary inline-flex no-underline"
+					>
+						{secondaryLabel}
+					</a>
+				) : null
+			}
+		</div>
+	</div>
+</section>

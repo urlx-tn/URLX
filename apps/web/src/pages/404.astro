@@ -1,0 +1,19 @@
+---
+import StatusPage from "../components/StatusPage.astro";
+import Layout from "../layouts/Layout.astro";
+
+Astro.response.status = 404;
+---
+
+<Layout
+	title="Page not found | URLX"
+	description="The page you requested could not be found."
+>
+	<StatusPage
+		code="404"
+		title="Page not found"
+		description="The page you’re looking for doesn’t exist or may have moved."
+		primaryHref="/"
+		primaryLabel="Return home"
+	/>
+</Layout>
