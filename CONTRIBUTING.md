@@ -11,7 +11,7 @@ documentation, and new tools.
 
 ## Prerequisites
 
-- **Node.js** 20 or newer
+- **Node.js** 22 or newer
 - **pnpm** 10.22 or newer (this repo pins `pnpm@10.22.0` via `packageManager`)
 
 ```bash
@@ -57,9 +57,21 @@ Please make sure these pass before opening a pull request:
 
 ```bash
 pnpm run check          # Biome lint and format checks
-pnpm run check-types    # configured TypeScript checks
+pnpm run check-types    # TypeScript and Astro checks
+pnpm run test           # automated unit tests
 pnpm run build          # build packages and apps
 ```
+
+GitHub Actions runs these gates on pull requests targeting `main` and pushes to
+`main`. The pull request cannot be considered ready while the `Quality` check is
+failing.
+
+## Tests
+
+- Add or update unit tests when behavior changes.
+- Keep tests deterministic and independent of deployed Cloudflare resources.
+- Verify D1-backed and Worker-specific behavior against `pnpm run dev` when it
+  cannot be covered by a unit test.
 
 ## Code style
 
@@ -76,6 +88,10 @@ pnpm run build          # build packages and apps
 2. Make your change, with the quality gates passing.
 3. Write a clear PR description: what changed, why, and how you verified it.
 4. Link any related issue.
+
+GitHub automatically fills new pull requests with the repository template.
+Complete the applicable verification and checklist items; remove sections that
+do not apply.
 
 ## Reporting issues
 

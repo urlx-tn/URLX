@@ -26,7 +26,7 @@
 		"open-source"
 	],
 	"engines": {
-		"node": ">=20"
+		"node": ">=22"
 	},
 	"workspaces": [
 		"apps/*",
@@ -37,6 +37,7 @@
 		"dev": "pnpm --filter @urlx/infra exec alchemy dev",
 		"build": "turbo run build",
 		"check-types": "turbo run check-types",
+		"test": "turbo run test",
 		"dev:web": "pnpm --filter web dev:bare",
 		"dev:server": "pnpm --filter @urlx/infra exec alchemy dev --app server",
 		"db:generate": "turbo run db:generate --filter=@urlx/db",

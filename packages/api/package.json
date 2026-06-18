@@ -9,7 +9,10 @@
 			"default": "./src/*.ts"
 		}
 	},
-	"scripts": {},
+	"scripts": {
+		"check-types": "tsc --noEmit --pretty false",
+		"test": "vitest run"
+	},
 	"dependencies": {
 		"@orpc/client": "catalog:",
 		"@orpc/openapi": "catalog:",
@@ -24,6 +27,7 @@
 	"devDependencies": {
 		"@urlx/config": "workspace:*",
 		"hono": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "^4.1.9"
 	}
 }

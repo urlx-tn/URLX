@@ -1,8 +1,11 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-const runtimeEnv = (import.meta as { env: Record<string, string | undefined> })
-	.env;
+const runtimeEnv = (
+	import.meta as unknown as {
+		env: Record<string, string | undefined>;
+	}
+).env;
 
 export const env = createEnv({
 	clientPrefix: "PUBLIC_",
