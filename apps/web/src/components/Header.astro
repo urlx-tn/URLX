@@ -452,12 +452,13 @@ const visibleProductLinks = productLinks.filter((link) => {
 		input?.addEventListener(
 			"keydown",
 			(event) => {
-				if (findingsList?.hidden) return;
+				const list = findingsList;
+				if (!list || list.hidden) return;
 
 				if (event.key === "ArrowDown") {
 					event.preventDefault();
 					setActiveFinding(
-						Math.min(activeIndex + 1, findingsList.children.length - 1),
+						Math.min(activeIndex + 1, list.children.length - 1),
 					);
 					return;
 				}
