@@ -1,7 +1,8 @@
 # Contributing to URLX
 
-Thanks for your interest in improving URLX - a fast, private URL shortener.
-Contributions of all sizes are welcome: bug reports, fixes, docs, and features.
+Thanks for your interest in improving URLX, a free and open-source collection
+of URL tools. Contributions of all sizes are welcome: bug reports, fixes,
+documentation, and new tools.
 
 ## Maintainers
 
@@ -24,10 +25,10 @@ This is a pnpm + Turborepo monorepo.
 
 ```text
 apps/
-  web/        Astro frontend (the shortener UI)
+  web/        Astro frontend and browser-based URL tools
   server/     Hono/oRPC API worker
 packages/
-  api/        oRPC routers, link domain logic, schemas
+  api/        oRPC routers, URL and link-page domain logic, schemas
   db/         Drizzle schema and migrations
   env/        Typed environment access
   config/     Shared TypeScript config

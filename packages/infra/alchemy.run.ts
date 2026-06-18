@@ -63,7 +63,7 @@ export const server = await Worker("server", {
 
 const publicServerUrl = requireValue(
 	"PUBLIC_SERVER_URL",
-	alchemy.env.PUBLIC_SERVER_URL
+	alchemy.env.PUBLIC_SERVER_URL,
 );
 
 export const web = await Astro("web", {

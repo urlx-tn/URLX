@@ -1,7 +1,7 @@
 {
 	"name": "URLX",
 	"short_name": "URLX",
-	"description": "Shorten links. Share them beautifully.",
+	"description": "Free, open-source tools for shortening, cleaning, and sharing URLs.",
 	"icons": [
 		{
 			"src": "/favicons/favicon-16x16.png",

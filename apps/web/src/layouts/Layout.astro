@@ -9,18 +9,27 @@ interface Props {
 	title?: string;
 	description?: string;
 	image?: string;
+	imageAlt?: string;
+	canonicalPath?: string;
+	robots?: string;
 	chrome?: boolean;
 }
 
 const {
-	title = "URLX | Free URL Tools",
-	description = "Shorten links, build link-in-bio pages, and create QR codes - no sign-up required.",
+	title = "Free URL Tools | URLX",
+	description = "Free, open-source URL tools for shortening links, cleaning tracking parameters, creating QR codes, and building link-in-bio pages.",
 	image = "/og-image.png",
+	imageAlt = "URLX free and open-source URL tools.",
+	canonicalPath,
+	robots,
 	chrome = true,
 } = Astro.props;
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
-const canonical = new URL(Astro.url.pathname, siteUrl || Astro.url).toString();
+const canonical = new URL(
+	canonicalPath ?? Astro.url.pathname,
+	siteUrl || Astro.url,
+).toString();
 const ogImage = image.startsWith("http") ? image : `${siteUrl}${image}`;
 
 const websiteSchema = {
@@ -37,6 +46,7 @@ const organizationSchema = {
 	name: "URLX",
 	url: siteUrl || "/",
 	logo: `${siteUrl}/favicons/android-chrome-512x512.png`,
+	sameAs: ["https://github.com/urlx-tn/URLX"],
 };
 ---
 
@@ -51,6 +61,7 @@ const organizationSchema = {
 		<meta name="application-name" content="URLX" />
 		<meta name="generator" content={Astro.generator} />
 		<meta name="description" content={description} />
+		{robots && <meta name="robots" content={robots} />}
 		<link rel="canonical" href={canonical} />
 
 		<link rel="icon" href="/favicons/favicon.ico" sizes="any" />
@@ -81,14 +92,14 @@ const organizationSchema = {
 		<meta property="og:image" content={ogImage} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
-		<meta property="og:image:alt" content="URLX — Shorten links and share them beautifully." />
+		<meta property="og:image:alt" content={imageAlt} />
 		<meta property="og:locale" content="en_US" />
 
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
 		<meta name="twitter:image" content={ogImage} />
-		<meta name="twitter:image:alt" content="URLX — Shorten links and share them beautifully." />
+		<meta name="twitter:image:alt" content={imageAlt} />
 
 		<title>{title}</title>
 

@@ -1,49 +1,82 @@
 <p align="center">
-  <img src="./apps/web/src/assets/logo.png" alt="URLX" width="220" />
+  <a href="https://www.urlx.tn">
+    <img src="./apps/web/src/assets/logo.png" alt="URLX" width="220" />
+  </a>
 </p>
 
 <h1 align="center">URLX</h1>
 
 <p align="center">
-  A Cloudflare-first URL shortener with a polished Astro UI, QR code exports, and a Hono/oRPC API backed by Cloudflare D1.
+  Free and open-source tools for shortening, cleaning, and sharing URLs.
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178c6.svg" />
-  <img alt="pnpm" src="https://img.shields.io/badge/pnpm-10.22.0-f69220.svg" />
-  <img alt="Turborepo" src="https://img.shields.io/badge/Turborepo-2.9-black.svg" />
-  <img alt="Astro" src="https://img.shields.io/badge/Astro-6-ff5d01.svg" />
-  <img alt="Hono" src="https://img.shields.io/badge/Hono-4.8-e36002.svg" />
-  <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-f38020.svg" />
+  <a href="https://www.urlx.tn"><strong>Open URLX</strong></a>
+  ·
+  <a href="./API.md">API reference</a>
+  ·
+  <a href="./CONTRIBUTING.md">Contributing</a>
 </p>
 
-## Overview
+<p align="center">
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178c6.svg?logo=typescript&logoColor=white" />
+  <img alt="Astro" src="https://img.shields.io/badge/Astro-ff5d01.svg?logo=astro&logoColor=white" />
+  <img alt="Hono" src="https://img.shields.io/badge/Hono-e36002.svg?logo=hono&logoColor=white" />
+  <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare_Workers-f38020.svg?logo=cloudflare&logoColor=white" />
+</p>
 
-URLX is a pnpm and Turborepo monorepo for shortening links on Cloudflare Workers. The frontend is an Astro server-rendered app, the backend is a Hono Worker exposing oRPC and redirect routes, and persistence uses Cloudflare D1 through Drizzle ORM.
+## What is URLX?
 
-Infrastructure is managed with [Alchemy](https://alchemy.run/). The stack in `packages/infra/alchemy.run.ts` provisions:
+URLX is a no-account URL toolkit built for the web and deployed on Cloudflare.
+It combines focused browser-based utilities with server-backed short links and
+link-in-bio pages.
 
-- an Astro Worker for the web app
-- a Hono Worker for the API and redirect service
-- a Cloudflare D1 database bound to the API Worker as `DB`
-- environment bindings for `CORS_ORIGIN`, `SHORT_URL_BASE`, and `PUBLIC_SERVER_URL`
+The project is MIT licensed and designed to be easy to use, self-host, extend,
+and contribute to.
 
-## Stack
+## Tools
 
-- **Runtime:** Cloudflare Workers
-- **Web:** Astro, Tailwind CSS, QR code generation
-- **API:** Hono, oRPC, OpenAPI reference route
-- **Database:** Cloudflare D1, Drizzle ORM, SQL migrations
+| Tool | What it does | Processing |
+| --- | --- | --- |
+| [URL Shortener](https://www.urlx.tn/tools/url-shortener) | Creates compact redirect links and optional QR codes. | Cloudflare Worker + D1 |
+| [URL Cleaner](https://www.urlx.tn/tools/url-cleaner) | Removes common tracking parameters from a URL. | In the browser |
+| [QR Code Generator](https://www.urlx.tn/tools/qr-code-generator) | Exports a URL as SVG or PNG. | In the browser |
+| [Link in Bio](https://www.urlx.tn/tools/link-in-bio) | Publishes one shareable page containing multiple links. | Cloudflare Worker + D1 |
+
+No user account is required. Optional recent-URL history is stored locally in
+the browser only when the user enables it.
+
+## Architecture
+
+URLX is a pnpm and Turborepo monorepo:
+
+```text
+Browser
+  |
+  +-- Astro web Worker ---------------- Browser-only URL tools
+  |          |
+  |          +-------------------------- oRPC client
+  |
+  +-- Hono API Worker ----------------- Validation and business logic
+             |
+             +-------------------------- Cloudflare D1
+```
+
+- **Web:** Astro, Tailwind CSS, browser-side QR generation
+- **API:** Hono, oRPC, OpenAPI reference
+- **Database:** Cloudflare D1 and Drizzle ORM
 - **Infrastructure:** Alchemy TypeScript IaC
 - **Tooling:** pnpm, Turborepo, TypeScript, Biome
+
+Alchemy provisions the Astro Worker, API Worker, D1 database, runtime bindings,
+and database migrations from `packages/infra/alchemy.run.ts`.
 
 ## Requirements
 
 - Node.js 20 or newer
 - pnpm 10.22.0 or newer
 - A Cloudflare account for deployed environments
-- Alchemy Cloudflare authentication for `deploy`, `deploy:dev`, `deploy:prod`, and `destroy`
 
 Enable pnpm through Corepack:
 
@@ -51,17 +84,12 @@ Enable pnpm through Corepack:
 corepack enable
 ```
 
-## Getting Started
+## Local development
 
-Install dependencies:
+Install dependencies and create the local environment file:
 
 ```bash
 pnpm install
-```
-
-Create the local environment file:
-
-```bash
 cp .env.example .env
 ```
 
@@ -71,81 +99,68 @@ On Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Start the full Cloudflare-compatible development stack:
+Start the full Cloudflare-compatible stack:
 
 ```bash
 pnpm run dev
 ```
 
-Alchemy starts the local Workers stack and prints the web and server URLs. By default, the app uses:
+Default local URLs:
 
-- Web and short-link redirects: `http://localhost:4321`
+- Web app and short links: `http://localhost:4321`
 - API: `http://localhost:3000`
-- API reference: `http://localhost:3000/api-reference`
+- OpenAPI reference: `http://localhost:3000/api-reference`
 
-## Environment
+The full stack is required to test URL shortening and link-in-bio persistence
+because those features use the D1 binding created by Alchemy.
 
-The root `.env.example` contains the local values needed by the stack and local tooling:
-
-| Variable | Required | Used by | Purpose |
-| --- | --- | --- | --- |
-| `CORS_ORIGIN` | Yes | Server Worker | Allowed browser origin for API requests. |
-| `SHORT_URL_BASE` | No | Server Worker | Public origin used when returning shortened URLs. Defaults to `http://localhost:4321`. |
-| `PUBLIC_SERVER_URL` | Yes | Web app | Public oRPC server URL used by the browser client. |
-| `SKIP_ENV_VALIDATION` | No | Env helpers | Optional escape hatch for public env validation. |
-
-Deployment scripts select an Alchemy stage and the infra stack loads the matching root environment file:
-
-- `--stage dev` loads `.env.development`
-- `--stage prod` loads `.env.production`
-
-Keep `CORS_ORIGIN`, `SHORT_URL_BASE`, and `PUBLIC_SERVER_URL` aligned for each stage.
-
-Environment files are root-only by design:
-
-- `.env` for local development
-- `.env.development` for the deployed `dev` stage
-- `.env.production` for the deployed `prod` stage
-
-Do not create app-level or package-level `.env` files for normal workflows. The web app and infra tooling are configured to read from the repo root so there is a single source of truth.
-
-## Development
-
-Run the full stack:
-
-```bash
-pnpm run dev
-```
-
-Run only the Astro frontend without Alchemy-managed Cloudflare bindings:
+### Run individual apps
 
 ```bash
 pnpm run dev:web
-```
-
-Run only the server app through Alchemy:
-
-```bash
 pnpm run dev:server
 ```
 
-Use the full stack for testing URL shortening end to end, because the server depends on the Cloudflare D1 `DB` binding created by Alchemy.
+`dev:web` starts Astro without Alchemy-managed Cloudflare bindings. Browser-only
+tools work in this mode, but server-backed features require the full stack.
+
+## Environment variables
+
+The repository uses root environment files because Alchemy loads and distributes
+the stage configuration for both Workers.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `CORS_ORIGIN` | Yes | Browser origin accepted by the API Worker. |
+| `SHORT_URL_BASE` | No | Public origin used to construct short URLs. |
+| `PUBLIC_SERVER_URL` | Yes | Public oRPC API URL used by the Astro app. |
+| `SKIP_ENV_VALIDATION` | No | Optional escape hatch for public environment validation. |
+
+Stage mapping:
+
+- `.env` — local development
+- `.env.development` — deployed `dev` stage
+- `.env.production` — deployed `prod` stage
+
+Keep `CORS_ORIGIN`, `SHORT_URL_BASE`, and `PUBLIC_SERVER_URL` aligned for each
+stage. Never commit secrets or populated environment files.
 
 ## Database
 
-D1 access is runtime-bound through `DB`; there is no application-level database URL for the Worker. Schema and migrations live in `packages/db`.
+The API Worker accesses D1 through its `DB` runtime binding. Schema definitions
+and SQL migrations live in `packages/db`.
 
-Generate Drizzle migrations after changing the schema:
+Generate a migration after changing the schema:
 
 ```bash
 pnpm run db:generate
 ```
 
-Alchemy applies migrations from `packages/db/src/migrations` during local development and deployment.
+Alchemy applies migrations during local development and deployment.
 
-## Testing and Quality
+## Quality checks
 
-This repository does not currently include a dedicated unit test runner. Use these quality gates before opening a pull request or deploying:
+Run all checks before opening a pull request:
 
 ```bash
 pnpm run check
@@ -153,61 +168,47 @@ pnpm run check-types
 pnpm run build
 ```
 
-What each command covers:
-
-- `pnpm run check` runs Biome formatting and lint checks.
-- `pnpm run check-types` runs TypeScript checks for packages that define the task.
-- `pnpm run build` builds the deployable Astro and Hono Worker outputs through Turborepo.
-
-For an end-to-end smoke test, run `pnpm run dev`, open the web URL, shorten a public `https://` URL, copy the generated short URL, and confirm the redirect route returns the destination.
+The repository does not currently have a dedicated automated test suite.
+Changes to server-backed features should also be verified against the full
+local stack.
 
 ## Deployment
 
-URLX deploys to Cloudflare through Alchemy, not a hand-written Wrangler config. The root scripts pass `--stage dev` or `--stage prod`; `packages/infra/alchemy.run.ts` maps those stages to `.env.development` and `.env.production`.
-
-Authenticate Alchemy with Cloudflare once:
+Authenticate Alchemy with Cloudflare:
 
 ```bash
 pnpm --filter @urlx/infra exec alchemy login cloudflare
 ```
 
-You can also authenticate during the first Alchemy deployment prompt. Alchemy stores provider credentials in its local profile.
-
-Deploy production:
+Deploy a stage:
 
 ```bash
-pnpm run build
+pnpm run deploy:dev
 pnpm run deploy
 ```
 
-Deploy the development stage:
-
-```bash
-pnpm run build
-pnpm run deploy:dev
-```
-
-Destroy managed Cloudflare resources only when you intentionally want to remove a stage:
+`pnpm run deploy` targets the production stage. Destruction commands remove
+Alchemy-managed resources and should only be used intentionally:
 
 ```bash
 pnpm run destroy:dev
 pnpm run destroy:prod
 ```
 
-## Project Structure
+## Project structure
 
 ```text
 urlx/
 |-- apps/
-|   |-- web/              # Astro frontend and public assets
-|   `-- server/           # Hono Worker entrypoint and redirect routes
+|   |-- web/              # Astro frontend, URL tools, redirects, and public assets
+|   `-- server/           # Hono Worker and API transport
 |-- packages/
-|   |-- api/              # oRPC routers, schemas, and link business logic
+|   |-- api/              # oRPC routers and domain logic
 |   |-- config/           # Shared TypeScript configuration
 |   |-- db/               # Drizzle schema and D1 migrations
 |   |-- env/              # Typed runtime environment helpers
-|   `-- infra/            # Alchemy Cloudflare infrastructure stack
-|-- API.md                # Backend API behavior and error contracts
+|   `-- infra/            # Alchemy Cloudflare infrastructure
+|-- API.md                # API behavior and error contracts
 |-- CONTRIBUTING.md       # Contribution workflow
 |-- turbo.json            # Turborepo task graph
 `-- pnpm-workspace.yaml   # Workspace and dependency catalog
@@ -217,30 +218,38 @@ urlx/
 
 | Command | Description |
 | --- | --- |
-| `pnpm run dev` | Start the Alchemy local development stack. |
-| `pnpm run dev:web` | Start the Astro frontend only. |
-| `pnpm run dev:server` | Start the server Worker through Alchemy. |
-| `pnpm run build` | Build workspace packages and apps. |
-| `pnpm run check` | Run Biome checks. |
-| `pnpm run check:write` | Run Biome and apply safe fixes. |
+| `pnpm run dev` | Start the full local Workers stack. |
+| `pnpm run dev:web` | Start only the Astro app. |
+| `pnpm run dev:server` | Start only the API Worker through Alchemy. |
+| `pnpm run build` | Build workspace apps and packages. |
+| `pnpm run check` | Run Biome formatting and lint checks. |
+| `pnpm run check:write` | Apply safe Biome fixes. |
 | `pnpm run check-types` | Run configured TypeScript checks. |
-| `pnpm run db:generate` | Generate Drizzle migration files. |
-| `pnpm run deploy:dev` | Deploy the Cloudflare development stage through Alchemy. |
-| `pnpm run deploy` | Deploy the Cloudflare production stage through Alchemy. |
-| `pnpm run deploy:prod` | Alias for production deployment. |
-| `pnpm run destroy:dev` | Destroy the Alchemy-managed development stage. |
-| `pnpm run destroy:prod` | Destroy the Alchemy-managed production stage. |
+| `pnpm run db:generate` | Generate Drizzle migrations. |
+| `pnpm run deploy:dev` | Deploy the development stage. |
+| `pnpm run deploy` | Deploy the production stage. |
 
-## API Reference
+## API
 
-See [API.md](./API.md) for endpoint behavior, error codes, redirect semantics, and URL validation rules.
+See [API.md](./API.md) for endpoint behavior, error contracts, redirect
+semantics, and validation rules.
 
-When the server is running, the generated OpenAPI reference is available at:
+When the server is running, its generated OpenAPI reference is available at
+`http://localhost:3000/api-reference`.
 
-```text
-http://localhost:3000/api-reference
-```
+## Contributing
+
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md)
+for setup, quality gates, and the expected contribution workflow.
+
+Useful contribution areas include:
+
+- new focused URL utilities;
+- accessibility and browser compatibility;
+- automated tests and CI coverage;
+- abuse prevention and moderation tooling;
+- documentation and translations.
 
 ## License
 
-URLX is released under the [MIT License](./LICENSE).
+URLX is available under the [MIT License](./LICENSE).

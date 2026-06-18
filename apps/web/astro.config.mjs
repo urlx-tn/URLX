@@ -28,7 +28,19 @@ export default defineConfig({
 	adapter: shouldUseAlchemy
 		? alchemy({ platformProxy: { configPath: alchemyConfigPath } })
 		: node({ mode: "standalone" }),
-	integrations: [sitemap()],
+	integrations: [
+		sitemap({
+			filter: (page) => {
+				const pathname = new URL(page).pathname.replace(/\/$/, "") || "/";
+				return ![
+					"/404",
+					"/500",
+					"/tools",
+					"/tools/link-in-bio/search",
+				].includes(pathname);
+			},
+		}),
+	],
 	env: {
 		schema: {
 			PUBLIC_SERVER_URL: envField.string({
