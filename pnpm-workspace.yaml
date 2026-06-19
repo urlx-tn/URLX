@@ -8,7 +8,7 @@ allowBuilds:
   workerd: true
 
 catalog:
-  '@cloudflare/workers-types': ^4.20260617.1
+  '@cloudflare/workers-types': ^4.20260619.1
   '@orpc/client': ^1.13.14
   '@orpc/openapi': ^1.13.14
   '@orpc/server': ^1.13.14
