@@ -1,26 +1,20 @@
 ---
+import urlToHtmlIcon from "../../assets/icons/url-to-html.png";
+
 interface Props {
 	class?: string;
 }
 
-const { class: className = "h-24 w-auto max-w-full" } = Astro.props;
+const { class: className = "h-auto w-40 max-w-full object-contain" } =
+	Astro.props;
 ---
 
-<svg
-	viewBox="0 0 160 96"
+<img
+	src={urlToHtmlIcon.src}
+	width={urlToHtmlIcon.width}
+	height={urlToHtmlIcon.height}
+	alt=""
 	class={className}
-	fill="none"
-	xmlns="http://www.w3.org/2000/svg"
 	aria-hidden="true"
->
-	<rect x="2" y="2" width="156" height="92" rx="18" fill="#F5F5F7" />
-	<rect x="18" y="19" width="78" height="58" rx="10" fill="white" stroke="#D2D2D7" />
-	<circle cx="30" cy="31" r="3" fill="#FF5F57" />
-	<circle cx="40" cy="31" r="3" fill="#FFBD2E" />
-	<circle cx="50" cy="31" r="3" fill="#28C840" />
-	<path d="M29 45H72M29 54H83M29 63H62" stroke="#86868B" stroke-width="4" stroke-linecap="round" />
-	<path d="M91 48H112" stroke="#0071E3" stroke-width="5" stroke-linecap="round" />
-	<path d="M105 39L114 48L105 57" stroke="#0071E3" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-	<rect x="113" y="19" width="29" height="58" rx="8" fill="#1D1D1F" />
-	<path d="M126 38 120 48l6 10M130 38l6 10-6 10" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
-</svg>
+	decoding="async"
+/>
