@@ -1,8 +1,8 @@
 # URLX Backend API
 
-URLX v1 exposes shortening and link resolution through oRPC. URL-to-Markdown is
-served by a separate conversion Worker. Short-link redirects are served by the
-web app at `<<web-origin>>/u/:shortCode`.
+URLX v1 exposes shortening and link resolution through oRPC. URL-to-Markdown
+and URL-to-HTML are served by a separate conversion Worker. Short-link redirects
+are served by the web app at `<<web-origin>>/u/:shortCode`.
 
 ## Local Configuration
 
@@ -14,17 +14,18 @@ CORS_ORIGIN
 SHORT_URL_BASE
 ```
 
-The Markdown Worker expects:
+The conversion Worker expects:
 
 ```text
 BROWSER
-MARKDOWN_RATE_LIMIT
+CONVERSION_RATE_LIMIT
 CORS_ORIGIN
 ```
 
 `BROWSER` is the Cloudflare Browser Run binding provisioned by Alchemy; it does
-not require a separate application API token. `MARKDOWN_RATE_LIMIT` limits each
-client IP to five conversions per minute before Browser Run is called.
+not require a separate application API token. `CONVERSION_RATE_LIMIT` limits
+each client IP to five total Markdown or HTML conversions per minute before
+Browser Run is called.
 
 Alchemy defaults `SHORT_URL_BASE` to:
 
@@ -100,7 +101,7 @@ Unknown, malformed, or disabled short codes return a `SHORT_CODE_NOT_FOUND` erro
 ## Markdown Conversion Endpoint
 
 ```text
-POST <<markdown-worker-origin>>/markdown
+POST <<conversion-worker-origin>>/markdown
 ```
 
 Fetches a public webpage through Cloudflare Browser Run and returns its readable
@@ -130,9 +131,42 @@ page requests. Browser Run responses may be cached for five minutes. Generated
 Markdown is not stored by URLX and responses larger than 1,000,000 characters
 are rejected.
 
+## HTML Conversion Endpoint
+
+```text
+POST <<conversion-worker-origin>>/html
+```
+
+Fetches a public webpage through Cloudflare Browser Run and returns the fully
+rendered HTML, including the document head, after JavaScript execution.
+
+Request:
+
+```json
+{
+	"url": "https://example.com/"
+}
+```
+
+Success response:
+
+```json
+{
+	"sourceUrl": "https://example.com/",
+	"html": "<!doctype html><html>...</html>"
+}
+```
+
+HTML conversion retains scripts and stylesheets during rendering, while images,
+media, and fonts are blocked to reduce page requests. Browser Run waits for
+`networkidle2`, uses a 30-second navigation timeout, and may cache matching
+requests for five minutes. URLX returns HTML only as data; the web interface
+places it in a readonly textarea and never executes it. Results larger than
+2,000,000 characters are rejected.
+
 In local development, Alchemy supplies the remote development Worker URL to the
-Astro app as `PUBLIC_MARKDOWN_SERVER_URL`. Production deployments provision and
-bind the corresponding deployed Worker URL automatically.
+Astro app as `PUBLIC_CONVERSION_SERVER_URL`. Production deployments provision
+and bind the corresponding deployed Worker URL automatically.
 
 ## Additional oRPC Procedures
 
@@ -266,6 +300,12 @@ MARKDOWN_TOO_LARGE
 BROWSER_UNAVAILABLE
 ```
 
+HTML conversion may additionally return:
+
+```text
+HTML_TOO_LARGE
+```
+
 Bio-page error codes:
 
 ```text
@@ -295,6 +335,6 @@ Typical error payload data:
 
 ## Notes
 
-Markdown conversion is protected by a dedicated Cloudflare Rate Limiting
-binding at five requests per minute per client IP. Broader rate limiting for
+Markdown and HTML conversion share a Cloudflare Rate Limiting binding at five
+total conversion requests per minute per client IP. Broader rate limiting for
 other `POST /rpc` operations can still be enforced with Cloudflare rules.

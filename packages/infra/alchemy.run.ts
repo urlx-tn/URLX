@@ -51,16 +51,16 @@ const db = await D1Database("database", {
 	migrationsDir: "../../packages/db/src/migrations",
 });
 
-export const markdown = await Worker("markdown", {
+export const conversion = await Worker("markdown", {
 	adopt: true,
 	cwd: "../../apps/server",
-	entrypoint: "src/markdown.ts",
+	entrypoint: "src/conversion.ts",
 	compatibility: "node",
 	compatibilityDate: "2026-03-24",
 	url: true,
 	bindings: {
 		BROWSER: BrowserRendering(),
-		MARKDOWN_RATE_LIMIT: RateLimit({
+		CONVERSION_RATE_LIMIT: RateLimit({
 			namespace_id: 1001,
 			simple: {
 				limit: 5,
@@ -101,9 +101,9 @@ export const web = await Astro("web", {
 	entrypoint: "dist/server/entry.mjs",
 	assets: "dist/client",
 	bindings: {
-		PUBLIC_MARKDOWN_SERVER_URL: requireValue(
-			"PUBLIC_MARKDOWN_SERVER_URL",
-			markdown.url,
+		PUBLIC_CONVERSION_SERVER_URL: requireValue(
+			"PUBLIC_CONVERSION_SERVER_URL",
+			conversion.url,
 		),
 		PUBLIC_SERVER_URL: publicServerUrl,
 	},
@@ -111,7 +111,7 @@ export const web = await Astro("web", {
 
 console.log(`Web    -> ${web.url}`);
 console.log(`Server -> ${server.url}`);
-console.log(`Markdown -> ${markdown.url}`);
+console.log(`Conversion -> ${conversion.url}`);
 console.log(`API    -> ${publicServerUrl}`);
 
 await app.finalize();
