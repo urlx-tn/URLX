@@ -8,14 +8,14 @@ allowBuilds:
   workerd: true
 
 catalog:
-  '@cloudflare/workers-types': ^4.20251213.0
+  '@cloudflare/workers-types': ^4.20260617.1
   '@orpc/client': ^1.13.14
   '@orpc/openapi': ^1.13.14
   '@orpc/server': ^1.13.14
   '@orpc/zod': ^1.13.14
-  '@types/node': ^22.13.14
-  alchemy: ^0.91.2
+  '@types/node': ^22.19.21
+  alchemy: ^0.93.12
   dotenv: ^17.2.2
-  hono: ^4.8.2
+  hono: ^4.12.26
   typescript: 6.0.3
   zod: ^4.1.13

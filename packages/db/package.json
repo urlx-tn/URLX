@@ -14,11 +14,11 @@
 		"db:generate": "drizzle-kit generate"
 	},
 	"dependencies": {
-		"@libsql/client": "0.15.15",
+		"@libsql/client": "0.17.4",
 		"@urlx/env": "workspace:*",
 		"dotenv": "catalog:",
 		"drizzle-orm": "^0.45.1",
-		"libsql": "0.5.22",
+		"libsql": "0.5.29",
 		"zod": "catalog:"
 	},
 	"devDependencies": {

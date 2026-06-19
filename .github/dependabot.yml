@@ -16,6 +16,19 @@ updates:
       interval: weekly
       day: monday
     groups:
-      dependencies:
+      routine-dependencies:
         patterns:
           - "*"
+        exclude-patterns:
+          - "@cloudflare/workers-types"
+          - "@libsql/client"
+          - "@types/node"
+          - "alchemy"
+          - "astro"
+          - "libsql"
+          - "sharp"
+          - "tsdown"
+          - "wrangler"
+        update-types:
+          - patch
+          - minor

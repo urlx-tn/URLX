@@ -84,7 +84,7 @@ from `packages/infra/alchemy.run.ts`.
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 22.18 or newer
 - pnpm 10.22.0 or newer
 - A Cloudflare account for deployed environments
 

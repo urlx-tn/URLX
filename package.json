@@ -26,7 +26,7 @@
 		"open-source"
 	],
 	"engines": {
-		"node": ">=22"
+		"node": ">=22.18"
 	},
 	"workspaces": [
 		"apps/*",
