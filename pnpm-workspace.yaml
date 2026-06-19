@@ -13,7 +13,7 @@ catalog:
   '@orpc/openapi': ^1.13.14
   '@orpc/server': ^1.13.14
   '@orpc/zod': ^1.13.14
-  '@types/node': ^25.9.3
+  '@types/node': ^22.19.21
   alchemy: ^0.93.12
   dotenv: ^17.2.2
   hono: ^4.12.26
