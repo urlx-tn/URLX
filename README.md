@@ -83,6 +83,10 @@ Alchemy provisions the Astro Worker, API Worker, conversion Worker, D1 database,
 Browser Run and rate-limit bindings, runtime bindings, and database migrations
 from `packages/infra/alchemy.run.ts`.
 
+The conversion Worker uses the stage-aware Alchemy resource name `conversion`,
+so Cloudflare names it consistently with the app and stage instead of retaining
+the earlier Markdown-specific Worker name.
+
 ## Requirements
 
 - Node.js 22.18 or newer

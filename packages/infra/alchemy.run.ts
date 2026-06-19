@@ -51,7 +51,7 @@ const db = await D1Database("database", {
 	migrationsDir: "../../packages/db/src/migrations",
 });
 
-export const conversion = await Worker("markdown", {
+export const conversion = await Worker("conversion", {
 	adopt: true,
 	cwd: "../../apps/server",
 	entrypoint: "src/conversion.ts",
