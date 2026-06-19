@@ -1,18 +1,8 @@
 ---
 import logo from "../assets/logo.png";
+import { allToolsLink, primaryProducts } from "../lib/navigation";
 
 const year = new Date().getFullYear();
-
-const productLinks = [
-	{ label: "URL Shortener", href: "/tools/url-shortener" },
-	{ label: "QR Code Generator", href: "/tools/qr-code-generator" },
-	{ label: "URL Cleaner", href: "/tools/url-cleaner" },
-	{ label: "URL to Markdown", href: "/tools/url-to-markdown" },
-	{ label: "URL to HTML", href: "/tools/url-to-html" },
-	{ label: "Link in Bio", href: "/tools/link-in-bio" },
-	{ label: "Search pages", href: "/tools/link-in-bio/search" },
-	{ label: "GitHub", href: "https://github.com/urlx-tn/URLX", external: true },
-];
 
 const legalLinks = [
 	{ label: "Privacy", href: "/legal/privacy" },
@@ -26,7 +16,11 @@ const legalLinks = [
 			class="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.6fr_0.6fr] lg:gap-16"
 		>
 			<div>
-				<a href="/" class="inline-flex items-center no-underline" aria-label="URLX home">
+				<a
+					href="/"
+					class="inline-flex items-center no-underline"
+					aria-label="URLX home"
+				>
 					<img
 						src={logo.src}
 						alt="URLX"
@@ -36,49 +30,46 @@ const legalLinks = [
 						loading="lazy"
 					/>
 				</a>
-				<p class="mt-4 text-[15px] leading-7 text-ink-2">
+				<p class="mt-4 max-w-[36ch] text-[15px] leading-7 text-ink-2">
 					Free, open-source tools for shortening, cleaning, converting, and
 					sharing URLs. No account required.
 				</p>
 			</div>
 
 			<div class="lg:pl-8">
-				<h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-ink">
-					Product
+				<h3
+					class="text-[13px] font-semibold uppercase tracking-[0.04em] text-ink"
+				>
+					Products
 				</h3>
 				<ul class="mt-4 space-y-2.5">
 					{
-						productLinks.map((link) => (
+						primaryProducts.map((link) => (
 							<li>
 								<a
 									href={link.href}
-									target={link.external ? "_blank" : undefined}
-									rel={link.external ? "noopener noreferrer" : undefined}
-									class="inline-flex items-center gap-1.5 text-[15px] text-ink-2 underline-offset-2 transition-colors hover:text-ink hover:underline"
+									class="text-[15px] text-ink-2 underline-offset-2 transition-colors hover:text-ink hover:underline"
 								>
 									{link.label}
-									{link.external && (
-										<svg
-											class="h-3 w-3 text-ink-2/70"
-											viewBox="0 0 16 16"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="1.5"
-											stroke-linecap="round"
-											aria-hidden="true"
-										>
-											<path d="M6 4h6v6M12 4 6 10" />
-										</svg>
-									)}
 								</a>
 							</li>
 						))
 					}
+					<li>
+						<a
+							href={allToolsLink.href}
+							class="text-[15px] font-medium text-link underline-offset-2 hover:underline"
+						>
+							More tools
+						</a>
+					</li>
 				</ul>
 			</div>
 
 			<div class="lg:pl-8">
-				<h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-ink">
+				<h3
+					class="text-[13px] font-semibold uppercase tracking-[0.04em] text-ink"
+				>
 					Legal
 				</h3>
 				<ul class="mt-4 space-y-2.5">
@@ -102,7 +93,7 @@ const legalLinks = [
 			class="mt-10 flex flex-col items-start justify-between gap-4 border-t border-hair pt-6 sm:flex-row sm:items-center"
 		>
 			<p class="text-[13px] text-ink-2">
-				© {year} URLX. Built by
+				&copy; {year} URLX. Built by
 				<a
 					href="https://v1.chames.dhibi.tn"
 					class="text-ink-2 underline-offset-2 transition-colors hover:text-ink hover:underline"
@@ -116,7 +107,7 @@ const legalLinks = [
 					target="_blank"
 					rel="noopener noreferrer">Youssef Dhibi</a
 				>
-				· MIT Licensed
+				&middot; MIT Licensed
 			</p>
 			<a
 				href="https://github.com/urlx-tn/URLX"
