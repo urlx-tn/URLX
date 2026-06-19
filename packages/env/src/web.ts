@@ -10,6 +10,7 @@ const runtimeEnv = (
 export const env = createEnv({
 	clientPrefix: "PUBLIC_",
 	client: {
+		PUBLIC_MARKDOWN_SERVER_URL: z.url(),
 		PUBLIC_SERVER_URL: z.url(),
 	},
 	runtimeEnv,
