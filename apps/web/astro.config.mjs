@@ -43,7 +43,7 @@ export default defineConfig({
 	],
 	env: {
 		schema: {
-			PUBLIC_MARKDOWN_SERVER_URL: envField.string({
+			PUBLIC_CONVERSION_SERVER_URL: envField.string({
 				access: "public",
 				context: "client",
 				default: "http://localhost:3001",

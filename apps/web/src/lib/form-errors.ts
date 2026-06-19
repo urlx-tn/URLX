@@ -10,6 +10,7 @@ const friendlyMessages: Record<string, string> = {
 	PAGE_FETCH_FAILED:
 		"This page could not be converted. It may block automated access.",
 	MARKDOWN_TOO_LARGE: "This page produced too much Markdown to return.",
+	HTML_TOO_LARGE: "This page produced too much HTML to return.",
 	BROWSER_UNAVAILABLE:
 		"The conversion service is temporarily unavailable. Please try again.",
 	EMPTY_TITLE: "Please enter a title for your page.",

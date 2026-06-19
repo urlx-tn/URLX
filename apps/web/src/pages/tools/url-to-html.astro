@@ -1,0 +1,30 @@
+---
+import ConversionTool from "../../components/ConversionTool.astro";
+import Layout from "../../layouts/Layout.astro";
+
+const title = "URL to HTML Converter | URLX";
+const description =
+	"Convert a public webpage into fully rendered HTML after JavaScript execution. Free and no sign-up required.";
+const pageUrl = new URL("/tools/url-to-html", Astro.site).toString();
+const softwareSchema = {
+	"@context": "https://schema.org",
+	"@type": "WebApplication",
+	name: "URL to HTML Converter",
+	applicationCategory: "UtilitiesApplication",
+	operatingSystem: "Web",
+	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+	url: pageUrl,
+};
+---
+
+<Layout title={title} description={description}>
+	<script is:inline type="application/ld+json" set:html={JSON.stringify(softwareSchema)} />
+	<ConversionTool
+		format="html"
+		heading="Convert a URL to HTML."
+		intro="Capture the fully rendered HTML of a public webpage after JavaScript runs."
+		resultLabel="HTML"
+		downloadLabel="Download .html"
+		privacyText="The submitted page is fetched through Cloudflare for conversion. URLX does not store the generated HTML, and the result is shown only as escaped text."
+	/>
+</Layout>

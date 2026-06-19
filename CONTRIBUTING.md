@@ -45,9 +45,9 @@ pnpm run dev:web        # frontend only, without Alchemy-managed bindings
 pnpm run dev:server     # API Worker only, through Alchemy
 ```
 
-URL-to-Markdown uses Cloudflare Browser Run Quick Actions. The binding is remote
-and cannot be fully exercised by deterministic unit tests; verify the real
-conversion flow against a Cloudflare development deployment.
+URL-to-Markdown and URL-to-HTML use Cloudflare Browser Run Quick Actions. The
+binding is remote and cannot be fully exercised by deterministic unit tests;
+verify real conversion flows against a Cloudflare development deployment.
 
 To work on just the frontend without the full pipeline:
 

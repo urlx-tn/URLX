@@ -10,6 +10,7 @@ const isUrlShortenerPage = currentPath === "/tools/url-shortener";
 const isQrCodeGeneratorPage = currentPath === "/tools/qr-code-generator";
 const isUrlCleanerPage = currentPath === "/tools/url-cleaner";
 const isUrlToMarkdownPage = currentPath === "/tools/url-to-markdown";
+const isUrlToHtmlPage = currentPath === "/tools/url-to-html";
 const isLinkInBioPage =
 	currentPath === "/tools/link-in-bio" ||
 	currentPath.startsWith("/tools/link-in-bio/");
@@ -20,6 +21,7 @@ const productLinks = [
 	{ label: "QR Code Generator", href: "/tools/qr-code-generator" },
 	{ label: "URL Cleaner", href: "/tools/url-cleaner" },
 	{ label: "URL to Markdown", href: "/tools/url-to-markdown" },
+	{ label: "URL to HTML", href: "/tools/url-to-html" },
 	{ label: "Link in Bio", href: "/tools/link-in-bio" },
 ];
 
@@ -28,6 +30,7 @@ const visibleProductLinks = productLinks.filter((link) => {
 	if (link.href === "/tools/qr-code-generator") return !isQrCodeGeneratorPage;
 	if (link.href === "/tools/url-cleaner") return !isUrlCleanerPage;
 	if (link.href === "/tools/url-to-markdown") return !isUrlToMarkdownPage;
+	if (link.href === "/tools/url-to-html") return !isUrlToHtmlPage;
 	if (link.href === "/tools/link-in-bio") return !isLinkInBioPage;
 	return true;
 });
