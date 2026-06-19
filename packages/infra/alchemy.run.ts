@@ -1,5 +1,11 @@
 import alchemy from "alchemy";
-import { Astro, D1Database, Worker } from "alchemy/cloudflare";
+import {
+	Astro,
+	BrowserRendering,
+	D1Database,
+	RateLimit,
+	Worker,
+} from "alchemy/cloudflare";
 import { config } from "dotenv";
 
 function getCliStage() {
@@ -45,6 +51,29 @@ const db = await D1Database("database", {
 	migrationsDir: "../../packages/db/src/migrations",
 });
 
+export const markdown = await Worker("markdown", {
+	adopt: true,
+	cwd: "../../apps/server",
+	entrypoint: "src/markdown.ts",
+	compatibility: "node",
+	compatibilityDate: "2026-03-24",
+	url: true,
+	bindings: {
+		BROWSER: BrowserRendering(),
+		MARKDOWN_RATE_LIMIT: RateLimit({
+			namespace_id: 1001,
+			simple: {
+				limit: 5,
+				period: 60,
+			},
+		}),
+		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
+	},
+	dev: {
+		remote: true,
+	},
+});
+
 export const server = await Worker("server", {
 	adopt: true,
 	cwd: "../../apps/server",
@@ -72,12 +101,17 @@ export const web = await Astro("web", {
 	entrypoint: "dist/server/entry.mjs",
 	assets: "dist/client",
 	bindings: {
+		PUBLIC_MARKDOWN_SERVER_URL: requireValue(
+			"PUBLIC_MARKDOWN_SERVER_URL",
+			markdown.url,
+		),
 		PUBLIC_SERVER_URL: publicServerUrl,
 	},
 });
 
 console.log(`Web    -> ${web.url}`);
 console.log(`Server -> ${server.url}`);
+console.log(`Markdown -> ${markdown.url}`);
 console.log(`API    -> ${publicServerUrl}`);
 
 await app.finalize();

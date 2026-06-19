@@ -7,6 +7,11 @@ const friendlyMessages: Record<string, string> = {
 	PRIVATE_IP_NOT_ALLOWED: "Private network URLs cannot be shortened.",
 	URL_TOO_LONG: "This URL is too long.",
 	RATE_LIMITED: "Too many requests. Please try again shortly.",
+	PAGE_FETCH_FAILED:
+		"This page could not be converted. It may block automated access.",
+	MARKDOWN_TOO_LARGE: "This page produced too much Markdown to return.",
+	BROWSER_UNAVAILABLE:
+		"The conversion service is temporarily unavailable. Please try again.",
 	EMPTY_TITLE: "Please enter a title for your page.",
 	TITLE_TOO_LONG: "Titles must be 80 characters or fewer.",
 	DESCRIPTION_TOO_LONG: "Descriptions must be 300 characters or fewer.",

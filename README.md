@@ -7,7 +7,7 @@
 <h1 align="center">URLX</h1>
 
 <p align="center">
-  Free and open-source tools for shortening, cleaning, and sharing URLs.
+  Free and open-source tools for shortening, cleaning, converting, and sharing URLs.
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 URLX is a no-account URL toolkit built for the web and deployed on Cloudflare.
 It combines focused browser-based utilities with server-backed short links and
-link-in-bio pages.
+link-in-bio pages, plus Cloudflare-powered webpage conversion.
 
 The project is MIT licensed and designed to be easy to use, self-host, extend,
 and contribute to.
@@ -43,6 +43,7 @@ and contribute to.
 | [URL Shortener](https://www.urlx.tn/tools/url-shortener) | Creates compact redirect links and optional QR codes. | Cloudflare Worker + D1 |
 | [URL Cleaner](https://www.urlx.tn/tools/url-cleaner) | Removes common tracking parameters from a URL. | In the browser |
 | [QR Code Generator](https://www.urlx.tn/tools/qr-code-generator) | Exports a URL as SVG or PNG. | In the browser |
+| [URL to Markdown](https://www.urlx.tn/tools/url-to-markdown) | Converts a public webpage into Markdown. | Cloudflare Worker + Browser Run |
 | [Link in Bio](https://www.urlx.tn/tools/link-in-bio) | Publishes one shareable page containing multiple links. | Cloudflare Worker + D1 |
 
 No user account is required. Optional recent-URL history is stored locally in
@@ -56,22 +57,30 @@ URLX is a pnpm and Turborepo monorepo:
 Browser
   |
   +-- Astro web Worker ---------------- Browser-only URL tools
+  |          |                           |
+  |          +-------------------------- oRPC API client
   |          |
-  |          +-------------------------- oRPC client
+  |          +-------------------------- Markdown Worker client
   |
   +-- Hono API Worker ----------------- Validation and business logic
+  |          |
+  |          +-------------------------- Cloudflare D1
+  |
+  +-- Hono Markdown Worker ------------ URL validation and conversion
              |
-             +-------------------------- Cloudflare D1
+             +-------------------------- Cloudflare Browser Run
 ```
 
 - **Web:** Astro, Tailwind CSS, browser-side QR generation
 - **API:** Hono, oRPC, OpenAPI reference
+- **Markdown conversion:** Dedicated Hono Worker with Cloudflare Browser Run
 - **Database:** Cloudflare D1 and Drizzle ORM
 - **Infrastructure:** Alchemy TypeScript IaC
 - **Tooling:** pnpm, Turborepo, TypeScript, Biome
 
-Alchemy provisions the Astro Worker, API Worker, D1 database, runtime bindings,
-and database migrations from `packages/infra/alchemy.run.ts`.
+Alchemy provisions the Astro Worker, API Worker, Markdown Worker, D1 database,
+Browser Run and rate-limit bindings, runtime bindings, and database migrations
+from `packages/infra/alchemy.run.ts`.
 
 ## Requirements
 
@@ -112,8 +121,11 @@ Default local URLs:
 - API: `http://localhost:3000`
 - OpenAPI reference: `http://localhost:3000/api-reference`
 
-The full stack is required to test URL shortening and link-in-bio persistence
-because those features use the D1 binding created by Alchemy.
+The full stack is required to test server-backed tools. URL shortening and
+link-in-bio use the local API Worker and D1. URL-to-Markdown calls a dedicated
+remote development Worker because Browser Run Quick Actions are not emulated
+locally. Starting the stack may deploy or update that development Worker and
+consume Browser Run quota.
 
 ### Run individual apps
 
@@ -125,6 +137,11 @@ pnpm run dev:server
 `dev:web` starts Astro without Alchemy-managed Cloudflare bindings. Browser-only
 tools work in this mode, but server-backed features require the full stack.
 
+URL-to-Markdown requires an authenticated Alchemy Cloudflare session and Browser
+Run availability on that account. The application does not need a separate
+Browser Run API token. Alchemy provisions the browser and rate-limit bindings,
+and the Markdown Worker uses a compatibility date that supports Quick Actions.
+
 ## Environment variables
 
 The repository uses root environment files because Alchemy loads and distributes
@@ -135,6 +152,7 @@ the stage configuration for both Workers.
 | `CORS_ORIGIN` | Yes | Browser origin accepted by the API Worker. |
 | `SHORT_URL_BASE` | No | Public origin used to construct short URLs. |
 | `PUBLIC_SERVER_URL` | Yes | Public oRPC API URL used by the Astro app. |
+| `PUBLIC_MARKDOWN_SERVER_URL` | Automatic | Markdown Worker URL supplied by Alchemy; only set manually when running Astro outside the full stack. |
 | `SKIP_ENV_VALIDATION` | No | Optional escape hatch for public environment validation. |
 
 Stage mapping:
@@ -170,9 +188,9 @@ pnpm run test
 pnpm run build
 ```
 
-The unit suite covers core URL validation, normalization, slug, and short-code
-behavior. Changes to server-backed features should also be verified against the
-full local stack.
+The unit suite covers core URL validation, normalization, slug, short-code, and
+Markdown conversion behavior. Changes to Cloudflare-backed features should also
+be verified against a deployed or remote development stack.
 
 GitHub Actions runs the same quality gates for pull requests targeting `main`
 and for pushes to `main`. CI caches the pnpm package store and Turborepo task

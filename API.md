@@ -1,6 +1,8 @@
 # URLX Backend API
 
-URLX v1 exposes shortening and link resolution through oRPC. Short-link redirects are served by the web app at `<<web-origin>>/u/:shortCode`.
+URLX v1 exposes shortening and link resolution through oRPC. URL-to-Markdown is
+served by a separate conversion Worker. Short-link redirects are served by the
+web app at `<<web-origin>>/u/:shortCode`.
 
 ## Local Configuration
 
@@ -11,6 +13,18 @@ DB
 CORS_ORIGIN
 SHORT_URL_BASE
 ```
+
+The Markdown Worker expects:
+
+```text
+BROWSER
+MARKDOWN_RATE_LIMIT
+CORS_ORIGIN
+```
+
+`BROWSER` is the Cloudflare Browser Run binding provisioned by Alchemy; it does
+not require a separate application API token. `MARKDOWN_RATE_LIMIT` limits each
+client IP to five conversions per minute before Browser Run is called.
 
 Alchemy defaults `SHORT_URL_BASE` to:
 
@@ -82,6 +96,45 @@ Success response:
 ```
 
 Unknown, malformed, or disabled short codes return a `SHORT_CODE_NOT_FOUND` error.
+
+## Markdown Conversion Endpoint
+
+```text
+POST <<markdown-worker-origin>>/markdown
+```
+
+Fetches a public webpage through Cloudflare Browser Run and returns its readable
+content as Markdown.
+
+Request:
+
+```json
+{
+	"url": "https://example.com/article"
+}
+```
+
+Success response:
+
+```json
+{
+	"sourceUrl": "https://example.com/article",
+	"markdown": "# Article title\n\nArticle content."
+}
+```
+
+The URL is validated before Browser Run is called. Localhost, private-network
+addresses, unsupported schemes, and malformed public domains are rejected.
+Images, media, fonts, and stylesheets are not loaded during conversion to reduce
+page requests. Browser Run responses may be cached for five minutes. Generated
+Markdown is not stored by URLX and responses larger than 1,000,000 characters
+are rejected.
+
+In local development, Alchemy supplies the remote development Worker URL to the
+Astro app as `PUBLIC_MARKDOWN_SERVER_URL`. Production deployments provision and
+bind the corresponding deployed Worker URL automatically.
+
+## Additional oRPC Procedures
 
 ### `bio.create`
 
@@ -205,6 +258,14 @@ SHORT_CODE_NOT_FOUND
 SERVER_ERROR
 ```
 
+Markdown conversion may additionally return:
+
+```text
+PAGE_FETCH_FAILED
+MARKDOWN_TOO_LARGE
+BROWSER_UNAVAILABLE
+```
+
 Bio-page error codes:
 
 ```text
@@ -234,4 +295,6 @@ Typical error payload data:
 
 ## Notes
 
-Rate limiting is intended to be enforced with a Cloudflare rate limiting rule for `POST /rpc`, initially at 20 shorten requests per minute per IP. No application-level storage-backed limiter is provisioned in v1.
+Markdown conversion is protected by a dedicated Cloudflare Rate Limiting
+binding at five requests per minute per client IP. Broader rate limiting for
+other `POST /rpc` operations can still be enforced with Cloudflare rules.

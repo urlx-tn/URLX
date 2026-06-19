@@ -28,7 +28,7 @@ apps/
   web/        Astro frontend and browser-based URL tools
   server/     Hono/oRPC API worker
 packages/
-  api/        oRPC routers, URL and link-page domain logic, schemas
+  api/        oRPC routers, URL/link-page/conversion domain logic, schemas
   db/         Drizzle schema and migrations
   env/        Typed environment access
   config/     Shared TypeScript config
@@ -44,6 +44,10 @@ pnpm run dev            # web, API, D1 binding, and local Workers runtime
 pnpm run dev:web        # frontend only, without Alchemy-managed bindings
 pnpm run dev:server     # API Worker only, through Alchemy
 ```
+
+URL-to-Markdown uses Cloudflare Browser Run Quick Actions. The binding is remote
+and cannot be fully exercised by deterministic unit tests; verify the real
+conversion flow against a Cloudflare development deployment.
 
 To work on just the frontend without the full pipeline:
 
