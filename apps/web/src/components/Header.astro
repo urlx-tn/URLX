@@ -1,39 +1,42 @@
 ---
 import logo from "../assets/logo.png";
+import {
+	additionalTools,
+	allToolsLink,
+	isNavigationLinkActive,
+	primaryProducts,
+} from "../lib/navigation";
+import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
+import QRCodeGeneratorIcon from "./icons/QRCodeGeneratorIcon.astro";
+import UrlCleanerIcon from "./icons/UrlCleanerIcon.astro";
+import UrlShortenerIcon from "./icons/UrlShortenerIcon.astro";
+import UrlToHtmlIcon from "./icons/UrlToHtmlIcon.astro";
+import UrlToMarkdownIcon from "./icons/UrlToMarkdownIcon.astro";
 
 const headerSearchQuery =
 	Astro.url.pathname === "/tools/link-in-bio/search"
 		? (Astro.url.searchParams.get("q") ?? "")
 		: "";
 const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
-const isUrlShortenerPage = currentPath === "/tools/url-shortener";
-const isQrCodeGeneratorPage = currentPath === "/tools/qr-code-generator";
-const isUrlCleanerPage = currentPath === "/tools/url-cleaner";
-const isUrlToMarkdownPage = currentPath === "/tools/url-to-markdown";
-const isUrlToHtmlPage = currentPath === "/tools/url-to-html";
-const isLinkInBioPage =
-	currentPath === "/tools/link-in-bio" ||
-	currentPath.startsWith("/tools/link-in-bio/");
 const showHeaderSearch = currentPath === "/tools/link-in-bio";
-
-const productLinks = [
-	{ label: "URL Shortener", href: "/tools/url-shortener" },
-	{ label: "QR Code Generator", href: "/tools/qr-code-generator" },
-	{ label: "URL Cleaner", href: "/tools/url-cleaner" },
-	{ label: "URL to Markdown", href: "/tools/url-to-markdown" },
-	{ label: "URL to HTML", href: "/tools/url-to-html" },
-	{ label: "Link in Bio", href: "/tools/link-in-bio" },
-];
-
-const visibleProductLinks = productLinks.filter((link) => {
-	if (link.href === "/tools/url-shortener") return !isUrlShortenerPage;
-	if (link.href === "/tools/qr-code-generator") return !isQrCodeGeneratorPage;
-	if (link.href === "/tools/url-cleaner") return !isUrlCleanerPage;
-	if (link.href === "/tools/url-to-markdown") return !isUrlToMarkdownPage;
-	if (link.href === "/tools/url-to-html") return !isUrlToHtmlPage;
-	if (link.href === "/tools/link-in-bio") return !isLinkInBioPage;
-	return true;
-});
+const isAdditionalToolActive = additionalTools.some((link) =>
+	isNavigationLinkActive(currentPath, link.href),
+);
+const createTools = primaryProducts.filter(
+	(link) => link.category === "Create",
+);
+const cleanTools = additionalTools.filter((link) => link.category === "Clean");
+const conversionTools = additionalTools.filter(
+	(link) => link.category === "Convert",
+);
+const toolIcons = {
+	"/tools/url-shortener": UrlShortenerIcon,
+	"/tools/qr-code-generator": QRCodeGeneratorIcon,
+	"/tools/link-in-bio": LinkInBioIcon,
+	"/tools/url-cleaner": UrlCleanerIcon,
+	"/tools/url-to-markdown": UrlToMarkdownIcon,
+	"/tools/url-to-html": UrlToHtmlIcon,
+};
 ---
 
 <header
@@ -65,7 +68,7 @@ const visibleProductLinks = productLinks.filter((link) => {
 						<form
 							action="/tools/link-in-bio/search"
 							method="get"
-							class="field-compact relative hidden h-9 w-[220px] items-center gap-2 px-3 md:flex"
+							class="field-compact relative hidden h-9 w-[180px] items-center gap-2 px-3 lg:flex xl:w-[220px]"
 							data-header-search="form"
 							role="search"
 						>
@@ -107,26 +110,208 @@ const visibleProductLinks = productLinks.filter((link) => {
 						</form>
 						<a
 							href="/tools/link-in-bio/search"
-							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface md:hidden"
+							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink no-underline hover:bg-surface lg:hidden"
 						>
 							Search
 						</a>
 					</>
 				)
 			}
-			<div class="hidden items-center gap-2 md:flex">
+			<div class="hidden items-center gap-1 lg:flex">
 				{
-					visibleProductLinks.map((link) => (
+					primaryProducts.map((link) => (
 						<a
 							href={link.href}
-							class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap text-ink no-underline hover:bg-surface"
+							aria-current={isNavigationLinkActive(currentPath, link.href)
+								? "page"
+								: undefined}
+							class:list={[
+								"inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap no-underline transition-colors",
+								isNavigationLinkActive(currentPath, link.href)
+									? "bg-surface text-ink"
+									: "text-ink-2 hover:bg-surface hover:text-ink",
+							]}
 						>
-							{link.label}
+							{link.navLabel}
 						</a>
 					))
 				}
+				<div class="group relative" data-more-tools="menu">
+					<button
+						type="button"
+						aria-current={isAdditionalToolActive ? "page" : undefined}
+						aria-haspopup="true"
+						aria-expanded="false"
+						data-more-tools="toggle"
+						class:list={[
+							"inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium whitespace-nowrap no-underline transition-colors",
+							isAdditionalToolActive
+								? "bg-surface text-ink"
+								: "text-ink-2 hover:bg-surface hover:text-ink",
+						]}
+					>
+						More tools
+						<svg
+							viewBox="0 0 24 24"
+							class="ml-1 size-3.5 transition-transform duration-150 group-hover:rotate-180 group-focus-within:rotate-180"
+							data-more-tools="toggle-icon"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<path d="m6 9 6 6 6-6" />
+						</svg>
+					</button>
+					<div
+						class="invisible absolute right-0 top-full z-40 w-[min(720px,calc(100vw-3rem))] translate-y-1 pt-3 opacity-0 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+						data-more-tools="panel"
+					>
+						<div
+							class="relative rounded-2xl border border-hair/80 bg-white p-5 shadow-[0_22px_60px_rgb(0_0_0/0.16)]"
+						>
+							<span
+								class="absolute -top-2 right-12 size-4 rotate-45 border-l border-t border-hair/80 bg-white"
+								aria-hidden="true"
+							></span>
+							<div class="grid grid-cols-3 gap-5">
+								<section>
+									<p
+										class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2"
+									>
+										Create
+									</p>
+									<div class="mt-2 space-y-1">
+										{
+											createTools.map((link) => {
+												const Icon = toolIcons[link.href];
+												return (
+													<a
+														href={link.href}
+														aria-current={isNavigationLinkActive(
+															currentPath,
+															link.href,
+														)
+															? "page"
+															: undefined}
+														class:list={[
+															"flex items-center gap-3 rounded-xl p-2.5 no-underline transition-colors",
+															isNavigationLinkActive(currentPath, link.href)
+																? "bg-surface"
+																: "hover:bg-surface",
+														]}
+													>
+														<span class="grid size-12 shrink-0 place-items-center">
+															<Icon class="h-10 w-11 object-contain" />
+														</span>
+														<span class="min-w-0">
+															<span class="block text-[14px] font-semibold text-ink">
+																{link.label}
+															</span>
+															<span class="mt-0.5 block text-[12px] leading-4 text-ink-2">
+																{link.description}
+															</span>
+														</span>
+													</a>
+												);
+											})
+										}
+									</div>
+								</section>
+								<section>
+									<p
+										class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2"
+									>
+										Clean
+									</p>
+									<div class="mt-2 space-y-1">
+										{
+											cleanTools.map((link) => {
+												const Icon = toolIcons[link.href];
+												return (
+													<a
+														href={link.href}
+														aria-current={isNavigationLinkActive(
+															currentPath,
+															link.href,
+														)
+															? "page"
+															: undefined}
+														class:list={[
+															"group/tool flex items-center gap-3 rounded-xl p-2.5 no-underline transition-colors",
+															isNavigationLinkActive(currentPath, link.href)
+																? "bg-surface"
+																: "hover:bg-surface",
+														]}
+													>
+														<span class="grid size-12 shrink-0 place-items-center">
+															<Icon class="h-10 w-11 object-contain" />
+														</span>
+														<span class="min-w-0">
+															<span class="block text-[14px] font-semibold text-ink">
+																{link.label}
+															</span>
+															<span class="mt-0.5 block text-[12px] leading-4 text-ink-2">
+																{link.description}
+															</span>
+														</span>
+													</a>
+												);
+											})
+										}
+									</div>
+								</section>
+								<section>
+									<p
+										class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2"
+									>
+										Convert
+									</p>
+									<div class="mt-2 space-y-1">
+										{
+											conversionTools.map((link) => {
+												const Icon = toolIcons[link.href];
+												return (
+													<a
+														href={link.href}
+														aria-current={isNavigationLinkActive(
+															currentPath,
+															link.href,
+														)
+															? "page"
+															: undefined}
+														class:list={[
+															"group/tool flex items-center gap-3 rounded-xl p-2.5 no-underline transition-colors",
+															isNavigationLinkActive(currentPath, link.href)
+																? "bg-surface"
+																: "hover:bg-surface",
+														]}
+													>
+														<span class="grid size-12 shrink-0 place-items-center">
+															<Icon class="h-10 w-11 object-contain" />
+														</span>
+														<span class="min-w-0">
+															<span class="block text-[14px] font-semibold text-ink">
+																{link.label}
+															</span>
+															<span class="mt-0.5 block text-[12px] leading-4 text-ink-2">
+																{link.description}
+															</span>
+														</span>
+													</a>
+												);
+											})
+										}
+									</div>
+								</section>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
-			<div class="relative md:hidden" data-product-nav="menu">
+			<div class="relative lg:hidden" data-product-nav="menu">
 				<button
 					type="button"
 					class="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[14px] font-medium text-ink hover:bg-surface"
@@ -134,7 +319,7 @@ const visibleProductLinks = productLinks.filter((link) => {
 					aria-expanded="false"
 					aria-haspopup="true"
 				>
-					Tools
+					Products
 					<svg
 						viewBox="0 0 24 24"
 						class="ml-1 size-4 transition-transform"
@@ -150,26 +335,64 @@ const visibleProductLinks = productLinks.filter((link) => {
 					</svg>
 				</button>
 				<div
-					class="absolute right-0 top-full z-40 mt-2 hidden w-48 rounded-xl border border-hair bg-white p-1.5 shadow-[0_16px_44px_rgb(0_0_0/0.14)]"
+					class="absolute right-0 top-full z-40 mt-2 hidden w-64 rounded-xl border border-hair bg-white p-1.5 shadow-[0_16px_44px_rgb(0_0_0/0.14)]"
 					data-product-nav="panel"
 				>
 					{
-						visibleProductLinks.map((link) => (
+						primaryProducts.map((link) => (
 							<a
 								href={link.href}
-								class="block rounded-lg px-3 py-2 text-[14px] font-medium text-ink no-underline hover:bg-surface"
+								aria-current={isNavigationLinkActive(currentPath, link.href)
+									? "page"
+									: undefined}
+								class:list={[
+									"block rounded-lg px-3 py-2 text-[14px] font-medium text-ink no-underline",
+									isNavigationLinkActive(currentPath, link.href)
+										? "bg-surface"
+										: "hover:bg-surface",
+								]}
 							>
 								{link.label}
 							</a>
 						))
 					}
+					<p
+						class="mx-3 mb-1 mt-2 border-t border-hair/70 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-2"
+					>
+						More tools
+					</p>
+					{
+						additionalTools.map((link) => (
+							<a
+								href={link.href}
+								aria-current={isNavigationLinkActive(currentPath, link.href)
+									? "page"
+									: undefined}
+								class:list={[
+									"block rounded-lg px-3 py-2 text-[14px] font-medium text-ink no-underline",
+									isNavigationLinkActive(currentPath, link.href)
+										? "bg-surface"
+										: "hover:bg-surface",
+								]}
+							>
+								{link.label}
+							</a>
+						))
+					}
+					<a
+						href={allToolsLink.href}
+						class="mt-1 block rounded-lg px-3 py-2 text-[13px] font-medium text-link no-underline hover:bg-surface"
+					>
+						Browse all tools &rarr;
+					</a>
 				</div>
 			</div>
 			<a
 				href="https://github.com/urlx-tn/URLX"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="btn-secondary hidden h-9 items-center justify-center gap-2 rounded-xl border px-4 text-[14px] font-medium no-underline sm:inline-flex"
+				class="btn-secondary inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 text-[14px] font-medium no-underline sm:px-4"
+				aria-label="View URLX on GitHub"
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -185,7 +408,7 @@ const visibleProductLinks = productLinks.filter((link) => {
 					>
 					</path>
 				</svg>
-				<span class="hidden sm:inline">Open Source</span>
+				<span class="hidden sm:inline">GitHub</span>
 			</a>
 		</nav>
 	</div>
@@ -229,6 +452,18 @@ const visibleProductLinks = productLinks.filter((link) => {
 		const productNavToggleIcon = header.querySelector<HTMLElement>(
 			'[data-product-nav="toggle-icon"]',
 		);
+		const moreToolsMenu = header.querySelector<HTMLElement>(
+			'[data-more-tools="menu"]',
+		);
+		const moreToolsToggle = header.querySelector<HTMLButtonElement>(
+			'[data-more-tools="toggle"]',
+		);
+		const moreToolsPanel = header.querySelector<HTMLElement>(
+			'[data-more-tools="panel"]',
+		);
+		const moreToolsToggleIcon = header.querySelector<HTMLElement>(
+			'[data-more-tools="toggle-icon"]',
+		);
 
 		let timer: number | null = null;
 		let requestToken = 0;
@@ -236,6 +471,7 @@ const visibleProductLinks = productLinks.filter((link) => {
 		let currentItems: HeaderSearchItem[] = [];
 		let currentQuery = "";
 		let productNavOpen = false;
+		let moreToolsOpen = false;
 
 		const normalizeQueryInput = (value: string) =>
 			value
@@ -263,6 +499,22 @@ const visibleProductLinks = productLinks.filter((link) => {
 			}
 			if (productNavToggleIcon) {
 				productNavToggleIcon.style.transform = open ? "rotate(180deg)" : "";
+			}
+		};
+
+		const setMoreToolsOpen = (open: boolean) => {
+			moreToolsOpen = open;
+			if (moreToolsPanel) {
+				moreToolsPanel.classList.toggle("invisible", !open);
+				moreToolsPanel.classList.toggle("translate-y-1", !open);
+				moreToolsPanel.classList.toggle("opacity-0", !open);
+				moreToolsPanel.classList.toggle("visible", open);
+				moreToolsPanel.classList.toggle("translate-y-0", open);
+				moreToolsPanel.classList.toggle("opacity-100", open);
+			}
+			moreToolsToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+			if (moreToolsToggleIcon) {
+				moreToolsToggleIcon.style.transform = open ? "rotate(180deg)" : "";
 			}
 		};
 
@@ -502,6 +754,24 @@ const visibleProductLinks = productLinks.filter((link) => {
 			{ signal },
 		);
 
+		moreToolsToggle?.addEventListener(
+			"click",
+			() => {
+				setMoreToolsOpen(!moreToolsOpen);
+			},
+			{ signal },
+		);
+		moreToolsMenu?.addEventListener(
+			"mouseenter",
+			() => setMoreToolsOpen(true),
+			{ signal },
+		);
+		moreToolsMenu?.addEventListener(
+			"mouseleave",
+			() => setMoreToolsOpen(false),
+			{ signal },
+		);
+
 		document.addEventListener(
 			"mousedown",
 			(event) => {
@@ -511,6 +781,9 @@ const visibleProductLinks = productLinks.filter((link) => {
 				}
 				if (productNavMenu && !productNavMenu.contains(target)) {
 					setProductNavOpen(false);
+				}
+				if (moreToolsMenu && !moreToolsMenu.contains(target)) {
+					setMoreToolsOpen(false);
 				}
 			},
 			{ signal },
