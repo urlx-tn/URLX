@@ -1,30 +1,20 @@
 ---
+import urlMetadataIcon from "../../assets/icons/url-metadata.png";
+
 interface Props {
 	class?: string;
 }
 
-const { class: className = "h-auto w-40 max-w-full" } = Astro.props;
+const { class: className = "h-24 w-auto max-w-full object-contain" } =
+	Astro.props;
 ---
 
-<svg
-	viewBox="0 0 160 120"
-	fill="none"
-	xmlns="http://www.w3.org/2000/svg"
+<img
+	src={urlMetadataIcon.src}
+	width={urlMetadataIcon.width}
+	height={urlMetadataIcon.height}
+	alt=""
 	class={className}
 	aria-hidden="true"
->
-	<rect x="18" y="18" width="124" height="84" rx="14" fill="#F5F5F7" />
-	<rect x="18" y="18" width="124" height="84" rx="14" stroke="#D9D9E0" stroke-width="2" />
-	<rect x="32" y="34" width="96" height="16" rx="8" fill="#1D1D1F" />
-	<rect x="32" y="62" width="44" height="26" rx="8" fill="#0A84FF" />
-	<rect x="86" y="64" width="42" height="6" rx="3" fill="#6E6E73" />
-	<rect x="86" y="77" width="30" height="6" rx="3" fill="#A1A1A6" />
-	<circle cx="124" cy="38" r="18" fill="#34C759" />
-	<path
-		d="m116 38 5 5 10-11"
-		stroke="white"
-		stroke-width="4"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
-</svg>
+	decoding="async"
+/>
