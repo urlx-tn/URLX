@@ -136,12 +136,12 @@ const softwareSchema = {
 				</div>
 
 				<div
-					class="reveal mt-8 grid gap-4 lg:grid-cols-12"
+					class="reveal mt-8 grid min-w-0 gap-4 lg:grid-cols-12"
 					data-metadata="result"
 					aria-live="polite"
 					hidden
 				>
-					<section class="surface overflow-hidden lg:col-span-7">
+					<section class="surface min-w-0 overflow-hidden lg:col-span-7">
 						<div class="grid h-full gap-0 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:grid-cols-1 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
 							<div
 								class="flex min-h-[220px] items-center justify-center bg-surface lg:min-h-[260px] xl:min-h-[320px]"
@@ -202,7 +202,7 @@ const softwareSchema = {
 						</div>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-5">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-5">
 						<div class="flex flex-col gap-4">
 							<div class="min-w-0">
 								<h2 class="text-[18px] font-semibold text-ink">Inspection summary</h2>
@@ -239,15 +239,15 @@ const softwareSchema = {
 						</dl>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-12" data-metadata="warnings-section">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-12" data-metadata="warnings-section">
 						<h2 class="text-[18px] font-semibold text-ink">Warnings</h2>
 						<ul class="mt-4 grid gap-2 lg:grid-cols-2" data-metadata="warnings"></ul>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-8">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-8">
 						<h2 class="text-[18px] font-semibold text-ink">Open Graph</h2>
 						<dl class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-metadata="og-list"></dl>
-						<div class="mt-5 overflow-x-auto">
+						<div class="mt-5 min-w-0 overflow-x-auto">
 							<table class="w-full min-w-[560px] text-left text-[13px]">
 								<thead class="text-ink-2">
 									<tr class="border-b border-hair">
@@ -262,7 +262,7 @@ const softwareSchema = {
 						</div>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-4">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-4">
 						<h2 class="text-[18px] font-semibold text-ink">Twitter/X Card</h2>
 						<dl
 							class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1"
@@ -271,7 +271,7 @@ const softwareSchema = {
 						</dl>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-5">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-5">
 						<h2 class="text-[18px] font-semibold text-ink">Standard Metadata</h2>
 						<dl
 							class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1"
@@ -280,14 +280,14 @@ const softwareSchema = {
 						</dl>
 					</section>
 
-					<section class="surface flex h-full min-h-0 flex-col overflow-hidden p-5 sm:p-6 lg:col-span-7">
+					<section class="surface flex min-w-0 flex-col p-5 sm:p-6 lg:col-span-7 lg:h-full lg:min-h-0 lg:overflow-hidden">
 						<h2 class="text-[18px] font-semibold text-ink">Raw Metadata</h2>
-						<div class="mt-4 min-h-0 flex-1 basis-0 overflow-auto rounded-xl border border-hair">
+						<div class="mt-4 max-h-[380px] min-h-[220px] overflow-auto rounded-xl border border-hair lg:min-h-0 lg:max-h-none lg:flex-1 lg:basis-0">
 							<table class="w-full table-fixed text-left text-[13px]">
 								<thead class="sticky top-0 bg-white text-ink-2">
 									<tr class="border-b border-hair">
-										<th class="w-[88px] py-2 pl-3 pr-3 font-medium">Source</th>
-										<th class="w-[160px] py-2 pr-3 font-medium">Name</th>
+										<th class="w-[68px] py-2 pl-3 pr-3 font-medium sm:w-[88px]">Source</th>
+										<th class="w-[122px] py-2 pr-3 font-medium sm:w-[160px]">Name</th>
 										<th class="py-2 pr-3 font-medium">Value</th>
 									</tr>
 								</thead>
@@ -296,7 +296,7 @@ const softwareSchema = {
 						</div>
 					</section>
 
-					<section class="surface p-5 sm:p-6 lg:col-span-12">
+					<section class="surface min-w-0 p-5 sm:p-6 lg:col-span-12">
 						<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<h2 class="text-[18px] font-semibold text-ink">JSON Result</h2>
 							<div class="flex flex-wrap gap-2">
@@ -652,9 +652,9 @@ const softwareSchema = {
 			const cell = document.createElement("td");
 			cell.className =
 				kind === "source"
-					? "w-[88px] truncate border-b border-hair/70 py-2 pl-3 pr-3 text-ink-2"
+					? "w-[68px] truncate border-b border-hair/70 py-2 pl-3 pr-3 text-ink-2 sm:w-[88px]"
 					: kind === "name"
-						? "w-[160px] truncate border-b border-hair/70 py-2 pr-3 text-ink"
+						? "w-[122px] truncate border-b border-hair/70 py-2 pr-3 text-ink sm:w-[160px]"
 						: "truncate border-b border-hair/70 py-2 pr-3 text-ink";
 			cell.textContent = value === null || value === "" ? "Not found" : String(value);
 			cell.title = cell.textContent;
@@ -869,7 +869,6 @@ const softwareSchema = {
 				}
 				state = { status: "success", result, json };
 				render();
-				copyJson.focus();
 			} catch (error) {
 				state = { status: "error", message: friendlyErrorMessage(error) };
 				render();
