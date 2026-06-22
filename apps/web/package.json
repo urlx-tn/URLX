@@ -30,7 +30,7 @@
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
-		"sharp": "^0.35.1",
+		"sharp": "^0.35.2",
 		"tailwindcss": "^4.1.18",
 		"typescript": "catalog:"
 	}
