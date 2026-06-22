@@ -83,6 +83,13 @@ export const server = await Worker("server", {
 	bindings: {
 		DB: db,
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
+		METADATA_RATE_LIMIT: RateLimit({
+			namespace_id: 1002,
+			simple: {
+				limit: 20,
+				period: 60,
+			},
+		}),
 		SHORT_URL_BASE: requireValue("SHORT_URL_BASE", alchemy.env.SHORT_URL_BASE),
 	},
 	dev: {
