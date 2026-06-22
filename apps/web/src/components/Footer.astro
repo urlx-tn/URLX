@@ -3,6 +3,9 @@ import logo from "../assets/logo.png";
 import { allToolsLink, primaryProducts } from "../lib/navigation";
 
 const year = new Date().getFullYear();
+const visiblePrimaryProducts = primaryProducts.filter(
+	(link) => link.isDiscoverable,
+);
 
 const legalLinks = [
 	{ label: "Privacy", href: "/legal/privacy" },
@@ -44,7 +47,7 @@ const legalLinks = [
 				</h3>
 				<ul class="mt-4 space-y-2.5">
 					{
-						primaryProducts.map((link) => (
+						visiblePrimaryProducts.map((link) => (
 							<li>
 								<a
 									href={link.href}

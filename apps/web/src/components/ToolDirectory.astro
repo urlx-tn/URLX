@@ -14,6 +14,7 @@ const tools = [
 		description: "Create clean, reliable short links in seconds.",
 		href: "/tools/url-shortener",
 		Icon: UrlShortenerIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "qr-code-generator",
@@ -21,6 +22,7 @@ const tools = [
 		description: "Create a downloadable QR code from any link.",
 		href: "/tools/qr-code-generator",
 		Icon: QRCodeGeneratorIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "url-cleaner",
@@ -28,6 +30,7 @@ const tools = [
 		description: "Remove tracking parameters and copy a cleaner link.",
 		href: "/tools/url-cleaner",
 		Icon: UrlCleanerIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "url-metadata",
@@ -35,6 +38,7 @@ const tools = [
 		description: "Inspect link preview metadata for a public URL.",
 		href: "/tools/url-metadata",
 		Icon: UrlMetadataIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "url-to-markdown",
@@ -42,6 +46,7 @@ const tools = [
 		description: "Convert a public webpage into clean Markdown.",
 		href: "/tools/url-to-markdown",
 		Icon: UrlToMarkdownIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "url-to-html",
@@ -49,6 +54,7 @@ const tools = [
 		description: "Capture a webpage's fully rendered HTML.",
 		href: "/tools/url-to-html",
 		Icon: UrlToHtmlIcon,
+		isDiscoverable: true,
 	},
 	{
 		slug: "link-in-bio",
@@ -56,8 +62,11 @@ const tools = [
 		description: "Build a page that holds all your links in one shareable URL.",
 		href: "/tools/link-in-bio",
 		Icon: LinkInBioIcon,
+		isDiscoverable: false,
 	},
 ];
+
+const visibleTools = tools.filter((tool) => tool.isDiscoverable);
 ---
 
 <section class="flex flex-1 bg-white">
@@ -80,7 +89,7 @@ const tools = [
 			role="list"
 		>
 			{
-				tools.map((tool) => (
+				visibleTools.map((tool) => (
 					<li class="flex w-full min-[520px]:basis-[calc((100%-1rem)/2)] lg:basis-[calc((100%-2rem)/3)] xl:basis-[calc((100%-3rem)/4)]">
 						<a
 							href={tool.href}

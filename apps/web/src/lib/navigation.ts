@@ -5,6 +5,7 @@ export const primaryProducts = [
 		href: "/tools/url-shortener",
 		description: "Create short, shareable links",
 		category: "Create",
+		isDiscoverable: true,
 	},
 	{
 		label: "QR Code Generator",
@@ -12,6 +13,7 @@ export const primaryProducts = [
 		href: "/tools/qr-code-generator",
 		description: "Generate QR codes for any URL",
 		category: "Create",
+		isDiscoverable: true,
 	},
 	{
 		label: "Link in Bio",
@@ -19,6 +21,7 @@ export const primaryProducts = [
 		href: "/tools/link-in-bio",
 		description: "Share every link from one page",
 		category: "Create",
+		isDiscoverable: false,
 	},
 ] as const;
 

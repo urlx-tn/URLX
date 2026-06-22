@@ -20,10 +20,13 @@ const headerSearchQuery =
 		: "";
 const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 const showHeaderSearch = currentPath === "/tools/link-in-bio";
+const visiblePrimaryProducts = primaryProducts.filter(
+	(link) => link.isDiscoverable,
+);
 const isAdditionalToolActive = additionalTools.some((link) =>
 	isNavigationLinkActive(currentPath, link.href),
 );
-const createTools = primaryProducts.filter(
+const createTools = visiblePrimaryProducts.filter(
 	(link) => link.category === "Create",
 );
 const cleanTools = additionalTools.filter((link) => link.category === "Clean");
@@ -124,7 +127,7 @@ const toolIcons = {
 			}
 			<div class="hidden items-center gap-1 lg:flex">
 				{
-					primaryProducts.map((link) => (
+					visiblePrimaryProducts.map((link) => (
 						<a
 							href={link.href}
 							aria-current={isNavigationLinkActive(currentPath, link.href)
@@ -387,7 +390,7 @@ const toolIcons = {
 					data-product-nav="panel"
 				>
 					{
-						primaryProducts.map((link) => (
+						visiblePrimaryProducts.map((link) => (
 							<a
 								href={link.href}
 								aria-current={isNavigationLinkActive(currentPath, link.href)
