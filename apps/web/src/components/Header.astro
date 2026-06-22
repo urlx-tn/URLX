@@ -9,6 +9,7 @@ import {
 import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
 import QRCodeGeneratorIcon from "./icons/QRCodeGeneratorIcon.astro";
 import UrlCleanerIcon from "./icons/UrlCleanerIcon.astro";
+import UrlMetadataIcon from "./icons/UrlMetadataIcon.astro";
 import UrlShortenerIcon from "./icons/UrlShortenerIcon.astro";
 import UrlToHtmlIcon from "./icons/UrlToHtmlIcon.astro";
 import UrlToMarkdownIcon from "./icons/UrlToMarkdownIcon.astro";
@@ -26,6 +27,9 @@ const createTools = primaryProducts.filter(
 	(link) => link.category === "Create",
 );
 const cleanTools = additionalTools.filter((link) => link.category === "Clean");
+const inspectTools = additionalTools.filter(
+	(link) => link.category === "Inspect",
+);
 const conversionTools = additionalTools.filter(
 	(link) => link.category === "Convert",
 );
@@ -34,6 +38,7 @@ const toolIcons = {
 	"/tools/qr-code-generator": QRCodeGeneratorIcon,
 	"/tools/link-in-bio": LinkInBioIcon,
 	"/tools/url-cleaner": UrlCleanerIcon,
+	"/tools/url-metadata": UrlMetadataIcon,
 	"/tools/url-to-markdown": UrlToMarkdownIcon,
 	"/tools/url-to-html": UrlToHtmlIcon,
 };
@@ -166,7 +171,7 @@ const toolIcons = {
 						</svg>
 					</button>
 					<div
-						class="invisible absolute right-0 top-full z-40 w-[min(720px,calc(100vw-3rem))] translate-y-1 pt-3 opacity-0 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+						class="invisible absolute right-0 top-full z-40 w-[min(900px,calc(100vw-3rem))] translate-y-1 pt-3 opacity-0 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
 						data-more-tools="panel"
 					>
 						<div
@@ -176,7 +181,7 @@ const toolIcons = {
 								class="absolute -top-2 right-12 size-4 rotate-45 border-l border-t border-hair/80 bg-white"
 								aria-hidden="true"
 							></span>
-							<div class="grid grid-cols-3 gap-5">
+							<div class="grid grid-cols-4 gap-5">
 								<section>
 									<p
 										class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2"
@@ -229,6 +234,49 @@ const toolIcons = {
 									<div class="mt-2 space-y-1">
 										{
 											cleanTools.map((link) => {
+												const Icon = toolIcons[link.href];
+												return (
+													<a
+														href={link.href}
+														aria-current={isNavigationLinkActive(
+															currentPath,
+															link.href,
+														)
+															? "page"
+															: undefined}
+														class:list={[
+															"group/tool flex items-center gap-3 rounded-xl p-2.5 no-underline transition-colors",
+															isNavigationLinkActive(currentPath, link.href)
+																? "bg-surface"
+																: "hover:bg-surface",
+														]}
+													>
+														<span class="grid size-12 shrink-0 place-items-center">
+															<Icon class="h-10 w-11 object-contain" />
+														</span>
+														<span class="min-w-0">
+															<span class="block text-[14px] font-semibold text-ink">
+																{link.label}
+															</span>
+															<span class="mt-0.5 block text-[12px] leading-4 text-ink-2">
+																{link.description}
+															</span>
+														</span>
+													</a>
+												);
+											})
+										}
+									</div>
+								</section>
+								<section>
+									<p
+										class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2"
+									>
+										Inspect
+									</p>
+									<div class="mt-2 space-y-1">
+										{
+											inspectTools.map((link) => {
 												const Icon = toolIcons[link.href];
 												return (
 													<a

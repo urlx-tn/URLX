@@ -30,6 +30,12 @@ export const additionalTools = [
 		category: "Clean",
 	},
 	{
+		label: "URL Metadata Inspector",
+		description: "Inspect link preview metadata",
+		href: "/tools/url-metadata",
+		category: "Inspect",
+	},
+	{
 		label: "URL to Markdown",
 		description: "Turn webpages into Markdown",
 		href: "/tools/url-to-markdown",

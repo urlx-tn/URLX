@@ -1,0 +1,1001 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const title = "URL Metadata Inspector | URLX";
+const description =
+	"Inspect Open Graph, Twitter card, and standard link preview metadata for a public URL.";
+const pageUrl = new URL("/tools/url-metadata", Astro.site).toString();
+const softwareSchema = {
+	"@context": "https://schema.org",
+	"@type": "WebApplication",
+	name: "URL Metadata Inspector",
+	applicationCategory: "UtilitiesApplication",
+	operatingSystem: "Web",
+	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+	url: pageUrl,
+};
+---
+
+<Layout title={title} description={description}>
+	<script is:inline type="application/ld+json" set:html={JSON.stringify(softwareSchema)} />
+	<section
+		data-page-root="metadata-tool"
+		class="flex flex-1 bg-white"
+	>
+		<div class="mx-auto w-full max-w-[1180px] px-6 pt-16 pb-24 sm:pb-28">
+			<header class="text-center">
+				<h1
+					class="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-ink sm:text-[56px]"
+				>
+					Inspect URL metadata.
+				</h1>
+				<p
+					class="mx-auto mt-5 max-w-[44ch] text-[19px] leading-7 text-ink-2 sm:text-[21px]"
+				>
+					Check what link previews can read from a public page.
+				</p>
+			</header>
+
+			<div class="mx-auto mt-10 max-w-[1060px]">
+				<div class="mx-auto max-w-[560px]">
+					<form class="flex flex-col gap-3" data-metadata="form" novalidate>
+						<div class="flex flex-col gap-3 sm:flex-row">
+							<label class="sr-only" for="metadata-url">URL to inspect</label>
+							<div class="relative flex-1" data-metadata="input-wrap">
+								<div
+									class="field flex items-center gap-2 overflow-hidden pl-4"
+									data-metadata="input-shell"
+								>
+									<span
+										class="shrink-0 select-none text-[15px] text-ink-2"
+										aria-hidden="true"
+									>
+										https://
+									</span>
+									<input
+										id="metadata-url"
+										name="url"
+										type="url"
+										inputmode="url"
+										autocomplete="off"
+										spellcheck="false"
+										autocapitalize="off"
+										placeholder="example.com/article"
+										class="min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-2/70 focus:outline-none"
+										data-metadata="url"
+										role="combobox"
+										aria-invalid="false"
+										aria-expanded="false"
+										aria-autocomplete="list"
+										aria-haspopup="listbox"
+										aria-controls="metadata-history"
+										aria-describedby="metadata-error metadata-privacy"
+									/>
+								</div>
+								<ul
+									id="metadata-history"
+									class="absolute inset-x-0 top-full z-30 mt-2 max-h-[280px] overflow-auto rounded-xl border border-hair bg-white py-1 shadow-[0_8px_30px_rgb(0_0_0/0.08)]"
+									role="listbox"
+									aria-label="Recent URLs"
+									data-metadata="history"
+									hidden
+								>
+								</ul>
+							</div>
+							<button
+								type="submit"
+								class="btn w-full sm:w-auto sm:min-w-[148px]"
+								data-metadata="submit"
+							>
+								<span
+									class="spinner shrink-0"
+									aria-hidden="true"
+									data-metadata="spinner"
+									hidden
+								>
+								</span>
+								<span data-metadata="submit-label">Inspect</span>
+							</button>
+						</div>
+						<div
+							class="flex flex-col gap-2 text-[13px] leading-5 text-ink-2 sm:flex-row sm:items-center sm:justify-between"
+						>
+							<label class="inline-flex items-center gap-2">
+								<input
+									type="checkbox"
+									class="h-4 w-4 accent-accent"
+									data-metadata="remember-history"
+								/>
+								<span>Remember recent URLs on this device</span>
+							</label>
+							<button
+								type="button"
+								class="self-start text-link underline-offset-2 hover:underline sm:self-auto"
+								data-metadata="clear-history"
+								hidden
+							>
+								Clear recent URLs
+							</button>
+						</div>
+					</form>
+
+					<p
+						id="metadata-error"
+						class="mt-3 text-[14px] leading-5 text-[#d70015]"
+						role="alert"
+						aria-live="assertive"
+						data-metadata="error"
+						hidden
+					>
+					</p>
+					<p id="metadata-privacy" class="mt-3 text-[13px] leading-5 text-ink-2">
+						URLX fetches the submitted page server-side and does not store the
+						URL, HTML, or extracted metadata. Preview images may load in your
+						browser from the source site.
+					</p>
+				</div>
+
+				<div
+					class="reveal mt-8 grid gap-4 lg:grid-cols-12"
+					data-metadata="result"
+					aria-live="polite"
+					hidden
+				>
+					<section class="surface overflow-hidden lg:col-span-7">
+						<div class="grid h-full gap-0 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:grid-cols-1 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+							<div
+								class="flex min-h-[220px] items-center justify-center bg-surface lg:min-h-[260px] xl:min-h-[320px]"
+								data-metadata="preview-image-wrap"
+							>
+								<img
+									src=""
+									alt=""
+									class="h-full max-h-[320px] w-full object-cover"
+									referrerpolicy="no-referrer"
+									loading="lazy"
+									data-metadata="preview-image"
+									hidden
+								/>
+								<div
+									class="px-6 text-center text-[14px] leading-6 text-ink-2"
+									data-metadata="preview-empty"
+								>
+									No preview image
+								</div>
+							</div>
+							<div class="flex min-w-0 flex-col justify-center p-5 sm:p-6">
+								<div class="flex items-center gap-2">
+									<img
+										src=""
+										alt=""
+										class="size-5 rounded"
+										referrerpolicy="no-referrer"
+										loading="lazy"
+										data-metadata="favicon"
+										hidden
+									/>
+									<p
+										class="min-w-0 truncate text-[13px] font-medium text-ink-2"
+										data-metadata="preview-site"
+									>
+									</p>
+								</div>
+								<h2
+									class="mt-4 text-[22px] font-semibold leading-7 text-ink"
+									data-metadata="preview-title"
+								>
+								</h2>
+								<p
+									class="mt-2 text-[15px] leading-6 text-ink-2"
+									data-metadata="preview-description"
+								>
+								</p>
+								<a
+									href="#"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="mt-4 block truncate text-[13px] text-link underline-offset-2 hover:underline"
+									data-metadata="preview-url"
+								>
+								</a>
+							</div>
+						</div>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-5">
+						<div class="flex flex-col gap-4">
+							<div class="min-w-0">
+								<h2 class="text-[18px] font-semibold text-ink">Inspection summary</h2>
+								<a
+									href="#"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="mt-1 block truncate text-[13px] text-link underline-offset-2 hover:underline"
+									data-metadata="final-url"
+								>
+								</a>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<button
+									type="button"
+									class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+									data-metadata="copy-final"
+								>
+									<span class="copy-label" data-metadata="copy-final-label">Copy final URL</span>
+								</button>
+								<button
+									type="button"
+									class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+									data-metadata="copy-image"
+								>
+									<span class="copy-label" data-metadata="copy-image-label">Copy image URL</span>
+								</button>
+							</div>
+						</div>
+						<dl
+							class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"
+							data-metadata="summary-list"
+						>
+						</dl>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-12" data-metadata="warnings-section">
+						<h2 class="text-[18px] font-semibold text-ink">Warnings</h2>
+						<ul class="mt-4 grid gap-2 lg:grid-cols-2" data-metadata="warnings"></ul>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-8">
+						<h2 class="text-[18px] font-semibold text-ink">Open Graph</h2>
+						<dl class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-metadata="og-list"></dl>
+						<div class="mt-5 overflow-x-auto">
+							<table class="w-full min-w-[560px] text-left text-[13px]">
+								<thead class="text-ink-2">
+									<tr class="border-b border-hair">
+										<th class="py-2 pr-4 font-medium">Image</th>
+										<th class="py-2 pr-4 font-medium">Size</th>
+										<th class="py-2 pr-4 font-medium">Type</th>
+										<th class="py-2 font-medium">Alt</th>
+									</tr>
+								</thead>
+								<tbody data-metadata="og-images"></tbody>
+							</table>
+						</div>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-4">
+						<h2 class="text-[18px] font-semibold text-ink">Twitter/X Card</h2>
+						<dl
+							class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1"
+							data-metadata="twitter-list"
+						>
+						</dl>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-5">
+						<h2 class="text-[18px] font-semibold text-ink">Standard Metadata</h2>
+						<dl
+							class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1"
+							data-metadata="standard-list"
+						>
+						</dl>
+					</section>
+
+					<section class="surface flex h-full min-h-0 flex-col overflow-hidden p-5 sm:p-6 lg:col-span-7">
+						<h2 class="text-[18px] font-semibold text-ink">Raw Metadata</h2>
+						<div class="mt-4 min-h-0 flex-1 basis-0 overflow-auto rounded-xl border border-hair">
+							<table class="w-full table-fixed text-left text-[13px]">
+								<thead class="sticky top-0 bg-white text-ink-2">
+									<tr class="border-b border-hair">
+										<th class="w-[88px] py-2 pl-3 pr-3 font-medium">Source</th>
+										<th class="w-[160px] py-2 pr-3 font-medium">Name</th>
+										<th class="py-2 pr-3 font-medium">Value</th>
+									</tr>
+								</thead>
+								<tbody data-metadata="raw-tags"></tbody>
+							</table>
+						</div>
+					</section>
+
+					<section class="surface p-5 sm:p-6 lg:col-span-12">
+						<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+							<h2 class="text-[18px] font-semibold text-ink">JSON Result</h2>
+							<div class="flex flex-wrap gap-2">
+								<button
+									type="button"
+									class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+									data-metadata="copy-json"
+								>
+									<span class="copy-label" data-metadata="copy-json-label">Copy JSON</span>
+								</button>
+								<button
+									type="button"
+									class="btn-secondary inline-flex h-10 items-center justify-center rounded-xl border px-4 text-[14px]"
+									data-metadata="download-json"
+								>
+									Download .json
+								</button>
+							</div>
+						</div>
+						<textarea
+							readonly
+							spellcheck="false"
+							class="mt-4 min-h-[260px] w-full resize-y rounded-xl border border-hair bg-white p-4 font-mono text-[13px] leading-6 text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/20"
+							data-metadata="json"
+						>
+						</textarea>
+						<div class="mt-4 flex justify-end">
+							<button
+								type="button"
+								class="text-[14px] text-link underline-offset-2 hover:underline"
+								data-metadata="reset"
+							>
+								Inspect another URL
+							</button>
+						</div>
+					</section>
+				</div>
+			</div>
+		</div>
+	</section>
+</Layout>
+
+<script>
+	import type { InspectMetadataOutput } from "@urlx/api/modules/metadata/metadata.schema";
+	import { copyToClipboard } from "../../lib/copy-to-clipboard";
+	import { friendlyErrorMessage } from "../../lib/form-errors";
+	import { orpc } from "../../lib/orpc";
+	import { registerPageScript } from "../../lib/page-script";
+	import {
+		addRecentUrl,
+		clearRecentUrls,
+		getRecentUrls,
+		isUrlHistoryEnabled,
+		removeRecentUrl,
+		setUrlHistoryEnabled,
+	} from "../../lib/url-history";
+	import {
+		isValidUrl,
+		normalizeUserUrlInput,
+		stripScheme,
+	} from "../../lib/url-tools";
+
+	type State =
+		| { status: "idle" }
+		| { status: "submitting" }
+		| { status: "success"; result: InspectMetadataOutput; json: string }
+		| { status: "error"; message: string };
+
+	type KeyValue = {
+		label: string;
+		value: string | number | boolean | null;
+		href?: string | null;
+	};
+
+	const jsonDisplayLimit = 200_000;
+
+	registerPageScript<HTMLElement>('[data-page-root="metadata-tool"]', (root, signal) => {
+		const selectRequired = <T extends Element>(selector: string): T => {
+			const element = root.querySelector<T>(selector);
+			if (!element) throw new Error(`Missing required element: ${selector}`);
+			return element;
+		};
+
+		const form = selectRequired<HTMLFormElement>('[data-metadata="form"]');
+		const input = selectRequired<HTMLInputElement>('[data-metadata="url"]');
+		const inputShell = selectRequired<HTMLElement>('[data-metadata="input-shell"]');
+		const inputWrap = selectRequired<HTMLElement>('[data-metadata="input-wrap"]');
+		const historyList = selectRequired<HTMLUListElement>('[data-metadata="history"]');
+		const rememberHistory = selectRequired<HTMLInputElement>(
+			'[data-metadata="remember-history"]',
+		);
+		const clearHistoryButton = selectRequired<HTMLButtonElement>(
+			'[data-metadata="clear-history"]',
+		);
+		const submit = selectRequired<HTMLButtonElement>('[data-metadata="submit"]');
+		const submitLabel = selectRequired<HTMLElement>(
+			'[data-metadata="submit-label"]',
+		);
+		const spinner = selectRequired<HTMLElement>('[data-metadata="spinner"]');
+		const errorElement = selectRequired<HTMLElement>('[data-metadata="error"]');
+		const resultWrap = selectRequired<HTMLElement>('[data-metadata="result"]');
+		const previewImage = selectRequired<HTMLImageElement>(
+			'[data-metadata="preview-image"]',
+		);
+		const previewEmpty = selectRequired<HTMLElement>(
+			'[data-metadata="preview-empty"]',
+		);
+		const favicon = selectRequired<HTMLImageElement>('[data-metadata="favicon"]');
+		const previewSite = selectRequired<HTMLElement>(
+			'[data-metadata="preview-site"]',
+		);
+		const previewTitle = selectRequired<HTMLElement>(
+			'[data-metadata="preview-title"]',
+		);
+		const previewDescription = selectRequired<HTMLElement>(
+			'[data-metadata="preview-description"]',
+		);
+		const previewUrl = selectRequired<HTMLAnchorElement>(
+			'[data-metadata="preview-url"]',
+		);
+		const finalUrl = selectRequired<HTMLAnchorElement>('[data-metadata="final-url"]');
+		const summaryList = selectRequired<HTMLElement>(
+			'[data-metadata="summary-list"]',
+		);
+		const warningsSection = selectRequired<HTMLElement>(
+			'[data-metadata="warnings-section"]',
+		);
+		const warningsList = selectRequired<HTMLUListElement>(
+			'[data-metadata="warnings"]',
+		);
+		const ogList = selectRequired<HTMLElement>('[data-metadata="og-list"]');
+		const ogImages = selectRequired<HTMLTableSectionElement>(
+			'[data-metadata="og-images"]',
+		);
+		const twitterList = selectRequired<HTMLElement>(
+			'[data-metadata="twitter-list"]',
+		);
+		const standardList = selectRequired<HTMLElement>(
+			'[data-metadata="standard-list"]',
+		);
+		const rawTags = selectRequired<HTMLTableSectionElement>(
+			'[data-metadata="raw-tags"]',
+		);
+		const jsonOutput = selectRequired<HTMLTextAreaElement>(
+			'[data-metadata="json"]',
+		);
+		const copyFinal = selectRequired<HTMLButtonElement>(
+			'[data-metadata="copy-final"]',
+		);
+		const copyFinalLabel = selectRequired<HTMLElement>(
+			'[data-metadata="copy-final-label"]',
+		);
+		const copyImage = selectRequired<HTMLButtonElement>(
+			'[data-metadata="copy-image"]',
+		);
+		const copyImageLabel = selectRequired<HTMLElement>(
+			'[data-metadata="copy-image-label"]',
+		);
+		const copyJson = selectRequired<HTMLButtonElement>('[data-metadata="copy-json"]');
+		const copyJsonLabel = selectRequired<HTMLElement>(
+			'[data-metadata="copy-json-label"]',
+		);
+		const downloadJson = selectRequired<HTMLButtonElement>(
+			'[data-metadata="download-json"]',
+		);
+		const reset = selectRequired<HTMLButtonElement>('[data-metadata="reset"]');
+
+		let state: State = { status: "idle" };
+		let historyItems: string[] = [];
+		let historyActive = -1;
+		const copyTimers = new Map<HTMLElement, number>();
+
+		const resetCopyLabel = (label: HTMLElement, text: string) => {
+			const timer = copyTimers.get(label);
+			if (timer !== undefined) {
+				window.clearTimeout(timer);
+				copyTimers.delete(label);
+			}
+			label.textContent = text;
+			label.removeAttribute("data-swapping");
+		};
+
+		const swapCopyLabel = (label: HTMLElement, text: string) => {
+			label.setAttribute("data-swapping", "true");
+			window.setTimeout(() => {
+				label.textContent = text;
+				label.removeAttribute("data-swapping");
+			}, 140);
+		};
+
+		const showCopiedLabel = (label: HTMLElement, defaultText: string) => {
+			swapCopyLabel(label, "Copied");
+			const previousTimer = copyTimers.get(label);
+			if (previousTimer !== undefined) {
+				window.clearTimeout(previousTimer);
+			}
+			const nextTimer = window.setTimeout(() => {
+				swapCopyLabel(label, defaultText);
+				copyTimers.delete(label);
+			}, 1600);
+			copyTimers.set(label, nextTimer);
+		};
+
+		const closeHistory = () => {
+			historyList.hidden = true;
+			historyActive = -1;
+			input.setAttribute("aria-expanded", "false");
+			input.removeAttribute("aria-activedescendant");
+		};
+
+		const setHistoryActive = (index: number) => {
+			historyActive = index;
+			const options = Array.from(historyList.children);
+			options.forEach((option, optionIndex) => {
+				option.setAttribute("aria-selected", optionIndex === index ? "true" : "false");
+			});
+			if (index >= 0 && options[index]) {
+				input.setAttribute("aria-activedescendant", options[index].id);
+				options[index].scrollIntoView({ block: "nearest" });
+			} else {
+				input.removeAttribute("aria-activedescendant");
+			}
+		};
+
+		const updateSubmitState = () => {
+			submit.disabled = state.status === "submitting" || !isValidUrl(input.value);
+		};
+
+		const applyHistoryUrl = (url: string) => {
+			input.value = stripScheme(url);
+			closeHistory();
+			input.focus();
+			input.setSelectionRange(input.value.length, input.value.length);
+			updateSubmitState();
+		};
+
+		const updateHistoryControls = () => {
+			const enabled = isUrlHistoryEnabled();
+			rememberHistory.checked = enabled;
+			clearHistoryButton.hidden = !enabled || getRecentUrls().length === 0;
+		};
+
+		const buildHistoryOption = (url: string, index: number) => {
+			const option = document.createElement("li");
+			option.id = `metadata-history-opt-${index}`;
+			option.setAttribute("role", "option");
+			option.setAttribute("aria-selected", "false");
+			option.className =
+				"group flex cursor-pointer items-center gap-2 px-3 py-2 text-[15px] text-ink aria-selected:bg-surface hover:bg-surface";
+
+			const label = document.createElement("span");
+			label.className = "flex-1 truncate";
+			label.title = url;
+			label.textContent = url;
+			option.appendChild(label);
+
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.tabIndex = -1;
+			remove.className =
+				"shrink-0 rounded-md p-1 text-ink-2 opacity-0 transition group-hover:opacity-100 hover:bg-hair/50 hover:text-ink";
+			remove.setAttribute("aria-label", `Remove ${url} from recent`);
+			remove.textContent = "x";
+			remove.addEventListener("mousedown", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+			});
+			remove.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				removeRecentUrl(url);
+				renderHistory();
+				updateHistoryControls();
+				input.focus();
+			});
+			option.appendChild(remove);
+			option.addEventListener("mousedown", (event) => event.preventDefault());
+			option.addEventListener("click", () => applyHistoryUrl(url));
+			option.addEventListener("mousemove", () => setHistoryActive(index));
+			return option;
+		};
+
+		function renderHistory() {
+			if (!isUrlHistoryEnabled() || state.status === "submitting") {
+				closeHistory();
+				updateHistoryControls();
+				return;
+			}
+			const query = input.value.trim().toLowerCase();
+			historyItems = getRecentUrls().filter((url) => {
+				const lower = url.toLowerCase();
+				return query === "" ? true : lower.includes(query) && lower !== query;
+			});
+			historyList.replaceChildren();
+			historyActive = -1;
+			input.removeAttribute("aria-activedescendant");
+			if (historyItems.length === 0) {
+				closeHistory();
+				updateHistoryControls();
+				return;
+			}
+			historyItems.forEach((url, index) => {
+				historyList.appendChild(buildHistoryOption(url, index));
+			});
+			historyList.hidden = false;
+			input.setAttribute("aria-expanded", "true");
+			updateHistoryControls();
+		}
+
+		const renderKeyValues = (target: HTMLElement, values: KeyValue[]) => {
+			target.replaceChildren();
+			for (const item of values) {
+				const wrap = document.createElement("div");
+				wrap.className = "min-w-0 rounded-xl bg-surface px-3 py-2";
+				const dt = document.createElement("dt");
+				dt.className = "text-[12px] font-medium uppercase tracking-[0.04em] text-ink-2";
+				dt.textContent = item.label;
+				const dd = document.createElement("dd");
+				dd.className = "mt-1 min-w-0 truncate text-[14px] text-ink";
+				const value = item.value === null || item.value === "" ? "Not found" : String(item.value);
+				if (item.href) {
+					const link = document.createElement("a");
+					link.href = item.href;
+					link.target = "_blank";
+					link.rel = "noopener noreferrer";
+					link.className = "text-link underline-offset-2 hover:underline";
+					link.textContent = value;
+					link.title = value;
+					dd.appendChild(link);
+				} else {
+					dd.textContent = value;
+					dd.title = value;
+				}
+				wrap.appendChild(dt);
+				wrap.appendChild(dd);
+				target.appendChild(wrap);
+			}
+		};
+
+		const appendCell = (row: HTMLTableRowElement, value: string | number | null) => {
+			const cell = document.createElement("td");
+			cell.className = "max-w-[340px] truncate border-b border-hair/70 py-2 pr-4 text-ink";
+			cell.textContent = value === null || value === "" ? "Not found" : String(value);
+			cell.title = cell.textContent;
+			row.appendChild(cell);
+		};
+
+		const appendRawCell = (
+			row: HTMLTableRowElement,
+			value: string | number | null,
+			kind: "source" | "name" | "value",
+		) => {
+			const cell = document.createElement("td");
+			cell.className =
+				kind === "source"
+					? "w-[88px] truncate border-b border-hair/70 py-2 pl-3 pr-3 text-ink-2"
+					: kind === "name"
+						? "w-[160px] truncate border-b border-hair/70 py-2 pr-3 text-ink"
+						: "truncate border-b border-hair/70 py-2 pr-3 text-ink";
+			cell.textContent = value === null || value === "" ? "Not found" : String(value);
+			cell.title = cell.textContent;
+			row.appendChild(cell);
+		};
+
+		const renderWarnings = (result: InspectMetadataOutput) => {
+			warningsList.replaceChildren();
+			warningsSection.hidden = result.warnings.length === 0;
+			for (const warning of result.warnings) {
+				const item = document.createElement("li");
+				item.className =
+					"rounded-xl border border-hair bg-white px-3 py-2 text-[14px] leading-5 text-ink";
+				const label = document.createElement("span");
+				label.className = "mr-2 font-semibold";
+				label.textContent = warning.severity.toUpperCase();
+				const message = document.createElement("span");
+				message.textContent = warning.message;
+				item.appendChild(label);
+				item.appendChild(message);
+				warningsList.appendChild(item);
+			}
+		};
+
+		const renderRawTags = (result: InspectMetadataOutput) => {
+			rawTags.replaceChildren();
+			for (const tag of result.rawTags) {
+				const row = document.createElement("tr");
+				appendRawCell(row, tag.source, "source");
+				appendRawCell(row, tag.name, "name");
+				appendRawCell(row, tag.value, "value");
+				rawTags.appendChild(row);
+			}
+		};
+
+		const renderOgImages = (result: InspectMetadataOutput) => {
+			ogImages.replaceChildren();
+			if (result.openGraph.images.length === 0) {
+				const row = document.createElement("tr");
+				const cell = document.createElement("td");
+				cell.colSpan = 4;
+				cell.className = "py-3 text-ink-2";
+				cell.textContent = "No Open Graph images found.";
+				row.appendChild(cell);
+				ogImages.appendChild(row);
+				return;
+			}
+			for (const image of result.openGraph.images) {
+				const row = document.createElement("tr");
+				appendCell(row, image.url);
+				appendCell(row, image.width && image.height ? `${image.width} x ${image.height}` : null);
+				appendCell(row, image.type);
+				appendCell(row, image.alt);
+				ogImages.appendChild(row);
+			}
+		};
+
+		const renderResult = (result: InspectMetadataOutput, json: string) => {
+			const displayJson =
+				json.length > jsonDisplayLimit
+					? `${json.slice(0, jsonDisplayLimit - 80)}\n\n... JSON output truncated for display ...`
+					: json;
+
+			previewSite.textContent = result.preview.siteName ?? new URL(result.finalUrl).hostname;
+			previewTitle.textContent = result.preview.title ?? "No preview title";
+			previewDescription.textContent =
+				result.preview.description ?? "No preview description found.";
+			previewUrl.href = result.preview.url;
+			previewUrl.textContent = result.preview.url;
+			previewUrl.title = result.preview.url;
+
+			finalUrl.href = result.finalUrl;
+			finalUrl.textContent = result.finalUrl;
+			finalUrl.title = result.finalUrl;
+
+			if (result.preview.imageUrl) {
+				previewImage.src = result.preview.imageUrl;
+				previewImage.alt = result.preview.imageAlt ?? "";
+				previewImage.hidden = false;
+				previewEmpty.hidden = true;
+			} else {
+				previewImage.removeAttribute("src");
+				previewImage.hidden = true;
+				previewEmpty.hidden = false;
+			}
+
+			if (result.preview.faviconUrl) {
+				favicon.src = result.preview.faviconUrl;
+				favicon.hidden = false;
+			} else {
+				favicon.removeAttribute("src");
+				favicon.hidden = true;
+			}
+
+			renderKeyValues(summaryList, [
+				{ label: "Status", value: `${result.status} ${result.ok ? "OK" : "Issue"}` },
+				{ label: "Content type", value: result.contentType },
+				{ label: "Redirects", value: result.redirects.length },
+				{ label: "Checked at", value: new Date(result.checkedAt).toLocaleString() },
+				{ label: "Source URL", value: result.sourceUrl, href: result.sourceUrl },
+				{ label: "Final URL", value: result.finalUrl, href: result.finalUrl },
+			]);
+			renderWarnings(result);
+			renderKeyValues(ogList, [
+				{ label: "Title", value: result.openGraph.title },
+				{ label: "Description", value: result.openGraph.description },
+				{ label: "URL", value: result.openGraph.url, href: result.openGraph.url },
+				{ label: "Type", value: result.openGraph.type },
+				{ label: "Site name", value: result.openGraph.siteName },
+				{ label: "Locale", value: result.openGraph.locale },
+			]);
+			renderOgImages(result);
+			renderKeyValues(twitterList, [
+				{ label: "Card", value: result.twitter.card },
+				{ label: "Site", value: result.twitter.site },
+				{ label: "Creator", value: result.twitter.creator },
+				{ label: "Title", value: result.twitter.title },
+				{ label: "Description", value: result.twitter.description },
+				{ label: "Image", value: result.twitter.image, href: result.twitter.image },
+				{ label: "Image alt", value: result.twitter.imageAlt },
+			]);
+			renderKeyValues(standardList, [
+				{ label: "Title", value: result.title },
+				{ label: "Description", value: result.description },
+				{ label: "Canonical", value: result.canonicalUrl, href: result.canonicalUrl },
+				{ label: "Language", value: result.language },
+				{ label: "Charset", value: result.charset },
+				{ label: "Viewport", value: result.viewport },
+				{ label: "Robots", value: result.robots },
+				{ label: "Theme color", value: result.themeColor },
+				{ label: "Favicon", value: result.faviconUrl, href: result.faviconUrl },
+			]);
+			renderRawTags(result);
+			jsonOutput.value = displayJson;
+			copyImage.disabled = !result.preview.imageUrl;
+			resultWrap.hidden = false;
+		};
+
+		const render = () => {
+			const isSubmitting = state.status === "submitting";
+			input.disabled = isSubmitting;
+			rememberHistory.disabled = isSubmitting;
+			submitLabel.textContent = isSubmitting ? "Inspecting..." : "Inspect";
+			spinner.hidden = !isSubmitting;
+			updateSubmitState();
+
+			if (state.status === "error") {
+				errorElement.hidden = false;
+				errorElement.textContent = state.message;
+				input.setAttribute("aria-invalid", "true");
+				inputShell.setAttribute("aria-invalid", "true");
+			} else {
+				errorElement.hidden = true;
+				errorElement.textContent = "";
+				input.setAttribute("aria-invalid", "false");
+				inputShell.setAttribute("aria-invalid", "false");
+			}
+
+			if (state.status === "success") {
+				renderResult(state.result, state.json);
+			} else {
+				resultWrap.hidden = true;
+				resetCopyLabel(copyFinalLabel, "Copy final URL");
+				resetCopyLabel(copyImageLabel, "Copy image URL");
+				resetCopyLabel(copyJsonLabel, "Copy JSON");
+			}
+		};
+
+		const handleHistoryKeydown = (event: KeyboardEvent) => {
+			const open = !historyList.hidden;
+			if (event.key === "ArrowDown") {
+				if (!open) {
+					renderHistory();
+					if (!historyList.hidden) setHistoryActive(0);
+				} else {
+					setHistoryActive(Math.min(historyActive + 1, historyItems.length - 1));
+				}
+				if (!historyList.hidden) event.preventDefault();
+			} else if (event.key === "ArrowUp" && open) {
+				setHistoryActive(historyActive <= 0 ? -1 : historyActive - 1);
+				event.preventDefault();
+			} else if (event.key === "Enter" && open && historyActive >= 0) {
+				event.preventDefault();
+				applyHistoryUrl(historyItems[historyActive]);
+			} else if (event.key === "Escape" && open) {
+				event.preventDefault();
+				closeHistory();
+			}
+		};
+
+		const handleSubmit = async (event: SubmitEvent) => {
+			event.preventDefault();
+			if (state.status === "submitting") return;
+			const url = normalizeUserUrlInput(input.value);
+			if (!url || !isValidUrl(url)) {
+				state = { status: "error", message: "Please enter a valid URL." };
+				render();
+				input.focus();
+				return;
+			}
+
+			closeHistory();
+			state = { status: "submitting" };
+			render();
+
+			try {
+				const result = await orpc.metadata.inspect({ url });
+				const json = JSON.stringify(result, null, 2);
+				if (isUrlHistoryEnabled()) {
+					addRecentUrl(url);
+					updateHistoryControls();
+				}
+				state = { status: "success", result, json };
+				render();
+				copyJson.focus();
+			} catch (error) {
+				state = { status: "error", message: friendlyErrorMessage(error) };
+				render();
+				input.focus();
+			}
+		};
+
+		const handleCopy = async (
+			value: string | null | undefined,
+			label: HTMLElement,
+			defaultText: string,
+		) => {
+			if (!value) return;
+			if (await copyToClipboard(value)) {
+				showCopiedLabel(label, defaultText);
+			}
+		};
+
+		const handleDownload = () => {
+			if (state.status !== "success") return;
+			const hostname = new URL(state.result.finalUrl).hostname.replace(/[^a-z0-9.-]+/gi, "-");
+			const blobUrl = URL.createObjectURL(
+				new Blob([state.json], { type: "application/json;charset=utf-8" }),
+			);
+			const anchor = document.createElement("a");
+			anchor.href = blobUrl;
+			anchor.download = `${hostname || "metadata"}-metadata.json`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+		};
+
+		const handleReset = () => {
+			state = { status: "idle" };
+			input.value = "";
+			jsonOutput.value = "";
+			render();
+			input.focus();
+		};
+
+		form.addEventListener("submit", handleSubmit, { signal });
+		rememberHistory.addEventListener(
+			"change",
+			() => {
+				setUrlHistoryEnabled(rememberHistory.checked);
+				if (!rememberHistory.checked) clearRecentUrls();
+				closeHistory();
+				updateHistoryControls();
+			},
+			{ signal },
+		);
+		clearHistoryButton.addEventListener(
+			"click",
+			() => {
+				clearRecentUrls();
+				closeHistory();
+				updateHistoryControls();
+				input.focus();
+			},
+			{ signal },
+		);
+		input.addEventListener("focus", renderHistory, { signal });
+		input.addEventListener("input", renderHistory, { signal });
+		input.addEventListener("input", updateSubmitState, { signal });
+		input.addEventListener(
+			"input",
+			() => {
+				const stripped = stripScheme(input.value);
+				if (stripped !== input.value) input.value = stripped;
+			},
+			{ signal },
+		);
+		input.addEventListener("keydown", handleHistoryKeydown, { signal });
+		document.addEventListener(
+			"mousedown",
+			(event) => {
+				if (!inputWrap.contains(event.target as Node)) closeHistory();
+			},
+			{ signal },
+		);
+		copyFinal.addEventListener(
+			"click",
+			() => {
+				if (state.status === "success") {
+					void handleCopy(state.result.finalUrl, copyFinalLabel, "Copy final URL");
+				}
+			},
+			{ signal },
+		);
+		copyImage.addEventListener(
+			"click",
+			() => {
+				if (state.status === "success") {
+					void handleCopy(
+						state.result.preview.imageUrl,
+						copyImageLabel,
+						"Copy image URL",
+					);
+				}
+			},
+			{ signal },
+		);
+		copyJson.addEventListener(
+			"click",
+			() => {
+				if (state.status === "success") {
+					void handleCopy(state.json, copyJsonLabel, "Copy JSON");
+				}
+			},
+			{ signal },
+		);
+		downloadJson.addEventListener("click", handleDownload, { signal });
+		reset.addEventListener("click", handleReset, { signal });
+
+		updateHistoryControls();
+		render();
+		signal.addEventListener(
+			"abort",
+			() => {
+				for (const timer of copyTimers.values()) {
+					window.clearTimeout(timer);
+				}
+				copyTimers.clear();
+			},
+			{ once: true },
+		);
+	});
+</script>

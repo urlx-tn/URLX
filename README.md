@@ -7,7 +7,7 @@
 <h1 align="center">URLX</h1>
 
 <p align="center">
-  Free and open-source tools for shortening, cleaning, converting, and sharing URLs.
+  Free and open-source tools for shortening, cleaning, inspecting, converting, and sharing URLs.
 </p>
 
 <p align="center">
@@ -30,8 +30,9 @@
 ## What is URLX?
 
 URLX is a no-account URL toolkit built for the web and deployed on Cloudflare.
-It combines focused browser-based utilities with server-backed short links and
-link-in-bio pages, plus Cloudflare-powered webpage conversion.
+It combines focused browser-based utilities with server-backed short links,
+link-in-bio pages, URL metadata inspection, and Cloudflare-powered webpage
+conversion.
 
 The project is MIT licensed and designed to be easy to use, self-host, extend,
 and contribute to.
@@ -43,6 +44,7 @@ and contribute to.
 | [URL Shortener](https://www.urlx.tn/tools/url-shortener) | Creates compact redirect links and optional QR codes. | Cloudflare Worker + D1 |
 | [URL Cleaner](https://www.urlx.tn/tools/url-cleaner) | Removes common tracking parameters from a URL. | In the browser |
 | [QR Code Generator](https://www.urlx.tn/tools/qr-code-generator) | Exports a URL as SVG or PNG. | In the browser |
+| [URL Metadata Inspector](https://www.urlx.tn/tools/url-metadata) | Reads link-preview metadata from a public URL. | Cloudflare Worker |
 | [URL to Markdown](https://www.urlx.tn/tools/url-to-markdown) | Converts a public webpage into Markdown. | Cloudflare Worker + Browser Run |
 | [URL to HTML](https://www.urlx.tn/tools/url-to-html) | Captures the fully rendered HTML of a public webpage. | Cloudflare Worker + Browser Run |
 | [Link in Bio](https://www.urlx.tn/tools/link-in-bio) | Publishes one shareable page containing multiple links. | Cloudflare Worker + D1 |
@@ -63,7 +65,7 @@ Browser
   |          |
   |          +-------------------------- Conversion Worker client
   |
-  +-- Hono API Worker ----------------- Validation and business logic
+  +-- Hono API Worker ----------------- Validation, metadata inspection, and business logic
   |          |
   |          +-------------------------- Cloudflare D1
   |

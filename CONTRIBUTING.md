@@ -28,7 +28,7 @@ apps/
   web/        Astro frontend and browser-based URL tools
   server/     Hono/oRPC API worker
 packages/
-  api/        oRPC routers, URL/link-page/conversion domain logic, schemas
+  api/        oRPC routers, URL/link-page/metadata/conversion domain logic, schemas
   db/         Drizzle schema and migrations
   env/        Typed environment access
   config/     Shared TypeScript config

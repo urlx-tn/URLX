@@ -1,8 +1,9 @@
 # URLX Backend API
 
-URLX v1 exposes shortening and link resolution through oRPC. URL-to-Markdown
-and URL-to-HTML are served by a separate conversion Worker. Short-link redirects
-are served by the web app at `<<web-origin>>/u/:shortCode`.
+URLX v1 exposes shortening, link resolution, link-in-bio, and metadata
+inspection through oRPC. URL-to-Markdown and URL-to-HTML are served by a
+separate conversion Worker. Short-link redirects are served by the web app at
+`<<web-origin>>/u/:shortCode`.
 
 ## Local Configuration
 
@@ -11,6 +12,7 @@ The server Worker expects these bindings:
 ```text
 DB
 CORS_ORIGIN
+METADATA_RATE_LIMIT
 SHORT_URL_BASE
 ```
 
@@ -26,6 +28,9 @@ CORS_ORIGIN
 not require a separate application API token. `CONVERSION_RATE_LIMIT` limits
 each client IP to five total Markdown or HTML conversions per minute before
 Browser Run is called.
+
+`METADATA_RATE_LIMIT` limits each client IP to 20 metadata inspections per
+minute before the submitted URL is fetched.
 
 Alchemy defaults `SHORT_URL_BASE` to:
 
@@ -170,6 +175,73 @@ and bind the corresponding deployed Worker URL automatically.
 
 ## Additional oRPC Procedures
 
+### `metadata.inspect`
+
+Fetches the initial server-rendered HTML for a public URL and returns link
+preview metadata, diagnostics, and a computed preview object. It uses the main
+API Worker and does not use Browser Run or the conversion Worker.
+
+Request:
+
+```json
+{
+	"url": "https://example.com/article"
+}
+```
+
+Success response includes:
+
+```json
+{
+	"sourceUrl": "https://example.com/article",
+	"finalUrl": "https://example.com/article",
+	"status": 200,
+	"ok": true,
+	"contentType": "text/html; charset=utf-8",
+	"checkedAt": "2026-06-22T12:00:00.000Z",
+	"redirects": [],
+	"title": "Article title",
+	"description": "Article description",
+	"canonicalUrl": "https://example.com/article",
+	"openGraph": {
+		"title": "Article title",
+		"description": "Article description",
+		"url": "https://example.com/article",
+		"type": "article",
+		"siteName": "Example",
+		"locale": "en_US",
+		"images": []
+	},
+	"twitter": {
+		"card": "summary_large_image",
+		"site": null,
+		"creator": null,
+		"title": null,
+		"description": null,
+		"image": null,
+		"imageAlt": null
+	},
+	"preview": {
+		"title": "Article title",
+		"description": "Article description",
+		"imageUrl": null,
+		"imageAlt": null,
+		"siteName": "Example",
+		"url": "https://example.com/article",
+		"faviconUrl": null
+	},
+	"rawTags": [],
+	"warnings": []
+}
+```
+
+The submitted URL and each redirect target are validated with the same public
+URL rules as `links.shorten`. Redirects are followed manually up to five hops.
+The inspector sends a simple GET request with no cookies or credentials, uses an
+8-second timeout, reads at most the first 1 MiB of HTML, and stops after
+`</head>` when possible. URLX does not store submitted URLs, fetched HTML,
+extracted metadata, or generated JSON results.
+
 ### `bio.create`
 
 Creates a "link in bio" page: one slug that renders a page listing several links.
@@ -290,6 +362,14 @@ URL_TOO_LONG
 RATE_LIMITED
 SHORT_CODE_NOT_FOUND
 SERVER_ERROR
+```
+
+Metadata inspection may additionally return:
+
+```text
+TOO_MANY_REDIRECTS
+FETCH_TIMEOUT
+FETCH_FAILED
 ```
 
 Markdown conversion may additionally return:
