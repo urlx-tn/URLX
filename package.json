@@ -59,11 +59,11 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.16",
+		"@biomejs/biome": "^2.5.1",
 		"@cloudflare/workers-types": "catalog:",
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
-		"turbo": "^2.9.16",
+		"turbo": "^2.10.0",
 		"typescript": "catalog:"
 	},
 	"packageManager": "pnpm@10.22.0"
