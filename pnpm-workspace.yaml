@@ -16,6 +16,6 @@ catalog:
   '@types/node': ^26.0.0
   alchemy: ^0.93.12
   dotenv: ^17.2.2
-  hono: ^4.12.26
+  hono: ^4.12.27
   typescript: 6.0.3
   zod: ^4.1.13
