@@ -17,21 +17,21 @@
 		"@urlx/api": "workspace:*",
 		"@urlx/env": "workspace:*",
 		"astro": "^6.4.8",
-		"astro-loading-indicator": "^0.8.0",
+		"astro-loading-indicator": "^0.9.0",
 		"dotenv": "catalog:",
 		"qrcode": "^1.5.4",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
-		"@astrojs/check": "^0.9.9",
+		"@astrojs/check": "^0.9.10",
 		"@astrojs/cloudflare": "^13.0.1",
 		"@cloudflare/workers-types": "catalog:",
-		"@tailwindcss/vite": "^4.1.18",
+		"@tailwindcss/vite": "^4.3.3",
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
 		"sharp": "^0.35.2",
-		"tailwindcss": "^4.1.18",
+		"tailwindcss": "^4.3.3",
 		"typescript": "catalog:"
 	}
 }
