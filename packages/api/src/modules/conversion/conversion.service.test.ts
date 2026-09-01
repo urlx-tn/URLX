@@ -43,37 +43,40 @@ describe("ConversionService", () => {
 			["image", "media", "font"],
 			"networkidle2",
 		],
-	] as const)("converts %s and normalizes a public URL", async (format, action, result, rejectedResources, waitUntil) => {
-		const browser = createBrowser(Response.json({ success: true, result }));
-		const rateLimiter = createRateLimiter();
-		const service = new ConversionService({
-			browser,
-			rateLimiter,
-			rateLimitKey: "203.0.113.10",
-		});
+	] as const)(
+		"converts %s and normalizes a public URL",
+		async (format, action, result, rejectedResources, waitUntil) => {
+			const browser = createBrowser(Response.json({ success: true, result }));
+			const rateLimiter = createRateLimiter();
+			const service = new ConversionService({
+				browser,
+				rateLimiter,
+				rateLimitKey: "203.0.113.10",
+			});
 
-		await expect(
-			service.convert(" HTTPS://Example.COM:443/page ", format),
-		).resolves.toEqual({
-			sourceUrl: "https://example.com/page",
-			result,
-		});
-		expect(browser.quickAction).toHaveBeenCalledWith(
-			action,
-			expect.objectContaining({
-				url: "https://example.com/page",
-				rejectResourceTypes: rejectedResources,
-				gotoOptions: {
-					timeout: 30_000,
-					waitUntil,
-				},
-				cacheTTL: 300,
-			}),
-		);
-		expect(rateLimiter.limit).toHaveBeenCalledWith({
-			key: "conversion:203.0.113.10",
-		});
-	});
+			await expect(
+				service.convert(" HTTPS://Example.COM:443/page ", format),
+			).resolves.toEqual({
+				sourceUrl: "https://example.com/page",
+				result,
+			});
+			expect(browser.quickAction).toHaveBeenCalledWith(
+				action,
+				expect.objectContaining({
+					url: "https://example.com/page",
+					rejectResourceTypes: rejectedResources,
+					gotoOptions: {
+						timeout: 30_000,
+						waitUntil,
+					},
+					cacheTTL: 300,
+				}),
+			);
+			expect(rateLimiter.limit).toHaveBeenCalledWith({
+				key: "conversion:203.0.113.10",
+			});
+		},
+	);
 
 	it("uses one rate-limit namespace key for both formats", async () => {
 		const rateLimiter = createRateLimiter();
