@@ -178,7 +178,7 @@ const qrSvg = page
 										{link.favicon ? (
 											<img
 												src={link.favicon}
-												alt=""
+												alt={`${link.label} website icon`}
 												width="40"
 												height="40"
 												loading={index < 6 ? "eager" : "lazy"}
@@ -221,7 +221,7 @@ const qrSvg = page
 						>
 							<img
 								src="/favicons/favicon-32x32.png"
-								alt=""
+								alt="URLX logo"
 								width="16"
 								height="16"
 								class="size-4 rounded-[4px]"

@@ -149,7 +149,7 @@ const softwareSchema = {
 							>
 								<img
 									src=""
-									alt=""
+									alt="Website social preview"
 									class="h-full max-h-[320px] w-full object-cover"
 									referrerpolicy="no-referrer"
 									loading="lazy"
@@ -167,7 +167,7 @@ const softwareSchema = {
 								<div class="flex items-center gap-2">
 									<img
 										src=""
-										alt=""
+										alt="Website favicon"
 										class="size-5 rounded"
 										referrerpolicy="no-referrer"
 										loading="lazy"
@@ -732,7 +732,9 @@ const softwareSchema = {
 
 			if (result.preview.imageUrl) {
 				previewImage.src = result.preview.imageUrl;
-				previewImage.alt = result.preview.imageAlt ?? "";
+				previewImage.alt =
+					result.preview.imageAlt?.trim() ||
+					`Social preview image for ${result.preview.title ?? new URL(result.finalUrl).hostname}`;
 				previewImage.hidden = false;
 				previewEmpty.hidden = true;
 			} else {
@@ -743,6 +745,7 @@ const softwareSchema = {
 
 			if (result.preview.faviconUrl) {
 				favicon.src = result.preview.faviconUrl;
+				favicon.alt = `${previewSite.textContent || new URL(result.finalUrl).hostname} favicon`;
 				favicon.hidden = false;
 			} else {
 				favicon.removeAttribute("src");
