@@ -9,13 +9,13 @@ allowBuilds:
 
 catalog:
   '@cloudflare/workers-types': ^5.20260829.1
-  '@orpc/client': ^1.13.14
-  '@orpc/openapi': ^1.13.14
-  '@orpc/server': ^1.13.14
-  '@orpc/zod': ^1.13.14
+  '@orpc/client': ^1.15.0
+  '@orpc/openapi': ^1.15.0
+  '@orpc/server': ^1.15.0
+  '@orpc/zod': ^1.15.0
   '@types/node': ^26.0.0
   alchemy: ^0.93.12
   dotenv: ^17.2.2
-  hono: ^4.12.26
+  hono: ^4.13.5
   typescript: 6.0.3
-  zod: ^4.1.13
+  zod: ^4.5.2
