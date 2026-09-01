@@ -22,7 +22,7 @@ const cloudflareWorkersAlias = shouldUseAlchemy
 
 // https://astro.build/config
 export default defineConfig({
-	site: "https://www.urlx.tn",
+	site: "https://urlx.tn",
 	output: "server",
 	devToolbar: { enabled: false },
 	adapter: shouldUseAlchemy

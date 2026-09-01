@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.urlx.tn/sitemap-index.xml
+Sitemap: https://urlx.tn/sitemap-index.xml
