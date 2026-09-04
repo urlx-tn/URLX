@@ -29,7 +29,8 @@ const defaultMessages: Record<ConversionErrorCode, string> = {
 	PAGE_FETCH_FAILED: "The page could not be converted.",
 	MARKDOWN_TOO_LARGE: "The generated Markdown is too large to return.",
 	HTML_TOO_LARGE: "The generated HTML is too large to return.",
-	RATE_LIMITED: "Too many conversion requests. Please try again shortly.",
+	RATE_LIMITED:
+		"You've reached the temporary request limit. Please wait about a minute and try again.",
 	BROWSER_UNAVAILABLE: "The conversion service is temporarily unavailable.",
 	SERVER_ERROR: "Something went wrong. Please try again.",
 };

@@ -1,9 +1,10 @@
-import alchemy from "alchemy";
+import alchemy, { secret } from "alchemy";
 import {
 	Astro,
 	BrowserRendering,
 	D1Database,
 	RateLimit,
+	SecretKey,
 	Worker,
 } from "alchemy/cloudflare";
 import { config } from "dotenv";
@@ -46,6 +47,26 @@ function requireValue(name: string, value: string | undefined) {
 	return value;
 }
 
+function requireVisitorTokenKey(value: string | undefined) {
+	const encodedKey = requireValue("VISITOR_TOKEN_KEY_BASE64", value);
+	const keyBytes = Buffer.from(encodedKey, "base64");
+	if (keyBytes.length !== 32 || keyBytes.toString("base64") !== encodedKey) {
+		throw new Error(
+			"VISITOR_TOKEN_KEY_BASE64 must be a canonical base64-encoded 32-byte key",
+		);
+	}
+	return encodedKey;
+}
+
+const visitorTokenKey = new SecretKey({
+	algorithm: { name: "HMAC", hash: "SHA-256" },
+	format: "raw",
+	usages: ["sign", "verify"],
+	key_base64: secret(
+		requireVisitorTokenKey(alchemy.env.VISITOR_TOKEN_KEY_BASE64),
+	),
+});
+
 const db = await D1Database("database", {
 	adopt: true,
 	migrationsDir: "../../packages/db/src/migrations",
@@ -60,14 +81,22 @@ export const conversion = await Worker("conversion", {
 	url: true,
 	bindings: {
 		BROWSER: BrowserRendering(),
-		CONVERSION_RATE_LIMIT: RateLimit({
+		CONVERSION_VISITOR_RATE_LIMIT: RateLimit({
 			namespace_id: 1001,
 			simple: {
-				limit: 5,
+				limit: 15,
+				period: 60,
+			},
+		}),
+		CONVERSION_IP_RATE_LIMIT: RateLimit({
+			namespace_id: 1003,
+			simple: {
+				limit: 60,
 				period: 60,
 			},
 		}),
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
+		VISITOR_TOKEN_KEY: visitorTokenKey,
 	},
 	dev: {
 		remote: true,
@@ -83,14 +112,22 @@ export const server = await Worker("server", {
 	bindings: {
 		DB: db,
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
-		METADATA_RATE_LIMIT: RateLimit({
+		METADATA_VISITOR_RATE_LIMIT: RateLimit({
 			namespace_id: 1002,
 			simple: {
-				limit: 20,
+				limit: 60,
+				period: 60,
+			},
+		}),
+		METADATA_IP_RATE_LIMIT: RateLimit({
+			namespace_id: 1004,
+			simple: {
+				limit: 240,
 				period: 60,
 			},
 		}),
 		SHORT_URL_BASE: requireValue("SHORT_URL_BASE", alchemy.env.SHORT_URL_BASE),
+		VISITOR_TOKEN_KEY: visitorTokenKey,
 	},
 	dev: {
 		port: 3000,

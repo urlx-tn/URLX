@@ -1,3 +1,7 @@
+import {
+	checkLayeredRateLimit,
+	type RateLimitIdentity,
+} from "../../lib/layered-rate-limit";
 import { normalizeUrl } from "../../lib/normalize-url";
 import { validateDestinationUrl } from "../../lib/validate-url";
 import { ConversionError, type ConversionErrorCode } from "./conversion.errors";
@@ -39,25 +43,35 @@ const conversionConfigs: Record<ConversionFormat, ConversionConfig> = {
 
 export type ConversionServiceOptions = {
 	browser: BrowserRenderer;
-	rateLimitKey: string;
-	rateLimiter: ConversionRateLimiter;
+	clientIp: string;
+	ipRateLimiter: ConversionRateLimiter;
+	rateLimitIdentity: RateLimitIdentity;
+	visitorRateLimiter: ConversionRateLimiter;
 };
 
 export class ConversionService {
 	private readonly browser: BrowserRenderer;
-	private readonly rateLimitKey: string;
-	private readonly rateLimiter: ConversionRateLimiter;
+	private readonly clientIp: string;
+	private readonly ipRateLimiter: ConversionRateLimiter;
+	private readonly rateLimitIdentity: RateLimitIdentity;
+	private readonly visitorRateLimiter: ConversionRateLimiter;
 
 	constructor(options: ConversionServiceOptions) {
 		this.browser = options.browser;
-		this.rateLimitKey = options.rateLimitKey;
-		this.rateLimiter = options.rateLimiter;
+		this.clientIp = options.clientIp;
+		this.ipRateLimiter = options.ipRateLimiter;
+		this.rateLimitIdentity = options.rateLimitIdentity;
+		this.visitorRateLimiter = options.visitorRateLimiter;
 	}
 
 	async convert(rawUrl: string, format: ConversionFormat) {
 		const sourceUrl = normalizeUrl(validateDestinationUrl(rawUrl).toString());
-		const rateLimit = await this.rateLimiter.limit({
-			key: `conversion:${this.rateLimitKey}`,
+		const rateLimit = await checkLayeredRateLimit({
+			operation: "conversion",
+			clientIp: this.clientIp,
+			identity: this.rateLimitIdentity,
+			ipRateLimiter: this.ipRateLimiter,
+			visitorRateLimiter: this.visitorRateLimiter,
 		});
 
 		if (!rateLimit.success) {
@@ -89,7 +103,7 @@ export class ConversionService {
 
 		if (!response.ok) {
 			throw response.status === 429
-				? new ConversionError("RATE_LIMITED")
+				? new ConversionError("BROWSER_UNAVAILABLE")
 				: response.status >= 500
 					? new ConversionError("BROWSER_UNAVAILABLE")
 					: new ConversionError("PAGE_FETCH_FAILED");

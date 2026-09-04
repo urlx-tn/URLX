@@ -25,7 +25,8 @@ const defaultMessages: Record<MetadataErrorCode, string> = {
 	LOCAL_URL_NOT_ALLOWED: "Local URLs are not allowed.",
 	PRIVATE_IP_NOT_ALLOWED: "Private network URLs are not allowed.",
 	URL_TOO_LONG: "URLs must be 2048 characters or fewer.",
-	RATE_LIMITED: "Too many metadata inspections. Please try again shortly.",
+	RATE_LIMITED:
+		"You've reached the temporary request limit. Please wait about a minute and try again.",
 	TOO_MANY_REDIRECTS: "The URL redirected too many times.",
 	FETCH_TIMEOUT: "The page took too long to respond.",
 	FETCH_FAILED: "The page could not be fetched.",

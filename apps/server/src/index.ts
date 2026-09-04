@@ -5,6 +5,8 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import type { ServerBindings } from "@urlx/api/context";
 import { createContext } from "@urlx/api/context";
+import type { AnonymousVisitorVerification } from "@urlx/api/lib/anonymous-visitor";
+import { issueAnonymousVisitorToken } from "@urlx/api/lib/anonymous-visitor";
 import { appRouter } from "@urlx/api/routers/index";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -31,7 +33,8 @@ app.use(
 			return origin === c.env.CORS_ORIGIN ? origin : "";
 		},
 		allowMethods: ["GET", "POST", "OPTIONS"],
-		allowHeaders: ["Content-Type"],
+		allowHeaders: ["Content-Type", "X-URLX-Visitor-Token"],
+		exposeHeaders: ["Retry-After", "X-URLX-Visitor-Token-Refresh"],
 	}),
 );
 
@@ -65,7 +68,10 @@ app.use("/*", async (c, next) => {
 	});
 
 	if (rpcResult.matched) {
-		return c.newResponse(rpcResult.response.body, rpcResult.response);
+		return decorateProtectedResponse(
+			c.newResponse(rpcResult.response.body, rpcResult.response),
+			context.visitorTokenVerification,
+		);
 	}
 
 	const apiResult = await apiHandler.handle(c.req.raw, {
@@ -74,14 +80,37 @@ app.use("/*", async (c, next) => {
 	});
 
 	if (apiResult.matched) {
-		return c.newResponse(apiResult.response.body, apiResult.response);
+		return decorateProtectedResponse(
+			c.newResponse(apiResult.response.body, apiResult.response),
+			context.visitorTokenVerification,
+		);
 	}
 
 	await next();
 });
 
+app.get("/visitor-token", async (c) => {
+	const visitorToken = await issueAnonymousVisitorToken({
+		key: c.env.VISITOR_TOKEN_KEY,
+	});
+	return c.json(visitorToken, 200, { "Cache-Control": "no-store" });
+});
+
 app.get("/", (c) => {
 	return c.text("OK");
 });
+
+function decorateProtectedResponse(
+	response: Response,
+	verification: AnonymousVisitorVerification,
+) {
+	if (verification.status === "invalid") {
+		response.headers.set("X-URLX-Visitor-Token-Refresh", "required");
+	}
+	if (response.status === 429) {
+		response.headers.set("Retry-After", "60");
+	}
+	return response;
+}
 
 export default app;
