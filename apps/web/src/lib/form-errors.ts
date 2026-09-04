@@ -6,7 +6,8 @@ const friendlyMessages: Record<string, string> = {
 	LOCAL_URL_NOT_ALLOWED: "Local URLs cannot be shortened.",
 	PRIVATE_IP_NOT_ALLOWED: "Private network URLs cannot be shortened.",
 	URL_TOO_LONG: "This URL is too long.",
-	RATE_LIMITED: "Too many requests. Please try again shortly.",
+	RATE_LIMITED:
+		"You've reached the temporary request limit. Please wait about a minute and try again.",
 	PAGE_FETCH_FAILED:
 		"This page could not be converted. It may block automated access.",
 	MARKDOWN_TOO_LARGE: "This page produced too much Markdown to return.",

@@ -18,10 +18,12 @@ export const metadataRouter = {
 		.handler(async ({ context, input }) => {
 			try {
 				const service = new MetadataService({
+					clientIp: context.clientIp,
 					fetcher: context.fetcher,
+					ipRateLimiter: context.metadataIpRateLimiter,
 					now: context.now,
-					rateLimiter: context.metadataRateLimiter,
-					rateLimitKey: context.metadataRateLimitKey,
+					rateLimitIdentity: context.rateLimitIdentity,
+					visitorRateLimiter: context.metadataVisitorRateLimiter,
 				});
 
 				return await service.inspect(input.url);

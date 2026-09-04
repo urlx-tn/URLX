@@ -1,5 +1,9 @@
 import { Parser } from "htmlparser2";
 
+import {
+	checkLayeredRateLimit,
+	type RateLimitIdentity,
+} from "../../lib/layered-rate-limit";
 import { normalizeUrl } from "../../lib/normalize-url";
 import { validateDestinationUrl } from "../../lib/validate-url";
 import { MetadataError } from "./metadata.errors";
@@ -38,10 +42,12 @@ type ParsedMetadata = Pick<
 };
 
 export type MetadataServiceOptions = {
+	clientIp: string;
 	fetcher: MetadataFetcher;
+	ipRateLimiter: MetadataRateLimiter;
 	now: MetadataClock;
-	rateLimitKey: string;
-	rateLimiter: MetadataRateLimiter;
+	rateLimitIdentity: RateLimitIdentity;
+	visitorRateLimiter: MetadataRateLimiter;
 };
 
 const maxRedirects = 5;
@@ -53,22 +59,30 @@ const fetchTimeoutMs = 8_000;
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 export class MetadataService {
+	private readonly clientIp: string;
 	private readonly fetcher: MetadataFetcher;
+	private readonly ipRateLimiter: MetadataRateLimiter;
 	private readonly now: MetadataClock;
-	private readonly rateLimitKey: string;
-	private readonly rateLimiter: MetadataRateLimiter;
+	private readonly rateLimitIdentity: RateLimitIdentity;
+	private readonly visitorRateLimiter: MetadataRateLimiter;
 
 	constructor(options: MetadataServiceOptions) {
+		this.clientIp = options.clientIp;
 		this.fetcher = options.fetcher;
+		this.ipRateLimiter = options.ipRateLimiter;
 		this.now = options.now;
-		this.rateLimitKey = options.rateLimitKey;
-		this.rateLimiter = options.rateLimiter;
+		this.rateLimitIdentity = options.rateLimitIdentity;
+		this.visitorRateLimiter = options.visitorRateLimiter;
 	}
 
 	async inspect(rawUrl: string): Promise<InspectMetadataOutput> {
 		const sourceUrl = normalizeUrl(validateDestinationUrl(rawUrl).toString());
-		const rateLimit = await this.rateLimiter.limit({
-			key: `metadata:${this.rateLimitKey}`,
+		const rateLimit = await checkLayeredRateLimit({
+			operation: "metadata",
+			clientIp: this.clientIp,
+			identity: this.rateLimitIdentity,
+			ipRateLimiter: this.ipRateLimiter,
+			visitorRateLimiter: this.visitorRateLimiter,
 		});
 
 		if (!rateLimit.success) {

@@ -1,5 +1,10 @@
 import { PUBLIC_CONVERSION_SERVER_URL } from "astro:env/client";
 
+import {
+	getAnonymousVisitorToken,
+	handleVisitorTokenRefresh,
+} from "./anonymous-visitor";
+
 export type ConversionFormat = "html" | "markdown";
 
 export type Conversion = {
@@ -27,14 +32,17 @@ export async function convertUrl(
 	format: ConversionFormat,
 	signal?: AbortSignal,
 ): Promise<Conversion> {
+	const visitorToken = await getAnonymousVisitorToken();
 	const response = await fetch(`${PUBLIC_CONVERSION_SERVER_URL}/${format}`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
+			...(visitorToken ? { "X-URLX-Visitor-Token": visitorToken } : undefined),
 		},
 		body: JSON.stringify({ url }),
 		signal,
 	});
+	handleVisitorTokenRefresh(response);
 	const payload: unknown = await response.json();
 
 	if (!response.ok) {

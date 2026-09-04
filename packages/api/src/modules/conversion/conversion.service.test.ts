@@ -19,12 +19,15 @@ const createRateLimiter = (success = true) => ({
 
 const createService = (
 	response: Response | Error,
-	rateLimiter = createRateLimiter(),
+	visitorRateLimiter = createRateLimiter(),
+	ipRateLimiter = createRateLimiter(),
 ) =>
 	new ConversionService({
 		browser: createBrowser(response),
-		rateLimiter,
-		rateLimitKey: "test-client",
+		clientIp: "test-client",
+		ipRateLimiter,
+		rateLimitIdentity: { kind: "fallback-ip" },
+		visitorRateLimiter,
 	});
 
 describe("ConversionService", () => {
@@ -47,11 +50,17 @@ describe("ConversionService", () => {
 		"converts %s and normalizes a public URL",
 		async (format, action, result, rejectedResources, waitUntil) => {
 			const browser = createBrowser(Response.json({ success: true, result }));
-			const rateLimiter = createRateLimiter();
+			const ipRateLimiter = createRateLimiter();
+			const visitorRateLimiter = createRateLimiter();
 			const service = new ConversionService({
 				browser,
-				rateLimiter,
-				rateLimitKey: "203.0.113.10",
+				clientIp: "203.0.113.10",
+				ipRateLimiter,
+				rateLimitIdentity: {
+					kind: "visitor",
+					visitorId: "8d78d008-63e5-4e56-a9ed-82824bd87c10",
+				},
+				visitorRateLimiter,
 			});
 
 			await expect(
@@ -72,14 +81,18 @@ describe("ConversionService", () => {
 					cacheTTL: 300,
 				}),
 			);
-			expect(rateLimiter.limit).toHaveBeenCalledWith({
-				key: "conversion:203.0.113.10",
+			expect(ipRateLimiter.limit).toHaveBeenCalledWith({
+				key: "conversion:ip:203.0.113.10",
+			});
+			expect(visitorRateLimiter.limit).toHaveBeenCalledWith({
+				key: "conversion:visitor:8d78d008-63e5-4e56-a9ed-82824bd87c10",
 			});
 		},
 	);
 
 	it("uses one rate-limit namespace key for both formats", async () => {
-		const rateLimiter = createRateLimiter();
+		const ipRateLimiter = createRateLimiter();
+		const visitorRateLimiter = createRateLimiter();
 		const browser = {
 			quickAction: vi.fn(async () =>
 				Response.json({ success: true, result: "converted" }),
@@ -87,29 +100,36 @@ describe("ConversionService", () => {
 		};
 		const service = new ConversionService({
 			browser,
-			rateLimiter,
-			rateLimitKey: "shared-client",
+			clientIp: "shared-client",
+			ipRateLimiter,
+			rateLimitIdentity: { kind: "fallback-ip" },
+			visitorRateLimiter,
 		});
 
 		await service.convert("https://example.com", "markdown");
 		await service.convert("https://example.com", "html");
 
-		expect(rateLimiter.limit).toHaveBeenNthCalledWith(1, {
-			key: "conversion:shared-client",
+		expect(visitorRateLimiter.limit).toHaveBeenNthCalledWith(1, {
+			key: "conversion:fallback-ip:shared-client",
 		});
-		expect(rateLimiter.limit).toHaveBeenNthCalledWith(2, {
-			key: "conversion:shared-client",
+		expect(visitorRateLimiter.limit).toHaveBeenNthCalledWith(2, {
+			key: "conversion:fallback-ip:shared-client",
 		});
+		expect(ipRateLimiter.limit).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not call Browser Run for blocked URLs", async () => {
 		const browser = createBrowser(
 			Response.json({ success: true, result: "unused" }),
 		);
+		const ipRateLimiter = createRateLimiter();
+		const visitorRateLimiter = createRateLimiter();
 		const service = new ConversionService({
 			browser,
-			rateLimiter: createRateLimiter(),
-			rateLimitKey: "test-client",
+			clientIp: "test-client",
+			ipRateLimiter,
+			rateLimitIdentity: { kind: "fallback-ip" },
+			visitorRateLimiter,
 		});
 
 		await expect(
@@ -118,10 +138,12 @@ describe("ConversionService", () => {
 			code: "PRIVATE_IP_NOT_ALLOWED",
 		});
 		expect(browser.quickAction).not.toHaveBeenCalled();
+		expect(ipRateLimiter.limit).not.toHaveBeenCalled();
+		expect(visitorRateLimiter.limit).not.toHaveBeenCalled();
 	});
 
 	it.each([
-		[429, "RATE_LIMITED"],
+		[429, "BROWSER_UNAVAILABLE"],
 		[422, "PAGE_FETCH_FAILED"],
 		[503, "BROWSER_UNAVAILABLE"],
 	] as const)("maps provider status %s to %s", async (status, code) => {
@@ -162,13 +184,38 @@ describe("ConversionService", () => {
 		);
 		const service = new ConversionService({
 			browser,
-			rateLimiter: createRateLimiter(false),
-			rateLimitKey: "test-client",
+			clientIp: "test-client",
+			ipRateLimiter: createRateLimiter(),
+			rateLimitIdentity: { kind: "fallback-ip" },
+			visitorRateLimiter: createRateLimiter(false),
 		});
 
 		await expect(
 			service.convert("https://example.com", "html"),
 		).rejects.toMatchObject({ code: "RATE_LIMITED" });
+		expect(browser.quickAction).not.toHaveBeenCalled();
+	});
+
+	it("stops before the visitor bucket and Browser Run when the IP ceiling fails", async () => {
+		const browser = createBrowser(
+			Response.json({ success: true, result: "unused" }),
+		);
+		const visitorRateLimiter = createRateLimiter();
+		const service = new ConversionService({
+			browser,
+			clientIp: "test-client",
+			ipRateLimiter: createRateLimiter(false),
+			rateLimitIdentity: {
+				kind: "visitor",
+				visitorId: "8d78d008-63e5-4e56-a9ed-82824bd87c10",
+			},
+			visitorRateLimiter,
+		});
+
+		await expect(
+			service.convert("https://example.com", "html"),
+		).rejects.toMatchObject({ code: "RATE_LIMITED" });
+		expect(visitorRateLimiter.limit).not.toHaveBeenCalled();
 		expect(browser.quickAction).not.toHaveBeenCalled();
 	});
 

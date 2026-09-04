@@ -9,7 +9,7 @@ import Layout from "../../layouts/Layout.astro";
 	<section class="bg-white">
 		<div class="mx-auto w-full max-w-[800px] px-6 py-16">
 			<p class="text-[14px] font-semibold uppercase tracking-[0.06em] text-ink-2">
-				Last updated June 22, 2026
+				Last updated September 4, 2026
 			</p>
 			<h1 class="mt-3 text-[40px] font-semibold leading-tight text-ink">
 				Privacy Policy
@@ -18,9 +18,8 @@ import Layout from "../../layouts/Layout.astro";
 				<section>
 					<h2 class="text-[22px] font-semibold text-ink">Overview</h2>
 					<p class="mt-3">
-						URLX is a no-account URL shortener. You do not need to create an
-						account, provide an email address, or make a payment to create a
-						short link.
+						URLX provides no-account URL tools. You do not need to create an
+						account, provide an email address, or make a payment to use them.
 					</p>
 					<p class="mt-3">
 						This policy describes the data URLX handles when you use the site
@@ -60,6 +59,14 @@ import Layout from "../../layouts/Layout.astro";
 							list.
 						</li>
 						<li>
+							Anonymous rate-limit token: conversion and metadata tools store a
+							pseudonymous token in browser local storage. It contains a random ID
+							and issue and expiry timestamps, not an email address or profile. It
+							is sent only when you use those protected tools and is not an account
+							or advertising identifier. URLX does not create a persistent database
+							record for the token.
+						</li>
+						<li>
 							Operational logs: the server and hosting provider may process
 							request metadata such as request path, response status, IP address,
 							user agent, timing, and security-related metadata for operations,
@@ -75,9 +82,11 @@ import Layout from "../../layouts/Layout.astro";
 						analytics trackers.
 					</p>
 					<p class="mt-3">
-						URLX can use browser local storage only if you opt in to remembering
-						recent URLs on your device. You can turn this off or clear recent
-						URLs from the homepage controls.
+						URLX uses browser local storage for the anonymous rate-limit token
+						used by conversion and metadata tools. The token expires after 30
+						days, and clearing site data removes it. If you opt in to remembering
+						recent URLs, that optional history is also stored locally; you can
+						turn it off or clear it from the site controls.
 					</p>
 				</section>
 
@@ -87,6 +96,7 @@ import Layout from "../../layouts/Layout.astro";
 						<li>Create and serve short links.</li>
 						<li>Return an existing short link for the same normalized URL.</li>
 						<li>Inspect public URL metadata and return link-preview diagnostics.</li>
+						<li>Apply fair request limits and prevent abuse of protected tools.</li>
 						<li>Prevent local, private-network, and unsupported URL schemes.</li>
 						<li>Operate, secure, debug, and improve the service.</li>
 						<li>Investigate abuse reports and disable harmful links.</li>
@@ -100,7 +110,8 @@ import Layout from "../../layouts/Layout.astro";
 						Workers, Cloudflare D1, and Cloudflare Browser Run. Cloudflare may
 						process hosting, security, database, conversion URLs, webpage
 						content, generated Markdown or HTML, and request metadata needed to
-						provide the service.
+						provide the service. Cloudflare also processes short-lived rate-limit
+						counters and request metadata for conversion and metadata tools.
 					</p>
 				</section>
 
@@ -124,6 +135,13 @@ import Layout from "../../layouts/Layout.astro";
 						not stored by URLX. Preview images may load in your browser from the
 						source website when the result includes an image URL.
 					</p>
+					<p class="mt-3">
+						The anonymous rate-limit token expires after 30 days and is then
+						replaced when a protected tool is used again. URLX does not keep a
+						persistent database record for the token. Cloudflare's short-lived
+						rate-limit counters and operational data are handled according to its
+						service policies.
+					</p>
 				</section>
 
 				<section>
@@ -132,6 +150,10 @@ import Layout from "../../layouts/Layout.astro";
 						<li>You can use URLX without creating an account.</li>
 						<li>You can leave recent URL history disabled.</li>
 						<li>You can clear recent URLs from the homepage.</li>
+						<li>
+							You can clear site data to remove the anonymous rate-limit token; a
+							new token is created the next time you use a protected tool.
+						</li>
 						<li>You can avoid submitting URLs that contain sensitive personal data.</li>
 						<li>
 							You can report an abusive short link to the URLX maintainers using

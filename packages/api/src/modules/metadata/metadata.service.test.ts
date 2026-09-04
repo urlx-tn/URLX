@@ -11,13 +11,16 @@ const createRateLimiter = (success = true) => ({
 
 const createService = (
 	fetcher: typeof fetch,
-	rateLimiter = createRateLimiter(),
+	visitorRateLimiter = createRateLimiter(),
+	ipRateLimiter = createRateLimiter(),
 ) =>
 	new MetadataService({
+		clientIp: "203.0.113.10",
 		fetcher,
-		rateLimiter,
-		rateLimitKey: "203.0.113.10",
+		ipRateLimiter,
 		now: () => fixedDate,
+		rateLimitIdentity: { kind: "fallback-ip" },
+		visitorRateLimiter,
 	});
 
 function htmlResponse(html: string, init: ResponseInit = {}) {
@@ -137,15 +140,34 @@ describe("MetadataService", () => {
 		);
 	});
 
+	it("checks the metadata IP and fallback allowance before fetching", async () => {
+		const fetcher = vi.fn(async () => htmlResponse("<title>Example</title>"));
+		const visitorRateLimiter = createRateLimiter();
+		const ipRateLimiter = createRateLimiter();
+		const service = createService(fetcher, visitorRateLimiter, ipRateLimiter);
+
+		await service.inspect("https://example.com");
+
+		expect(ipRateLimiter.limit).toHaveBeenCalledWith({
+			key: "metadata:ip:203.0.113.10",
+		});
+		expect(visitorRateLimiter.limit).toHaveBeenCalledWith({
+			key: "metadata:fallback-ip:203.0.113.10",
+		});
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
 	it("rejects blocked URLs before rate limiting or fetch", async () => {
 		const fetcher = vi.fn(async () => htmlResponse(""));
-		const rateLimiter = createRateLimiter();
-		const service = createService(fetcher, rateLimiter);
+		const visitorRateLimiter = createRateLimiter();
+		const ipRateLimiter = createRateLimiter();
+		const service = createService(fetcher, visitorRateLimiter, ipRateLimiter);
 
 		await expect(service.inspect("http://127.0.0.1")).rejects.toMatchObject({
 			code: "PRIVATE_IP_NOT_ALLOWED",
 		});
-		expect(rateLimiter.limit).not.toHaveBeenCalled();
+		expect(visitorRateLimiter.limit).not.toHaveBeenCalled();
+		expect(ipRateLimiter.limit).not.toHaveBeenCalled();
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 
@@ -156,6 +178,22 @@ describe("MetadataService", () => {
 		await expect(service.inspect("https://example.com")).rejects.toMatchObject({
 			code: "RATE_LIMITED",
 		});
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it("stops before the visitor bucket and fetch when the IP ceiling fails", async () => {
+		const fetcher = vi.fn(async () => htmlResponse(""));
+		const visitorRateLimiter = createRateLimiter();
+		const service = createService(
+			fetcher,
+			visitorRateLimiter,
+			createRateLimiter(false),
+		);
+
+		await expect(service.inspect("https://example.com")).rejects.toMatchObject({
+			code: "RATE_LIMITED",
+		});
+		expect(visitorRateLimiter.limit).not.toHaveBeenCalled();
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 

@@ -12,25 +12,31 @@ The server Worker expects these bindings:
 ```text
 DB
 CORS_ORIGIN
-METADATA_RATE_LIMIT
+METADATA_IP_RATE_LIMIT
+METADATA_VISITOR_RATE_LIMIT
 SHORT_URL_BASE
+VISITOR_TOKEN_KEY
 ```
 
 The conversion Worker expects:
 
 ```text
 BROWSER
-CONVERSION_RATE_LIMIT
+CONVERSION_IP_RATE_LIMIT
+CONVERSION_VISITOR_RATE_LIMIT
 CORS_ORIGIN
+VISITOR_TOKEN_KEY
 ```
 
 `BROWSER` is the Cloudflare Browser Run binding provisioned by Alchemy; it does
-not require a separate application API token. `CONVERSION_RATE_LIMIT` limits
-each client IP to five total Markdown or HTML conversions per minute before
-Browser Run is called.
-
-`METADATA_RATE_LIMIT` limits each client IP to 20 metadata inspections per
-minute before the submitted URL is fetched.
+not require a separate application API token. The rate-limit bindings implement
+the layered limits described below. `VISITOR_TOKEN_KEY` is the same HMAC
+`CryptoKey` in both Workers and is provisioned from the required
+`VISITOR_TOKEN_KEY_BASE64` secret. Generate a 32-byte key with
+`openssl rand -base64 32` and keep it only in an ignored stage environment file
+or deployment secret. Alchemy requires `ALCHEMY_PASSWORD` to encrypt secret
+values in its state; never commit either value. Configuration fails before
+deployment if the visitor-token key is absent or invalid.
 
 Alchemy defaults `SHORT_URL_BASE` to:
 
@@ -45,6 +51,63 @@ https://your-production-url.com
 ```
 
 Do not include a trailing slash. Short links are built as `${SHORT_URL_BASE}/u/${shortCode}`.
+
+## Anonymous Visitor Token
+
+Browsers can obtain a pseudonymous token for fair rate limiting:
+
+```http
+GET /visitor-token
+Origin: https://www.urlx.tn
+```
+
+The response is marked `Cache-Control: no-store`:
+
+```json
+{
+	"token": "v1.<payload>.<signature>",
+	"expiresAt": "2026-10-04T12:00:00.000Z"
+}
+```
+
+The server issues a random visitor ID, signs it with HMAC-SHA-256, and expires
+the token after 30 days. Browser clients store `{ token, expiresAt }` under
+`urlx:visitor-token:v1` in local storage and send it only to conversion and
+metadata operations:
+
+```http
+X-URLX-Visitor-Token: v1.<payload>.<signature>
+```
+
+The header is optional. Direct API clients can remain tokenless and use the
+stricter per-IP fallback allowance. Missing or invalid tokens never cause an
+authentication failure or server error. An invalid token is processed using
+the fallback allowance and the response includes:
+
+```http
+X-URLX-Visitor-Token-Refresh: required
+```
+
+Browser clients clear that token so the next protected operation requests a
+replacement. The exact-origin CORS policy permits the request header and
+exposes the refresh header; wildcard origins are not allowed.
+
+## Protected Tool Rate Limits
+
+URL validation occurs before counters are consumed. For a valid request, URLX
+first checks the operation's broader IP ceiling, then checks either the signed
+visitor bucket or the stricter fallback-IP bucket:
+
+| Operation | Visitor or fallback-IP allowance | IP ceiling | Window |
+| --- | ---: | ---: | ---: |
+| HTML and Markdown conversion (shared) | 15 | 60 | 60 seconds |
+| Metadata inspection | 60 | 240 | 60 seconds |
+
+Conversion and metadata use separate counters. A local limit failure retains
+the `RATE_LIMITED` code and HTTP `429` status and includes `Retry-After: 60`.
+Cloudflare Browser Run HTTP `429` responses are reported as
+`BROWSER_UNAVAILABLE` with HTTP `503`, because provider throttling is not a URLX
+visitor-limit failure.
 
 ## oRPC Endpoint
 
@@ -415,6 +478,6 @@ Typical error payload data:
 
 ## Notes
 
-Markdown and HTML conversion share a Cloudflare Rate Limiting binding at five
-total conversion requests per minute per client IP. Broader rate limiting for
-other `POST /rpc` operations can still be enforced with Cloudflare rules.
+Markdown and HTML conversion continue to share one conversion allowance.
+Shortener and Link-in-Bio procedures do not use anonymous visitor tokens and
+their behavior is unchanged.
