@@ -59,7 +59,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.11",
+		"@biomejs/biome": "^2.5.13",
 		"@cloudflare/workers-types": "catalog:",
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
