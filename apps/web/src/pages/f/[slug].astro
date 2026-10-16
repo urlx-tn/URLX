@@ -1,10 +1,12 @@
 ---
+import logoAccent from "../../assets/logo-layer-accent.png";
+import logoInk from "../../assets/logo-layer-ink.png";
 import Layout from "../../layouts/Layout.astro";
 import "../../styles/forms.css";
 import { env } from "cloudflare:workers";
 import { proxyApiRequest } from "../../lib/api-proxy";
 import { formsReady } from "../../lib/forms-ready";
-import { accentColors, publicFieldMarkup } from "../../lib/forms-ui";
+import { accentColors, formsIcon, publicFieldMarkup } from "../../lib/forms-ui";
 
 export const prerender = false;
 const { slug = "" } = Astro.params;
@@ -66,26 +68,49 @@ const pageTitle = `${title} | URLX Forms`;
 const hasRequired = fields.some(
 	(field: Record<string, unknown>) => field.required,
 );
+const minutes = Math.max(1, Math.ceil((fields.length * 20) / 60));
 ---
 <Layout title={pageTitle} description={description || `Fill out ${title} online.`} image={form && canonicalSlug ? `/api/forms/public/${encodeURIComponent(canonicalSlug)}/og.png` : undefined} imageAlt={`${title} form preview`} canonicalPath={`/f/${slug}`} chrome={false} clientRouter={false}>
 	<div class="forms-app" style={`--form-accent:${accentValue}`}>
 		{formsEnabled && form && version ? (
-			<div class="f-public">
+			<div class:list={["f-public", { "is-done": submitted }]}>
+				<div class="f-cover" aria-hidden="true"></div>
+				<a class="f-cover-brand" href="/tools/forms" aria-label="Made with URLX Forms">
+					<span class="f-logo" aria-hidden="true"><span class="ink" style={`--logo:url("${logoInk.src}")`}></span><span class="accent" style={`--logo:url("${logoAccent.src}")`}></span></span>
+					<span>Forms</span>
+				</a>
+				{!submitted && <div class="f-progress" hidden aria-hidden="true"><span></span></div>}
 				<main class="f-public-card">
-					<div class="f-band"></div>
-					{submitted ? <section class="f-public-head f-thanks" role="status"><span class="f-thanks-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg></span><h1>Thank you</h1><p>{confirmationMessage}</p></section> : <>
-					<header class="f-public-head"><h1>{title}</h1>{description && <p>{description}</p>}{hasRequired && <p class="f-required-note"><span class="f-req">*</span> Required</p>}</header>
-					<form method="post" action={`/f/${encodeURIComponent(slug)}/submit`}>
+					{submitted ? (
+						<section class="f-thanks" role="status">
+							<span class="f-thanks-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg></span>
+							<h1>Thank you</h1>
+							<p class="f-thanks-message">{confirmationMessage}</p>
+							<a class="f-thanks-again" href={`/f/${encodeURIComponent(slug)}`}>Submit another response</a>
+						</section>
+					) : <>
+					<header class="f-public-head">
+						<h1>{title}</h1>
+						{description && <p>{description}</p>}
+						<p class="f-public-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{fields.length} question{fields.length === 1 ? "" : "s"}</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min</span>{hasRequired && <span class="f-required-note"><span class="f-req">*</span> Required</span>}</p>
+					</header>
+					<form method="post" action={`/f/${encodeURIComponent(slug)}/submit`} class="f-public-form">
 						<input type="hidden" name="versionId" value={submitVersion} />
 						<input type="hidden" name="submissionToken" value={submitToken} />
 						<input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 						<div hidden aria-hidden="true"><label>Leave this field empty<input name="website" tabindex="-1" autocomplete="off" /></label></div>
 						<div class="f-public-fields" set:html={fields.map((field: Record<string, any>, index: number) => publicFieldMarkup(field, index)).join("")} />
-						<div class="f-public-footer"><button class="f-btn" type="submit">Submit</button></div>
+						<div class="f-public-footer">
+							<button class="f-btn" type="submit">Submit</button>
+							<p class="f-public-progress" hidden aria-live="polite"></p>
+							<p class="f-public-safety">Never share passwords or payment details in a form.</p>
+						</div>
 					</form>
 					</>}
 				</main>
-				<p class="f-brand-foot">Made with <a href="/tools/forms">URLX Forms</a> · <a href="/tools/forms">Create your own form</a></p>
+				<footer class="f-made">
+					<a class="f-made-cta" href="/tools/forms">Create your own form with URLX <span aria-hidden="true">→</span></a>
+				</footer>
 			</div>
 		) : (
 			<main class="forms-main" style="padding-top:100px;text-align:center">
@@ -93,4 +118,28 @@ const hasRequired = fields.some(
 			</main>
 		)}
 	</div>
+	<script>
+		// @ts-nocheck
+		// Progress bar is an enhancement: the form submits fine without it.
+		const form = document.querySelector(".f-public-form");
+		const bar = document.querySelector(".f-progress");
+		const label = document.querySelector(".f-public-progress");
+		if (form && bar && label) {
+			const questions = [...form.querySelectorAll(".f-public-field")];
+			const answered = (field) =>
+				[...field.querySelectorAll("input, textarea")].some((input) =>
+					input.type === "radio" || input.type === "checkbox" ? input.checked : input.value.trim() !== "",
+				);
+			const update = () => {
+				const done = questions.filter(answered).length;
+				bar.querySelector("span").style.width = `${questions.length ? (done / questions.length) * 100 : 0}%`;
+				label.textContent = `${done} of ${questions.length} answered`;
+			};
+			bar.hidden = false;
+			label.hidden = false;
+			form.addEventListener("input", update);
+			form.addEventListener("change", update);
+			update();
+		}
+	</script>
 </Layout>

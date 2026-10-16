@@ -38,6 +38,7 @@ const title = "Edit form | URLX Forms";
 					<aside class="f-sidebar" aria-label="Form editor controls">
 						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("plus", 15)} />Add a question</h3><div class="f-types" id="field-types"></div></section>
 						<section class="f-card f-settings"><h3><span class="f-h-icon" set:html={formsIcon("palette", 15)} />Appearance</h3><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted f-fine">Changes save automatically.</p></section>
+					<section class="f-card f-settings"><h3><span class="f-h-icon" set:html={formsIcon("check", 15)} />After submitting</h3><label class="f-label" for="draft-confirmation">Message people see</label><textarea id="draft-confirmation" class="f-textarea f-confirm-input" maxlength="500" rows="3" placeholder="Your response has been recorded."></textarea><p class="f-muted f-fine">Shown under “Thank you”. Publish again to update the live form.</p></section>
 						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("keyboard", 15)} />Shortcuts</h3><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd><kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd><kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd><kbd>↑</kbd><kbd>↓</kbd></span></div><div class="f-keyline"><span>New question below</span><span><kbd>Enter</kbd></span></div></section>
 					</aside>
 				</div>
@@ -92,6 +93,7 @@ const title = "Edit form | URLX Forms";
 		function capturePendingText() {
 			draft.title = $("#draft-title").value;
 			draft.description = $("#draft-description").value;
+			draft.confirmationMessage = $("#draft-confirmation").value;
 			for (const card of app.querySelectorAll("[data-field]")) {
 				const field = draft.fields.find((item) => item.id === card.dataset.field);
 				if (!field) continue;
@@ -135,13 +137,14 @@ const title = "Edit form | URLX Forms";
 		}
 		function renderStatic() {
 			const groups = [...new Set(types.map((type) => fieldTypeMeta[type].group))];
-			$("#field-types").innerHTML = groups.map((group) => `<p class="f-type-group">${esc(group)}</p>${types.filter((type) => fieldTypeMeta[type].group === group).map((type) => `<button type="button" class="f-type-tile" data-action="add" data-type="${type}" title="${esc(fieldTypeMeta[type].hint)}"><span class="f-type-icon">${icon(type, 16)}</span><span class="f-type-text"><strong>${esc(fieldTypeMeta[type].name)}</strong><small>${esc(fieldTypeMeta[type].hint)}</small></span></button>`).join("")}`).join("");
+			$("#field-types").innerHTML = groups.map((group) => `<p class="f-type-group">${esc(group)}</p>${types.filter((type) => fieldTypeMeta[type].group === group).map((type) => `<button type="button" class="f-type-tile" data-action="add" data-type="${type}"><span class="f-type-icon">${icon(type, 16)}</span><span class="f-type-text"><strong>${esc(fieldTypeMeta[type].name)}</strong><small>${esc(fieldTypeMeta[type].hint)}</small></span></button>`).join("")}`).join("");
 			$("#paper-add").innerHTML = `<span class="f-muted">Add</span>${["short", "paragraph", "singlechoice", "multichoice", "rating"].map((type) => `<button type="button" class="f-quick-add" data-action="add" data-type="${type}" aria-label="Add ${esc(typeNames[type])} question" title="${esc(typeNames[type])}">${icon(type, 16)}</button>`).join("")}`;
 		}
 		function render() {
 			$("#form-title-label").textContent = draft.title || "Untitled form";
 			$("#draft-title").value = draft.title || "";
 			$("#draft-description").value = draft.description || "";
+			if (document.activeElement !== $("#draft-confirmation")) $("#draft-confirmation").value = draft.confirmationMessage || "";
 			$("#form-paper").style.setProperty("--form-accent", color());
 			$("#draft-accent").innerHTML = Object.entries(colors).map(([name, value]) => `<button type="button" data-action="accent" data-accent="${name}" aria-label="${name} accent" title="${name[0].toUpperCase()}${name.slice(1)}" aria-pressed="${draft.accent === name}" style="--swatch:${value}">${icon("check", 15)}</button>`).join("");
 			$("#question-list").innerHTML = draft.fields.map(questionCard).join("") || `<div class="f-paper-empty"><span class="f-empty-icon">${icon("plus", 24)}</span><h2>Start with your first question</h2><p>Pick a question type below. You can reorder, duplicate and change types any time.</p></div>`;
@@ -296,6 +299,7 @@ const title = "Edit form | URLX Forms";
 			const input = event.target;
 			if (input.id === "draft-title") { draft.title = input.value; $("#form-title-label").textContent = input.value || "Untitled form"; queueSave(); return; }
 			if (input.id === "draft-description") { draft.description = input.value; queueSave(); return; }
+			if (input.id === "draft-confirmation") { draft.confirmationMessage = input.value; queueSave(); return; }
 			const card = input.closest("[data-field]"); const field = card && draft.fields.find((item) => item.id === card.dataset.field); if (!field) return;
 			if (input.dataset.key === "label") field.label = input.value;
 			if (input.dataset.key === "help") field.help = input.value;

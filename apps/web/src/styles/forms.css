@@ -2256,15 +2256,58 @@ a.f-btn[aria-disabled="true"] {
 
 /* Public form */
 .f-public {
+	position: relative;
 	min-height: 100dvh;
-	padding: 48px 16px 36px;
+	padding: 0 16px 36px;
+	background: var(--fs);
+}
+/* Generated cover in the form's accent (Tally/Fillout-style header, no upload). */
+.f-cover {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 220px;
 	background:
 		radial-gradient(
-			90% 420px at 50% -60px,
-			color-mix(in srgb, var(--form-accent, #0071e3) 22%, transparent),
-			transparent
+			circle at 1px 1px,
+			rgb(255 255 255 / 0.22) 1px,
+			transparent 0
+		)
+		0 0 / 16px 16px,
+		radial-gradient(
+			120% 140% at 0% 0%,
+			color-mix(in srgb, var(--form-accent, #0071e3) 70%, #fff),
+			transparent 60%
 		),
-		var(--fs);
+		linear-gradient(
+			135deg,
+			var(--form-accent, #0071e3),
+			color-mix(in srgb, var(--form-accent, #0071e3) 55%, #fff)
+		);
+}
+.f-public > main,
+.f-public > .f-made {
+	position: relative;
+}
+.f-public > main {
+	top: 120px;
+	margin-bottom: 120px;
+}
+.f-progress {
+	position: fixed;
+	inset: 0 0 auto;
+	z-index: 10;
+	height: 4px;
+	background: rgb(255 255 255 / 0.35);
+}
+.f-progress[hidden] {
+	display: none;
+}
+.f-progress span {
+	display: block;
+	width: 0;
+	height: 100%;
+	background: color-mix(in srgb, var(--form-accent, #0071e3) 80%, #000);
+	transition: width 0.3s ease;
 }
 .f-public-card {
 	max-width: 680px;
@@ -2293,6 +2336,53 @@ a.f-btn[aria-disabled="true"] {
 .f-public-head .f-required-note {
 	font-size: 13px;
 	margin-top: 14px;
+}
+.f-public-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	font-size: 13px;
+}
+.f-public-meta span + .f-ico {
+	margin-left: 8px;
+}
+.f-public-meta .f-required-note {
+	margin: 0 0 0 auto;
+}
+/* Number each question; the counter reads naturally ("1 Full name"). */
+.f-public-fields {
+	counter-reset: f-question;
+}
+.f-public-field {
+	counter-increment: f-question;
+}
+.f-public-field > label::before,
+.f-public-field > fieldset > legend::before {
+	content: counter(f-question);
+	display: inline-grid;
+	place-items: center;
+	min-width: 22px;
+	height: 22px;
+	margin-right: 10px;
+	padding: 0 6px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--form-accent, #0071e3) 12%, #fff);
+	color: color-mix(in srgb, var(--form-accent, #0071e3) 85%, #000);
+	font-size: 12px;
+	font-weight: 700;
+	vertical-align: 1px;
+}
+.f-public-field .help,
+.f-public-field .f-input,
+.f-public-field .f-textarea,
+.f-public-field .f-choices,
+.f-public-field .f-stars {
+	margin-left: 32px;
+	width: calc(100% - 32px);
+}
+.f-public-field .f-stars {
+	width: auto;
 }
 .f-req {
 	color: var(--f-danger);
@@ -2411,11 +2501,59 @@ a.f-btn[aria-disabled="true"] {
 .f-public-footer button:hover {
 	background: color-mix(in srgb, var(--form-accent, #0071e3) 88%, #000);
 }
+.f-public-footer .f-public-progress {
+	margin: 12px 0 0;
+	text-align: center;
+	color: var(--fm);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+.f-public-footer .f-public-progress[hidden] {
+	display: none;
+}
+.f-public-safety {
+	margin: 10px 0 0;
+	text-align: center;
+	color: var(--fm2);
+	font-size: 12px;
+}
+/* Ending screen: centred on the page, the creator's message front and centre. */
+.f-public.is-done {
+	display: grid;
+	place-content: center;
+	padding: 24px 16px;
+}
+.f-public.is-done > main {
+	top: auto;
+	margin: 0 auto;
+	width: min(520px, calc(100vw - 32px));
+}
 .f-thanks {
 	text-align: center;
-	padding: 48px 32px 44px;
-	border: 0;
+	padding: 48px 32px 40px;
+}
+.f-thanks h1 {
 	margin: 0;
+	font-size: 28px;
+	letter-spacing: -0.02em;
+}
+.f-thanks-message {
+	margin: 10px auto 0;
+	max-width: 40ch;
+	color: var(--fm);
+	font-size: 16px;
+	white-space: pre-line;
+}
+.f-thanks-again {
+	display: inline-block;
+	margin-top: 22px;
+	color: color-mix(in srgb, var(--form-accent, #0071e3) 85%, #000);
+	font-weight: 600;
+	font-size: 14.5px;
+	text-decoration: none;
+}
+.f-thanks-again:hover {
+	text-decoration: underline;
 }
 .f-thanks-icon {
 	display: inline-grid;
@@ -2428,20 +2566,72 @@ a.f-btn[aria-disabled="true"] {
 	background: var(--form-accent, #0071e3);
 	box-shadow: 0 0 0 8px
 		color-mix(in srgb, var(--form-accent, #0071e3) 14%, transparent);
+	animation: f-pop-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3);
 }
-.f-brand-foot {
-	text-align: center;
-	color: var(--fm);
-	font-size: 12.5px;
-	margin-top: 18px;
+@keyframes f-pop-in {
+	from {
+		transform: scale(0.6);
+		opacity: 0;
+	}
 }
-.f-brand-foot a {
+/* URLX Forms badge in the cover: the real two-tone logo, with its blue layer
+   swapped for the form's accent (identical to the original on blue forms). */
+.f-cover-brand {
+	position: absolute;
+	z-index: 1;
+	top: 28px;
+	left: max(16px, calc(50% - 340px));
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 11px 18px 11px 16px;
+	border-radius: 99px;
+	background: rgb(255 255 255 / 0.95);
+	box-shadow: 0 4px 14px -4px rgb(0 0 0 / 0.2);
 	color: var(--fm);
+	font-size: 15px;
 	font-weight: 600;
 	text-decoration: none;
+	transition: box-shadow 0.15s ease;
 }
-.f-brand-foot a:hover {
-	color: var(--fa);
+.f-cover-brand:hover {
+	box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.28);
+}
+.f-public.is-done .f-cover-brand {
+	left: 50%;
+	transform: translateX(-50%);
+}
+.f-logo {
+	position: relative;
+	display: block;
+	width: 98px;
+	height: 26px;
+}
+.f-logo > span {
+	position: absolute;
+	inset: 0;
+	-webkit-mask: var(--logo) center / contain no-repeat;
+	mask: var(--logo) center / contain no-repeat;
+}
+.f-logo .ink {
+	background: #1d2330;
+}
+.f-logo .accent {
+	background: var(--form-accent, #0071e3);
+}
+.f-made {
+	display: flex;
+	justify-content: center;
+	margin-top: 22px;
+}
+.f-made-cta {
+	color: var(--fm);
+	font-size: 12.5px;
+	font-weight: 500;
+	text-decoration: none;
+}
+.f-made-cta:hover {
+	color: var(--fi);
 }
 
 @media (max-width: 1000px) {
@@ -2916,4 +3106,43 @@ a.f-btn[aria-disabled="true"] {
 	.forms-hero {
 		margin-bottom: 28px;
 	}
+}
+
+@media (max-width: 600px) {
+	.f-cover {
+		height: 150px;
+	}
+	.f-cover-brand {
+		top: 16px;
+		padding: 8px 14px 8px 12px;
+		font-size: 13.5px;
+	}
+	.f-cover-brand .f-logo {
+		width: 76px;
+		height: 20px;
+	}
+	.f-public > main {
+		top: 72px;
+		margin-bottom: 72px;
+	}
+	.f-public-field .help,
+	.f-public-field .f-input,
+	.f-public-field .f-textarea,
+	.f-public-field .f-choices,
+	.f-public-field .f-stars {
+		margin-left: 0;
+		width: 100%;
+	}
+	.f-public-field .f-stars {
+		width: auto;
+	}
+	.f-public-meta .f-required-note {
+		margin-left: 0;
+		flex-basis: 100%;
+	}
+}
+
+.f-confirm-input {
+	min-height: 76px;
+	font-size: 14px;
 }
