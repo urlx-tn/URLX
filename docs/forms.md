@@ -2,13 +2,21 @@
 
 ## Interface previews
 
-These screenshots come from the isolated browser suite with synthetic data.
+These screenshots come from a local preview with synthetic data.
+
+![Template gallery](forms/screenshots/forms-templates-desktop.png)
+
+![Template preview page](forms/screenshots/forms-template-preview-desktop.png)
 
 ![Forms editor on desktop](forms/screenshots/forms-editor-desktop.png)
 
 ![Forms editor at a 390px viewport](forms/screenshots/forms-editor-mobile.png)
 
-![Public form confirmation on mobile](forms/screenshots/forms-public-response-mobile.png)
+![Responses summary](forms/screenshots/forms-responses-desktop.png)
+
+![Public form on mobile](forms/screenshots/forms-public-form-mobile.png)
+
+![Ending screen on mobile](forms/screenshots/forms-public-thanks-mobile.png)
 
 URLX Forms is part of the MIT-licensed URLX application. It is available when the
 Forms authentication and email bindings are configured. Until then, the Forms

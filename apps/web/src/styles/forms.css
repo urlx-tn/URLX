@@ -53,7 +53,11 @@
 }
 .f-input:focus-visible,
 .f-textarea:focus-visible,
-.f-select:focus-visible {
+.f-select:focus-visible,
+.f-question input:focus-visible,
+.f-question textarea:focus-visible,
+.f-paper-head input:focus-visible,
+.f-paper-head textarea:focus-visible {
 	outline: none;
 }
 .forms-app h1,
@@ -1637,11 +1641,6 @@ a.f-btn[aria-disabled="true"] {
 	margin: 10px 8px 2px;
 	color: color-mix(in srgb, var(--form-accent, #0071e3) 55%, #fff);
 }
-.q-stars .f-ico:first-child,
-.q-stars .f-ico:nth-child(2),
-.q-stars .f-ico:nth-child(3) {
-	fill: color-mix(in srgb, var(--form-accent, #0071e3) 22%, #fff);
-}
 .f-question .q-options {
 	display: grid;
 	gap: 4px;
@@ -2143,7 +2142,10 @@ a.f-btn[aria-disabled="true"] {
 	margin: 0;
 	font-size: 18px;
 }
+/* Positioned so visually hidden (absolute) labels inside the table stay clipped
+   by this scroller instead of widening the page on phones. */
 .f-table-scroll {
+	position: relative;
 	overflow: auto;
 }
 .f-response-table {
