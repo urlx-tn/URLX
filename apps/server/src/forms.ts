@@ -7,6 +7,7 @@ import {
 	FormsError,
 	FormsService,
 } from "@urlx/api/modules/forms/forms.service";
+import { formTemplateDraft } from "@urlx/api/modules/forms/forms.templates";
 import type { FormFieldDto } from "@urlx/api/modules/forms/forms.types";
 import { createDb } from "@urlx/db";
 import { Hono, type Context as HonoContext } from "hono";
@@ -69,7 +70,7 @@ formsApp.post("/api/forms", async (c) => {
 		const body = await c.req.json<{ template?: string; title?: string }>();
 		const form = await new FormsService(createDb(c.env.DB)).create(
 			owner.id,
-			templateDraft(body.template ?? "blank", body.title),
+			formTemplateDraft(body.template ?? "blank", body.title),
 		);
 		return c.json(
 			{ form: form?.form, draft: form?.draft, revision: form?.revision },
@@ -630,53 +631,6 @@ function successResponse(
 			"Cache-Control": "no-store",
 		});
 	return c.redirect(`/f/${encodeURIComponent(slug)}?submitted=1`, 303);
-}
-function templateDraft(template: string, title?: string) {
-	const fields: FormFieldDto[] =
-		template === "feedback"
-			? [
-					{
-						id: "rating",
-						type: "rating",
-						label: "How would you rate it overall?",
-						required: true,
-					},
-					{
-						id: "improve",
-						type: "paragraph",
-						label: "What could we improve?",
-						required: false,
-					},
-				]
-			: template === "registration"
-				? [
-						{ id: "name", type: "short", label: "Full name", required: true },
-						{ id: "email", type: "email", label: "Email", required: true },
-						{ id: "phone", type: "phone", label: "Phone", required: false },
-					]
-				: [
-						{ id: "name", type: "short", label: "Your name", required: true },
-						{ id: "email", type: "email", label: "Email", required: true },
-						{
-							id: "message",
-							type: "paragraph",
-							label: "Message",
-							required: true,
-						},
-					];
-	return {
-		title:
-			title?.trim() ||
-			(template === "feedback"
-				? "How was your experience?"
-				: template === "registration"
-					? "Workshop registration"
-					: "Untitled form"),
-		description: "",
-		accent: "blue" as const,
-		confirmationMessage: "Thank you for your response.",
-		fields,
-	};
 }
 function str(value: unknown) {
 	return typeof value === "string" ? value : "";

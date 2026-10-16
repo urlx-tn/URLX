@@ -7,6 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FormsService } from "../src/modules/forms/forms.service";
 
 const owner = "synthetic-owner";
+// Publishing requires at least one question; most lifecycle tests only need a placeholder.
+const sampleFields = [
+	{ id: "q", type: "short" as const, label: "Question", required: false },
+];
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 let mf: Miniflare;
 let service: FormsService;
@@ -50,6 +54,26 @@ afterAll(async () => {
 });
 
 describe("forms isolated D1 lifecycle", () => {
+	it("saves a truly blank draft but refuses to publish it", async () => {
+		const blank = await service.create(owner, {
+			title: "Untitled form",
+			description: "",
+			accent: "blue",
+			fields: [],
+		});
+		const id = blank!.form!.id;
+		expect(blank!.draft!.fields).toEqual([]);
+		await expect(
+			service.publish(
+				owner,
+				id,
+				undefined,
+				"https://forms.example.invalid",
+				"https://s.example.invalid",
+			),
+		).rejects.toMatchObject({ code: "NO_QUESTIONS", status: 400 });
+	});
+
 	it("upgrades the old form version shape and keeps published content immutable", async () => {
 		const first = await service.create(owner, {
 			title: "Original",
@@ -110,7 +134,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const one = await limitedService.create(limitedOwner, {
 			title: "One",
 			accent: "blue",
-			fields: [],
+			fields: sampleFields,
 		});
 		await limitedService.setSlug(limitedOwner, one!.form!.id, "cap-one");
 		const pub = await limitedService.publish(
@@ -123,7 +147,7 @@ describe("forms isolated D1 lifecycle", () => {
 		await limitedService.save(
 			limitedOwner,
 			one!.form!.id,
-			{ title: "One updated", accent: "blue", fields: [] },
+			{ title: "One updated", accent: "blue", fields: sampleFields },
 			1,
 		);
 		await expect(
@@ -138,7 +162,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const two = await limitedService.create(limitedOwner, {
 			title: "Two",
 			accent: "teal",
-			fields: [],
+			fields: sampleFields,
 		});
 		await limitedService.setSlug(limitedOwner, two!.form!.id, "cap-two");
 		await expect(
@@ -190,7 +214,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const tombstoneForm = await limitedService.create(tombstoneOwner, {
 			title: "Tombstone",
 			accent: "pink",
-			fields: [],
+			fields: sampleFields,
 		});
 		await expect(
 			limitedService.setSlug(
@@ -221,7 +245,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const form = await monthOne.create(retainedOwner, {
 			title: "Retention",
 			accent: "green",
-			fields: [],
+			fields: sampleFields,
 		});
 		await monthOne.setSlug(retainedOwner, form!.form!.id, "retention-form");
 		const published = await monthOne.publish(
@@ -257,7 +281,12 @@ describe("forms isolated D1 lifecycle", () => {
 			.all<{ answers_json: string }>();
 		const retained = retainedRows.results[0];
 		expect(retained?.answers_json).toBe('{"value":"new"}');
+		const listed = await monthTwo.list(retainedOwner);
+		expect(listed.forms[0]?.responseCount).toBe(1);
 		await monthTwo.deleteResponse(retainedOwner, form!.form!.id);
+		expect((await monthTwo.list(retainedOwner)).forms[0]?.responseCount).toBe(
+			0,
+		);
 		const accepted = await d1
 			.prepare(
 				"SELECT response_count FROM form_monthly_usage WHERE owner_id=? AND month='2026-11'",
@@ -271,7 +300,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const first = await service.create(owner, {
 			title: "Slug owner",
 			accent: "blue",
-			fields: [],
+			fields: sampleFields,
 		});
 		await service.setSlug(owner, first!.form!.id, "first-address");
 		await service.publish(
@@ -295,7 +324,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const other = await service.create(otherOwner, {
 			title: "Other",
 			accent: "teal",
-			fields: [],
+			fields: sampleFields,
 		});
 		await expect(
 			service.setSlug(otherOwner, other!.form!.id, "first-address"),
@@ -315,7 +344,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const created = await draftService.create(draftOwner, {
 			title: "Initial draft",
 			accent: "blue",
-			fields: [],
+			fields: sampleFields,
 		});
 		if (!created?.form) throw new Error("Expected a created form");
 		const formId = created.form.id;
@@ -323,13 +352,13 @@ describe("forms isolated D1 lifecycle", () => {
 			draftService.save(
 				draftOwner,
 				formId,
-				{ title: "Winner A", accent: "blue", fields: [] },
+				{ title: "Winner A", accent: "blue", fields: sampleFields },
 				created.revision,
 			),
 			draftService.save(
 				draftOwner,
 				formId,
-				{ title: "Winner B", accent: "teal", fields: [] },
+				{ title: "Winner B", accent: "teal", fields: sampleFields },
 				created.revision,
 			),
 		]);
@@ -362,7 +391,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const updated = await draftService.save(
 			draftOwner,
 			formId,
-			{ title: "Updated draft", accent: "pink", fields: [] },
+			{ title: "Updated draft", accent: "pink", fields: sampleFields },
 			winner.revision,
 		);
 		if (!updated) throw new Error("Expected updated draft");
@@ -379,14 +408,14 @@ describe("forms isolated D1 lifecycle", () => {
 		const updatedAfterPublish = await draftService.save(
 			draftOwner,
 			formId,
-			{ title: "Next draft", accent: "green", fields: [] },
+			{ title: "Next draft", accent: "green", fields: sampleFields },
 			published.revision,
 		);
 		if (!updatedAfterPublish) throw new Error("Expected post-publish draft");
 		await draftService.save(
 			draftOwner,
 			formId,
-			{ title: "Latest draft", accent: "orange", fields: [] },
+			{ title: "Latest draft", accent: "orange", fields: sampleFields },
 			updatedAfterPublish.revision,
 		);
 		expect(await rowCounts()).toMatchObject({ total: 2, drafts: 1 });
@@ -400,7 +429,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const form = await service.create(owner, {
 			title: "A Friendly Registration Form",
 			accent: "blue",
-			fields: [],
+			fields: sampleFields,
 		});
 		const first = await service.publish(
 			owner,
@@ -430,7 +459,7 @@ describe("forms isolated D1 lifecycle", () => {
 		const first = await service.create(owner, {
 			title: "Concurrent",
 			accent: "pink",
-			fields: [],
+			fields: sampleFields,
 		});
 		await service.setSlug(owner, first!.form!.id, "concurrent-form");
 		const published = await service.publish(

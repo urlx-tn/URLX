@@ -50,10 +50,17 @@ export class FormsService {
 		const limits = await this.getLimits();
 		return {
 			forms: await Promise.all(
-				rows.map(async (form) => ({
-					...form,
-					publishedVersion: await this.getPublishedVersion(form.id),
-				})),
+				rows.map(async (form) => {
+					const [responses] = await this.db
+						.select({ total: count() })
+						.from(formResponses)
+						.where(eq(formResponses.formId, form.id));
+					return {
+						...form,
+						publishedVersion: await this.getPublishedVersion(form.id),
+						responseCount: Number(responses?.total ?? 0),
+					};
+				}),
 			),
 			usage: {
 				month,
@@ -228,6 +235,13 @@ export class FormsService {
 	) {
 		let current = await this.get(ownerId, id);
 		if (!current || !current.draft) return null;
+		// A blank draft can be saved, but respondents should never see an empty form.
+		if (!current.draft.fields?.length)
+			throw new FormsError(
+				"NO_QUESTIONS",
+				400,
+				"Add at least one question before publishing.",
+			);
 		if (requestedSlug) await this.setSlug(ownerId, id, requestedSlug);
 		current = await this.get(ownerId, id);
 		if (!current?.form.slug) {
