@@ -302,6 +302,100 @@ describe("forms isolated D1 lifecycle", () => {
 		).rejects.toMatchObject({ code: "SLUG_TAKEN" });
 	});
 
+	it("keeps one mutable draft snapshot and rejects overlapping revision saves", async () => {
+		const d1 = await mf.getD1Database("DB");
+		const draftOwner = "synthetic-draft-owner";
+		await d1
+			.prepare(
+				"INSERT INTO `user` (id,name,email,email_verified,created_at,updated_at) VALUES (?, 'Draft', 'draft@example.invalid', 1, 1, 1)",
+			)
+			.bind(draftOwner)
+			.run();
+		const draftService = new FormsService(createDb(d1));
+		const created = await draftService.create(draftOwner, {
+			title: "Initial draft",
+			accent: "blue",
+			fields: [],
+		});
+		if (!created?.form) throw new Error("Expected a created form");
+		const formId = created.form.id;
+		const concurrent = await Promise.allSettled([
+			draftService.save(
+				draftOwner,
+				formId,
+				{ title: "Winner A", accent: "blue", fields: [] },
+				created.revision,
+			),
+			draftService.save(
+				draftOwner,
+				formId,
+				{ title: "Winner B", accent: "teal", fields: [] },
+				created.revision,
+			),
+		]);
+		const fulfilled = concurrent.filter(
+			(result) => result.status === "fulfilled",
+		);
+		const rejected = concurrent.filter(
+			(result) => result.status === "rejected",
+		);
+		expect(fulfilled).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		if (rejected[0]?.status !== "rejected")
+			throw new Error("Expected one conflicting revision save");
+		expect(rejected[0].reason).toMatchObject({ code: "REVISION_CONFLICT" });
+		const winner = await draftService.get(draftOwner, formId);
+		if (!winner) throw new Error("Expected a winning draft save");
+		if (!winner.draft) throw new Error("Expected the winning mutable draft");
+		expect(winner.draft.title).toMatch(/^Winner [AB]$/);
+		const rowCounts = async () => {
+			const result = await d1
+				.prepare(
+					"SELECT count(*) AS total, sum(published_at IS NULL) AS drafts FROM form_versions WHERE form_id=?",
+				)
+				.bind(formId)
+				.first<{ total: number; drafts: number }>();
+			if (!result) throw new Error("Expected version row counts");
+			return result;
+		};
+		expect(await rowCounts()).toMatchObject({ total: 1, drafts: 1 });
+		const updated = await draftService.save(
+			draftOwner,
+			formId,
+			{ title: "Updated draft", accent: "pink", fields: [] },
+			winner.revision,
+		);
+		if (!updated) throw new Error("Expected updated draft");
+		expect(updated.revision).toBe(winner.revision + 1);
+		expect(await rowCounts()).toMatchObject({ total: 1, drafts: 1 });
+		const published = await draftService.publish(
+			draftOwner,
+			formId,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+		);
+		if (!published) throw new Error("Expected the draft to publish");
+		const updatedAfterPublish = await draftService.save(
+			draftOwner,
+			formId,
+			{ title: "Next draft", accent: "green", fields: [] },
+			published.revision,
+		);
+		if (!updatedAfterPublish) throw new Error("Expected post-publish draft");
+		await draftService.save(
+			draftOwner,
+			formId,
+			{ title: "Latest draft", accent: "orange", fields: [] },
+			updatedAfterPublish.revision,
+		);
+		expect(await rowCounts()).toMatchObject({ total: 2, drafts: 1 });
+		const publishedSlug = published.form.slug;
+		if (!publishedSlug) throw new Error("Expected a published slug");
+		const publicForm = await draftService.getPublic(publishedSlug);
+		expect(publicForm?.version.title).toBe("Updated draft");
+	});
+
 	it("assigns a stable title-based address when first publishing without a slug", async () => {
 		const form = await service.create(owner, {
 			title: "A Friendly Registration Form",
@@ -315,7 +409,9 @@ describe("forms isolated D1 lifecycle", () => {
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
 		);
-		expect(first?.form.slug).toMatch(/^a-friendly-registration-form-[a-z0-9]{8}$/);
+		expect(first?.form.slug).toMatch(
+			/^a-friendly-registration-form-[a-z0-9]{8}$/,
+		);
 		expect(first?.url).toBe(
 			`https://forms.example.invalid/f/${first?.form.slug}`,
 		);

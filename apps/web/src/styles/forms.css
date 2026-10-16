@@ -797,6 +797,12 @@
 		margin: 5px 7px;
 		padding-left: 14px;
 	}
+	.f-q-actions {
+		flex-wrap: wrap;
+	}
+	.f-q-actions > span {
+		display: none;
+	}
 	.f-public {
 		padding: 10px 9px;
 	}

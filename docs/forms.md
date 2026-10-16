@@ -1,5 +1,15 @@
 # URLX Forms setup
 
+## Interface previews
+
+These screenshots come from the isolated browser suite with synthetic data.
+
+![Forms editor on desktop](forms/screenshots/forms-editor-desktop.png)
+
+![Forms editor at a 390px viewport](forms/screenshots/forms-editor-mobile.png)
+
+![Public form confirmation on mobile](forms/screenshots/forms-public-response-mobile.png)
+
 URLX Forms is part of the MIT-licensed URLX application. It is available when the
 Forms authentication and email bindings are configured. Until then, the Forms
 entry points are hidden and Forms API requests fail closed; existing URL tools

@@ -8,7 +8,7 @@ import {
 	forms,
 	formVersions,
 } from "@urlx/db";
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import { LinkService } from "../links/link.service";
 import {
 	type FormDefinitionDto,
@@ -172,30 +172,50 @@ export class FormsService {
 			);
 		const now = this.now();
 		const nextVersion = current.revision + 1;
-		await this.db.batch([
-			this.db
-				.update(forms)
-				.set({
+		try {
+			await this.db.batch([
+				this.db
+					.delete(formVersions)
+					.where(
+						and(
+							eq(formVersions.formId, id),
+							isNull(formVersions.publishedAt),
+							lte(formVersions.version, current.revision),
+						),
+					),
+				this.db
+					.update(forms)
+					.set({
+						title: clean.title,
+						description: clean.description ?? null,
+						accent: clean.accent,
+						confirmationMessage: clean.confirmationMessage ?? null,
+						updatedAt: now,
+					})
+					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
+				this.db.insert(formVersions).values({
+					id: crypto.randomUUID(),
+					formId: id,
+					version: nextVersion,
+					fieldsJson: JSON.stringify(clean.fields),
 					title: clean.title,
 					description: clean.description ?? null,
-					accent: clean.accent,
 					confirmationMessage: clean.confirmationMessage ?? null,
-					updatedAt: now,
-				})
-				.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
-			this.db.insert(formVersions).values({
-				id: crypto.randomUUID(),
-				formId: id,
-				version: nextVersion,
-				fieldsJson: JSON.stringify(clean.fields),
-				title: clean.title,
-				description: clean.description ?? null,
-				confirmationMessage: clean.confirmationMessage ?? null,
-				accent: clean.accent,
-				createdAt: now,
-				publishedAt: null,
-			}),
-		]);
+					accent: clean.accent,
+					createdAt: now,
+					publishedAt: null,
+				}),
+			]);
+		} catch (error) {
+			const latest = await this.get(ownerId, id);
+			if (latest && latest.revision !== current.revision)
+				throw new FormsError(
+					"REVISION_CONFLICT",
+					409,
+					JSON.stringify({ draft: latest.draft, revision: latest.revision }),
+				);
+			throw error;
+		}
 		return this.get(ownerId, id);
 	}
 
@@ -219,7 +239,10 @@ export class FormsService {
 				.replace(/^-+|-+$/g, "")
 				.slice(0, 38)
 				.replace(/-+$/g, "");
-			const idSuffix = id.replace(/[^a-z0-9]/gi, "").slice(-8).toLowerCase();
+			const idSuffix = id
+				.replace(/[^a-z0-9]/gi, "")
+				.slice(-8)
+				.toLowerCase();
 			await this.setSlug(
 				ownerId,
 				id,

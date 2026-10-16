@@ -7,6 +7,7 @@ import {
 	readFile,
 	rm,
 	symlink,
+	writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -79,8 +80,26 @@ async function routeSyntheticPublicRequest(route) {
 			astroOrigin,
 		);
 		if (!forbiddenHostnames.has(localTarget.hostname))
-			throw new Error(`Refusing non-loopback route target: ${localTarget.hostname}`);
-		await route.continue({ url: localTarget.toString() });
+			throw new Error(
+				`Refusing non-loopback route target: ${localTarget.hostname}`,
+			);
+		const requestHeaders = {
+			...route.request().headers(),
+			host: new URL(astroOrigin).host,
+		};
+		if (requestHeaders.origin === syntheticPublicOrigin)
+			requestHeaders.origin = astroOrigin;
+		if (requestHeaders.referer?.startsWith(syntheticPublicOrigin))
+			requestHeaders.referer = requestHeaders.referer.replace(
+				syntheticPublicOrigin,
+				astroOrigin,
+			);
+		const localResponse = await route.fetch({
+			url: localTarget.toString(),
+			headers: requestHeaders,
+			maxRedirects: 0,
+		});
+		await route.fulfill({ response: localResponse });
 		return;
 	}
 	if (
@@ -167,11 +186,19 @@ async function startApi() {
 		"@urlx/api/modules/forms/forms.service",
 	);
 	const serviceSource = await readFile(servicePath, "utf8");
-	if (!servicePath.replaceAll("\\", "/").includes("packages/api/src/modules/forms/forms.service.ts") || !serviceSource.includes("titleSlug"))
-		throw new Error(`Browser API bridge resolved an unexpected FormsService source: ${servicePath}`);
+	if (
+		!servicePath
+			.replaceAll("\\", "/")
+			.includes("packages/api/src/modules/forms/forms.service.ts") ||
+		!serviceSource.includes("titleSlug")
+	)
+		throw new Error(
+			`Browser API bridge resolved an unexpected FormsService source: ${servicePath}`,
+		);
 	const { createServer: createViteServer } = requireFromServer("vite");
 	viteServer = await createViteServer({
 		root,
+		cacheDir: resolve(workspace, ".cache/forms-api-vite"),
 		configFile: false,
 		server: { middlewareMode: true },
 		appType: "custom",
@@ -313,6 +340,17 @@ test.beforeAll(async () => {
 	};
 
 	await makeSanitizedWorkspace();
+	const astroConfigPath = resolve(workspace, "apps/web/astro.config.mjs");
+	const astroConfigSource = await readFile(astroConfigPath, "utf8");
+	if (!astroConfigSource.includes('allowedHosts: ["forms-e2e.test"]')) {
+		const sanitizedConfig = astroConfigSource.replace(
+			"\tvite: {\n",
+			'\tvite: {\n\t\tcacheDir: "../../.cache/forms-web-vite",\n\t\tserver: { allowedHosts: ["forms-e2e.test"] },\n',
+		);
+		if (sanitizedConfig === astroConfigSource)
+			throw new Error("Could not isolate the Astro allowed-host test setting.");
+		await writeFile(astroConfigPath, sanitizedConfig);
+	}
 	await startApi();
 	const astroEntry = requireFromWeb.resolve("astro");
 	const astroCli = resolve(dirname(astroEntry), "../bin/astro.mjs");
@@ -377,23 +415,29 @@ test.afterAll(async () => {
 			});
 		});
 	}
-	if (apiServer?.listening)
+	if (apiServer?.listening) {
+		apiServer.closeIdleConnections?.();
+		apiServer.closeAllConnections?.();
 		await new Promise((resolveClose) => apiServer.close(resolveClose));
+	}
 	await mf?.dispose();
 	await viteServer?.close();
 	if (originalFetch) globalThis.fetch = originalFetch;
 	if (workspace) await rm(dirname(workspace), { recursive: true, force: true });
 });
 
-test("magic-link auth, editor keyboard flow, draft save, publish, response and public no-JS flow", async ({}, testInfo) => {
+test("magic-link auth, editor keyboard flow, draft save, publish, response and public no-JS flow", async ({
+	browserName,
+}, testInfo) => {
+	expect(browserName).toBe("chromium");
 	const context = await browser.newContext({
 		viewport: { width: 1440, height: 1100 },
 		acceptDownloads: true,
 	});
+	let mappedSyntheticRequests = 0;
 	context.on("request", (request) => {
-		if (new URL(request.url()).hostname === "forms-e2e.test") {
-			console.log(`Synthetic public request observed: ${request.url()}`);
-		}
+		if (new URL(request.url()).hostname === "forms-e2e.test")
+			mappedSyntheticRequests++;
 	});
 	await routeSyntheticPublicOrigin(context);
 	const page = await context.newPage();
@@ -402,10 +446,14 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await cdp.send("Network.enable");
 	cdp.on("Network.webSocketFrameReceived", (event) => {
 		const payload = event.response.payloadData;
-		try { if (JSON.parse(payload).type === "full-reload") viteFullReloads++; } catch {}
+		try {
+			if (JSON.parse(payload).type === "full-reload") viteFullReloads++;
+		} catch {}
 	});
 	const artifacts = resolve(here, "artifacts");
+	const screenshots = resolve(here, "screenshots");
 	await mkdir(artifacts, { recursive: true });
+	await mkdir(screenshots, { recursive: true });
 	await page.goto(`${astroOrigin}/forms`);
 	await expect(
 		page.getByRole("heading", { name: "Sign in to manage your forms" }),
@@ -430,7 +478,10 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		),
 	).toBe(true);
 	await page.goto(`${astroOrigin}/forms/e2e-dependency-warmup`);
-	await expect(page.locator(".forms-app")).toHaveAttribute("data-ready", "true");
+	await expect(page.locator(".forms-app")).toHaveAttribute(
+		"data-ready",
+		"true",
+	);
 	await page.waitForTimeout(1_500);
 	const warmedReloadCount = viteFullReloads;
 	await page.waitForTimeout(1_000);
@@ -439,46 +490,76 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.getByRole("button", { name: "Registration" }).click();
 	await expect(page).toHaveURL(/\/forms\/[^/]+$/);
 	await expect(page.getByLabel("Form title")).toBeVisible();
-	await expect(page.locator(".forms-app")).toHaveAttribute("data-ready", "true");
+	await expect(page.locator(".forms-app")).toHaveAttribute(
+		"data-ready",
+		"true",
+	);
 	const formId = new URL(page.url()).pathname.split("/").at(-1);
 	const editedTitle = `E2E registration ${runId}`;
 	const reloadCountBeforeEdit = viteFullReloads;
 	await page.waitForTimeout(650);
 	expect(viteFullReloads).toBe(reloadCountBeforeEdit);
-	const firstDraftPut = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/draft"), { timeout: 8_000 }).catch(() => null);
+	const firstDraftPut = page
+		.waitForResponse(
+			(response) =>
+				response.request().method() === "PUT" &&
+				response.url().includes("/draft"),
+			{ timeout: 8_000 },
+		)
+		.catch(() => null);
 	await page.getByLabel("Form title").fill(editedTitle);
 	await page
 		.getByLabel("Form description")
 		.fill("A browser-created form from an isolated local D1 database.");
 	const firstSave = await firstDraftPut;
-	expect(firstSave, "Editor should autosave title and description before structural edits").toBeTruthy();
+	expect(
+		firstSave,
+		"Editor should autosave title and description before structural edits",
+	).toBeTruthy();
 	expect(firstSave.status()).toBe(200);
-	const firstPersisted = await page.request.get(`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`);
+	const firstPersisted = await page.request.get(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+	);
 	expect((await firstPersisted.json()).draft?.title).toBe(editedTitle);
 	const question = page.locator(".q-label").first();
 	const startingQuestionCount = await page.locator(".f-question").count();
 	expect(startingQuestionCount).toBeGreaterThan(0);
-	const structuralSave = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/draft"), { timeout: 8_000 }).catch(() => null);
+	const structuralSave = page
+		.waitForResponse(
+			(response) =>
+				response.request().method() === "PUT" &&
+				response.url().includes("/draft"),
+			{ timeout: 8_000 },
+		)
+		.catch(() => null);
 	await question.focus();
 	await page.keyboard.press("Control+d");
-	await expect(page.locator(".f-question")).toHaveCount(startingQuestionCount + 1);
+	await expect(page.locator(".f-question")).toHaveCount(
+		startingQuestionCount + 1,
+	);
 	await expect(page.getByLabel("Form title")).toHaveValue(editedTitle);
 	await page.keyboard.press("Control+z");
 	await expect(page.locator(".f-question")).toHaveCount(startingQuestionCount);
 	await expect(page.getByLabel("Form title")).toHaveValue(editedTitle);
 	const structuralSaved = await structuralSave;
-	expect(structuralSaved, "Undo should autosave the restored draft").toBeTruthy();
+	expect(
+		structuralSaved,
+		"Undo should autosave the restored draft",
+	).toBeTruthy();
 	expect(structuralSaved.status()).toBe(200);
 	await expect
-		.poll(async () => {
-			const result = await page.request.get(
-				`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
-			);
-			return (await result.json()).draft?.title;
-		}, { timeout: 20_000 })
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
 		.toBe(editedTitle);
 	await page.screenshot({
-		path: resolve(artifacts, "forms-editor-desktop.png"),
+		path: resolve(screenshots, "forms-editor-desktop.png"),
 		fullPage: true,
 	});
 
@@ -487,21 +568,49 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.getByRole("button", { name: "Phone", exact: true }).click();
 	await expect(page.locator("#preview-content")).toHaveClass(/phone/);
 	await page.getByRole("button", { name: "Close preview" }).click();
-	const publishResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith(`/api/forms/${encodeURIComponent(formId)}/publish`), { timeout: 10_000 });
+	const publishResponsePromise = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			response
+				.url()
+				.endsWith(`/api/forms/${encodeURIComponent(formId)}/publish`),
+		{ timeout: 10_000 },
+	);
 	await page.getByRole("button", { name: "Publish" }).click();
 	const publishResponse = await publishResponsePromise;
 	const publishBody = await publishResponse.text();
-	expect(publishResponse.status(), `Publish response body: ${publishBody}`).toBe(200);
+	expect(
+		publishResponse.status(),
+		`Publish response body: ${publishBody}`,
+	).toBe(200);
+	const firstPublish = JSON.parse(publishBody);
+	const firstPublishedVersionId = firstPublish.version;
+	const firstPublishedVersion = await d1
+		.prepare(
+			"SELECT id, version FROM form_versions WHERE form_id = ? AND published_at IS NOT NULL ORDER BY version DESC LIMIT 1",
+		)
+		.bind(formId)
+		.first();
+	expect(firstPublishedVersion.id).toBe(firstPublishedVersionId);
+	const firstPublishedVersionNumber = firstPublishedVersion.version;
+	const versionsBeforeRepublish = await d1
+		.prepare("SELECT count(*) AS count FROM form_versions WHERE form_id = ?")
+		.bind(formId)
+		.first("count");
 	await expect(page.getByLabel("Form link slug")).toBeVisible();
 	const slugInput = page.getByLabel("Form link slug");
 	const slug = `browser-${runId}`.replaceAll(/[^a-z0-9-]/g, "");
 	await slugInput.fill(slug);
-	const slugSaveResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith(`/api/forms/${encodeURIComponent(formId)}/slug`));
+	const slugSaveResponsePromise = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			response.url().endsWith(`/api/forms/${encodeURIComponent(formId)}/slug`),
+	);
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 	const slugSaveResponse = await slugSaveResponsePromise;
-	console.log("Slug save diagnostics", slugSaveResponse.status(), await slugSaveResponse.text());
-	const slugOwnerRead = await page.request.get(`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`);
-	console.log("Slug owner GET", slugOwnerRead.status(), await slugOwnerRead.text());
+	const slugSaveBody = await slugSaveResponse.json();
+	expect(slugSaveResponse.status()).toBe(200);
+	expect(slugSaveBody.form.slug).toBe(slug);
 	await expect(page.getByText("Published", { exact: true })).toBeVisible();
 	await expect(page.getByText("Short link:")).toBeVisible();
 	const publicUrl = await page.locator("#share-url").inputValue();
@@ -523,28 +632,34 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	expect(shortUrl).toBeTruthy();
 	expect(new URL(shortUrl).origin).toBe(syntheticPublicOrigin);
 	const shortPage = await context.newPage();
-	await shortPage.route("**/*", routeSyntheticPublicRequest);
-	shortPage.on("response", async (response) => {
-		if (/\/(?:u|f)\//.test(new URL(response.url()).pathname)) {
-			let body = "";
-			if (response.status() < 300 || response.status() >= 400)
-				body = (await response.text().catch(() => "")).slice(0, 500);
-			console.log("Short/public response", response.status(), response.url(), response.headers().location ?? "", body);
-		}
-	});
-	await shortPage.goto(shortUrl);
+	const shortRedirectPromise = shortPage.waitForResponse((response) =>
+		new URL(response.url()).pathname.startsWith("/u/"),
+	);
+	const shortFinalResponse = await shortPage.goto(shortUrl);
+	const shortRedirect = await shortRedirectPromise;
+	const oldSlug = decodeURIComponent(
+		new URL(shortRedirect.headers().location).pathname.split("/").at(-1),
+	);
+	const oldSlugApiResponse = await page.request.get(
+		`${astroOrigin}/api/forms/public/${encodeURIComponent(oldSlug)}`,
+	);
+	const oldSlugPublic = await oldSlugApiResponse.json();
+	expect(shortRedirect.status()).toBe(302);
+	expect(oldSlugPublic.form.canonicalSlug).toBe(slug);
+	expect(shortFinalResponse?.status()).toBe(200);
+	expect(mappedSyntheticRequests).toBeGreaterThan(0);
 	await expect(shortPage).toHaveURL(new RegExp(`/f/${slug}$`));
 	await expect(
 		shortPage.getByRole("heading", { name: `E2E registration ${runId}` }),
 	).toBeVisible();
 
 	await page.setViewportSize({ width: 390, height: 844 });
-	await page.getByRole("button", { name: "Responses" }).click();
+	await page.getByRole("tab", { name: /Responses/ }).click();
 	await expect(
 		page.getByRole("heading", { name: "No responses yet" }),
 	).toBeVisible();
 	await page.screenshot({
-		path: resolve(artifacts, "forms-responses-mobile.png"),
+		path: resolve(screenshots, "forms-responses-mobile.png"),
 		fullPage: true,
 	});
 	const mobileEditor = await context.newPage();
@@ -552,7 +667,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await mobileEditor.goto(page.url());
 	await expect(mobileEditor.locator(".f-editor-grid")).toBeVisible();
 	await mobileEditor.screenshot({
-		path: resolve(artifacts, "forms-editor-mobile.png"),
+		path: resolve(screenshots, "forms-editor-mobile.png"),
 		fullPage: true,
 	});
 
@@ -562,33 +677,46 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	});
 	await routeSyntheticPublicOrigin(publicContext);
 	const publicPage = await publicContext.newPage();
-	await publicPage.goto(publicUrl);
+	await publicPage.goto(publicUrl, { timeout: 15_000 });
 	await expect(
 		publicPage.getByRole("heading", { name: `E2E registration ${runId}` }),
 	).toBeVisible();
 	await expect(publicPage.getByLabel("Full name")).toBeVisible();
-	await publicPage.getByLabel("Full name").fill("Synthetic Respondent");
-	await publicPage.getByLabel("Email").fill("respondent@example.invalid");
-	await publicPage.getByRole("radio", { name: "Morning" }).check();
-	await publicPage.getByRole("button", { name: "Submit" }).click();
+	await publicPage
+		.getByLabel("Full name")
+		.fill("Synthetic Respondent", { timeout: 10_000 });
+	await publicPage
+		.getByLabel("Email")
+		.fill("respondent@example.invalid", { timeout: 10_000 });
+	await publicPage
+		.getByRole("button", { name: "Submit" })
+		.click({ timeout: 15_000 });
 	await expect(
 		publicPage.getByRole("heading", { name: "Thank you" }),
 	).toBeVisible();
 	await publicPage.screenshot({
-		path: resolve(artifacts, "forms-public-response-mobile.png"),
+		path: resolve(screenshots, "forms-public-response-mobile.png"),
 		fullPage: true,
 	});
+	const submittedVersionId = await d1
+		.prepare("SELECT version_id FROM form_responses WHERE form_id = ?")
+		.bind(formId)
+		.first("version_id");
+	expect(submittedVersionId).toBe(firstPublishedVersionId);
 
-	await page.getByRole("button", { name: "Build" }).click();
+	await page.getByRole("tab", { name: "Build" }).click();
 	await page.locator(".q-label").first().fill("Name for registration");
 	await expect
-		.poll(async () => {
-			const response = await page.evaluate(async (id) => {
-				const result = await fetch(`/api/forms/${encodeURIComponent(id)}`);
-				return result.json();
-			}, formId);
-			return response.draft?.fields?.[0]?.label;
-		}, { timeout: 20_000 })
+		.poll(
+			async () => {
+				const response = await page.evaluate(async (id) => {
+					const result = await fetch(`/api/forms/${encodeURIComponent(id)}`);
+					return result.json();
+				}, formId);
+				return response.draft?.fields?.[0]?.label;
+			},
+			{ timeout: 20_000 },
+		)
 		.toBe("Name for registration");
 	await page.getByRole("button", { name: "Publish" }).click();
 	await expect(page.getByLabel("Form link slug")).toBeVisible();
@@ -600,19 +728,31 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	expect(versionResult.publishedVersion.fields[0].label).toBe(
 		"Name for registration",
 	);
+	expect(versionResult.publishedVersion.id).not.toBe(firstPublishedVersionId);
 	const versionCount = await d1
 		.prepare("SELECT count(*) AS count FROM form_versions WHERE form_id = ?")
 		.bind(formId)
 		.first("count");
-	expect(Number(versionCount)).toBe(2);
+	expect(Number(versionCount)).toBe(Number(versionsBeforeRepublish) + 1);
 
-	await page.getByRole("button", { name: "Responses" }).click();
+	await page.getByRole("tab", { name: /Responses/ }).click();
 	await expect(
 		page.getByRole("cell", { name: "Synthetic Respondent" }),
 	).toBeVisible();
-	await expect(page.getByText(/Version 1 · 1 response/)).toBeVisible();
+	await expect(
+		page.getByText(
+			new RegExp(`Version ${firstPublishedVersionNumber} · 1 response`),
+		),
+	).toBeVisible();
+	const exportDownloadPromise = page.waitForEvent("download");
+	await page.getByRole("button", { name: "Export CSV" }).click();
+	const exportDownload = await exportDownloadPromise;
+	const exportPath = resolve(artifacts, "forms-responses.csv");
+	await exportDownload.saveAs(exportPath);
+	const exportCsv = await readFile(exportPath, "utf8");
+	expect(exportCsv).toContain("Synthetic Respondent");
 	await page.screenshot({
-		path: resolve(artifacts, "forms-responses-with-data.png"),
+		path: resolve(screenshots, "forms-responses-with-data.png"),
 		fullPage: true,
 	});
 	await publicContext.close();
