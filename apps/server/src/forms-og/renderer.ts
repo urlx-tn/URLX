@@ -1,6 +1,5 @@
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
-import satori from "satori";
 
 import { interLatinBase64 } from "./font-data";
 
@@ -26,41 +25,109 @@ export type OgField = {
 	type?: string;
 };
 
-type OgNode = {
-	type: string;
-	props: {
-		style: Record<string, string | number>;
-		children: Array<OgNode | string>;
-	};
-};
-
-function box(
-	style: Record<string, string | number>,
-	children: Array<OgNode | string> = [],
-): OgNode {
-	return {
-		type: "div",
-		props: { style: { display: "flex", ...style }, children },
-	};
-}
-
-
-function label(text: string, style: Record<string, string | number> = {}) {
-	return box(style, [text]);
-}
-
 let wasmReady: Promise<void> | undefined;
-void satori(box({ width: 1, height: 1 }), {
-	width: 1,
-	height: 1,
-	fonts: [],
-}).catch((error: unknown) => console.error("Satori warmup failed", error));
 
 function fontBytes() {
 	const decoded = atob(interLatinBase64);
 	const bytes = new Uint8Array(decoded.length);
 	for (let i = 0; i < decoded.length; i += 1) bytes[i] = decoded.charCodeAt(i);
 	return bytes;
+}
+
+function escapeXml(text: string) {
+	return text.replace(/[&<>"']/g, (char) => {
+		switch (char) {
+			case "&":
+				return "&amp;";
+			case "<":
+				return "&lt;";
+			case ">":
+				return "&gt;";
+			case '"':
+				return "&quot;";
+			default:
+				return "&apos;";
+		}
+	});
+}
+
+function wrapText(text: string, maxChars: number, maxLines: number): string[] {
+	const words = text.trim().split(/\s+/u).filter(Boolean);
+	const lines: string[] = [];
+	let line = "";
+	for (const originalWord of words) {
+		let word = Array.from(originalWord);
+		while (word.length > maxChars) {
+			if (line) {
+				lines.push(line);
+				line = "";
+			}
+			lines.push(word.slice(0, maxChars).join(""));
+			word = word.slice(maxChars);
+			if (lines.length >= maxLines) break;
+		}
+		if (lines.length >= maxLines) break;
+		const piece = word.join("");
+		if (line && Array.from(`${line} ${piece}`).length > maxChars) {
+			lines.push(line);
+			line = piece;
+		} else {
+			line = line ? `${line} ${piece}` : piece;
+		}
+	}
+	if (lines.length < maxLines && line) lines.push(line);
+	if (lines.length === maxLines) {
+		const consumed = lines.join(" ").length < text.trim().length;
+		const lastLine = lines[maxLines - 1];
+		if (consumed && lastLine !== undefined)
+			lines[maxLines - 1] = `${Array.from(lastLine)
+				.slice(0, maxChars - 1)
+				.join("")}…`;
+	}
+	return lines;
+}
+
+function svgTextLines(
+	lines: string[],
+	x: number,
+	y: number,
+	lineHeight: number,
+) {
+	return lines
+		.map(
+			(line, index) =>
+				`<tspan x="${x}" y="${y + index * lineHeight}">${escapeXml(line)}</tspan>`,
+		)
+		.join("");
+}
+
+export async function buildFormOgSvg(form: OgForm, fields: OgField[]) {
+	const accent = accents[form.accent ?? ""] ?? "#0071e3";
+	const title = wrapText(form.title.trim() || "Untitled form", 22, 3);
+	const description = wrapText((form.description ?? "").trim(), 42, 2);
+	const titleMarkup = svgTextLines(title, 68, 310, 62);
+	const descriptionY = Math.min(468, 310 + title.length * 62 + 34);
+	const descriptionMarkup = svgTextLines(description, 68, descriptionY, 32);
+	const previewFields = fields.slice(0, 3);
+	const visibleFields = previewFields.length
+		? previewFields
+		: [{ label: "Your first question" }];
+	const fieldRows = visibleFields
+		.map((field, index) => {
+			const y = 152 + index * 101;
+			const fieldLabel = Array.from(
+				field.label?.trim() || `Question ${index + 1}`,
+			)
+				.slice(0, 56)
+				.join("");
+			return `<rect x="662" y="${y}" width="440" height="87" rx="16" fill="#fff" stroke="#e5eaf1"/><text x="685" y="${y + 36}" font-family="Inter" font-size="18" font-weight="600" fill="#1d2939">${escapeXml(fieldLabel)}</text><rect x="685" y="${y + 53}" width="330" height="13" rx="7" fill="#f1f4f8"/>`;
+		})
+		.join("");
+	const extraFieldCount = Math.max(0, fields.length - previewFields.length);
+	const extraLabel = extraFieldCount
+		? `<text x="662" y="${152 + visibleFields.length * 101 + 10}" font-family="Inter" font-size="15" fill="#667085">+ ${extraFieldCount} more ${extraFieldCount === 1 ? "question" : "questions"}</text>`
+		: "";
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}"><rect width="1200" height="630" fill="#f4f7fb"/><rect x="68" y="58" width="44" height="44" rx="13" fill="${accent}"/><text x="82" y="88" font-family="Inter" font-size="22" font-weight="700" fill="#fff">F</text><text x="125" y="88" font-family="Inter" font-size="22" font-weight="700" fill="#101828">URLX Forms</text><text x="68" y="246" font-family="Inter" font-size="16" font-weight="700" letter-spacing="1.6" fill="${accent}">A FORM TO FILL OUT</text><text font-family="Inter" font-size="57" font-weight="700" fill="#101828">${titleMarkup}</text>${description.length ? `<text font-family="Inter" font-size="22" fill="#667085">${descriptionMarkup}</text>` : ""}<rect x="632" y="83" width="500" height="466" rx="27" fill="#fff" stroke="#e4eaf2"/><circle cx="665" cy="120" r="4" fill="${accent}"/><text x="680" y="125" font-family="Inter" font-size="13" font-weight="700" letter-spacing="1" fill="#667085">FORM PREVIEW</text>${fieldRows}${extraLabel}<rect x="662" y="472" width="110" height="42" rx="12" fill="${accent}"/><text x="692" y="499" font-family="Inter" font-size="16" font-weight="700" fill="#fff">Submit</text><circle cx="72" cy="563" r="4" fill="${accent}"/><text x="87" y="569" font-family="Inter" font-size="16" fill="#667085">Simple, thoughtful forms by URLX</text></svg>`;
 }
 
 function initializeWasm() {
@@ -71,240 +138,19 @@ function initializeWasm() {
 	return wasmReady;
 }
 
-export async function buildFormOgSvg(form: OgForm, fields: OgField[]) {
-	const font = fontBytes();
-	const accent = accents[form.accent ?? ""] ?? accents.blue!;
-	const title = form.title.trim().slice(0, 140) || "Untitled form";
-	const description = (form.description ?? "").trim().slice(0, 180);
-	const previewFields = fields.slice(0, 3);
-	const extraFieldCount = Math.max(0, fields.length - previewFields.length);
-	const fieldRows = previewFields.map((field, index) => {
-		const fieldLabel = field.label?.trim() || `Question ${index + 1}`;
-		return box(
-			{
-				flexDirection: "column",
-				gap: 10,
-				padding: "20px 22px",
-				border: "1px solid #e5eaf1",
-				borderRadius: 16,
-				backgroundColor: "#ffffff",
-				marginBottom: 14,
-			},
-			[
-				label(fieldLabel, { fontSize: 18, fontWeight: 600, color: "#1d2939" }),
-				box({
-					height: 13,
-					width: index === 1 ? "72%" : "86%",
-					borderRadius: 8,
-					backgroundColor: "#f1f4f8",
-				}),
-			],
-		);
-	});
-	const previewHeader = box(
-		{ alignItems: "center", gap: 9, marginBottom: 24 },
-		[
-			box({
-				width: 8,
-				height: 8,
-				borderRadius: "100%",
-				backgroundColor: accent,
-			}),
-			label("FORM PREVIEW", {
-				fontSize: 13,
-				fontWeight: 700,
-				letterSpacing: 1.2,
-				color: "#667085",
-			}),
-		],
-	);
-	const previewCard = box(
-		{
-			flexDirection: "column",
-			width: "100%",
-			maxHeight: 510,
-			backgroundColor: "#ffffff",
-			border: "1px solid #e4eaf2",
-			borderRadius: 27,
-			padding: 29,
-			boxSizing: "border-box",
-			boxShadow: "0px 18px 50px rgba(16,24,40,0.10)",
-			overflow: "hidden",
-		},
-		[
-			previewHeader,
-			...(fieldRows.length
-				? fieldRows
-				: [
-						box(
-							{
-								flexDirection: "column",
-								gap: 10,
-								padding: "20px 22px",
-								border: "1px solid #e5eaf1",
-								borderRadius: 16,
-								backgroundColor: "#ffffff",
-								marginBottom: 14,
-							},
-							[
-								label("Your first question", {
-									fontSize: 18,
-									fontWeight: 600,
-									color: "#1d2939",
-								}),
-								box({
-									height: 13,
-									width: "86%",
-									borderRadius: 8,
-									backgroundColor: "#f1f4f8",
-								}),
-							],
-						),
-					]),
-			...(extraFieldCount
-				? [
-						label(
-							`+ ${extraFieldCount} more ${extraFieldCount === 1 ? "question" : "questions"}`,
-							{ fontSize: 15, color: "#667085", marginTop: 3 },
-						),
-					]
-				: []),
-			label("Submit", {
-				alignItems: "center",
-				justifyContent: "center",
-				alignSelf: "flex-start",
-				minWidth: 110,
-				height: 42,
-				padding: "0 20px",
-				marginTop: 22,
-				borderRadius: 12,
-				backgroundColor: accent,
-				color: "#ffffff",
-				fontSize: 16,
-				fontWeight: 700,
-			}),
-		],
-	);
-	const brand = box({ alignItems: "center", gap: 13 }, [
-		label("F", {
-			alignItems: "center",
-			justifyContent: "center",
-			width: 44,
-			height: 44,
-			borderRadius: 13,
-			backgroundColor: accent,
-			color: "#ffffff",
-			fontSize: 22,
-			fontWeight: 700,
-		}),
-		label("URLX Forms", {
-			fontSize: 22,
-			fontWeight: 700,
-			letterSpacing: -0.4,
-			color: "#101828",
-		}),
-	]);
-	const titleGroup = box({ flexDirection: "column", gap: 20, marginTop: 20 }, [
-		label("A FORM TO FILL OUT", {
-			color: accent,
-			fontSize: 16,
-			fontWeight: 700,
-			letterSpacing: 1.6,
-		}),
-		label(title, {
-			fontSize: 57,
-			lineHeight: 1.08,
-			fontWeight: 700,
-			letterSpacing: -2,
-			color: "#101828",
-			maxHeight: 250,
-			overflow: "hidden",
-		}),
-		...(description
-			? [
-					label(description, {
-						fontSize: 22,
-						lineHeight: 1.45,
-						color: "#667085",
-						maxHeight: 96,
-						overflow: "hidden",
-					}),
-				]
-			: []),
-	]);
-	const footer = box(
-		{ alignItems: "center", gap: 11, color: "#667085", fontSize: 16 },
-		[
-			box({
-				width: 8,
-				height: 8,
-				borderRadius: "100%",
-				backgroundColor: accent,
-			}),
-			label("Simple, thoughtful forms by URLX", {
-				color: "#667085",
-				fontSize: 16,
-			}),
-		],
-	);
-	const tree = box(
-		{
-			width: WIDTH,
-			height: HEIGHT,
-			position: "relative",
-			overflow: "hidden",
-			backgroundColor: "#f4f7fb",
-			fontFamily: "Inter",
-			color: "#101828",
-			padding: "58px 68px",
-			boxSizing: "border-box",
-		},
-		[
-			box(
-				{
-					flexDirection: "column",
-					justifyContent: "space-between",
-					width: "53%",
-					paddingRight: 58,
-				},
-				[brand, titleGroup, footer],
-			),
-			box(
-				{
-					alignItems: "center",
-					justifyContent: "center",
-					width: "47%",
-					position: "relative",
-				},
-				[previewCard],
-			),
-		],
-	);
-	const svg = await satori(tree, {
-		width: WIDTH,
-		height: HEIGHT,
-		fonts: [
-			{ name: "Inter", data: font, weight: 400 },
-			{ name: "Inter", data: font, weight: 700 },
-		],
-	});
-	return svg;
-}
-
 export async function renderFormOg(form: OgForm, fields: OgField[]) {
 	await initializeWasm();
 	const svg = await buildFormOgSvg(form, fields);
-	const font = fontBytes();
 	const renderer = new Resvg(svg, {
 		fitTo: { mode: "width", value: WIDTH },
 		font: {
-			fontBuffers: [font],
+			fontBuffers: [fontBytes()],
 			defaultFontFamily: "Inter",
 			loadSystemFonts: false,
 		},
 	});
 	try {
-  return renderer.render().asPng();
+		return renderer.render().asPng();
 	} finally {
 		renderer.free();
 	}

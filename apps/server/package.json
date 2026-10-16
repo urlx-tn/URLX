@@ -18,7 +18,6 @@
 		"@urlx/env": "workspace:*",
 		"dotenv": "catalog:",
 		"hono": "catalog:",
-		"satori": "0.18.3",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
@@ -26,10 +25,10 @@
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
+		"miniflare": "4.20260424.0",
 		"tsdown": "^0.22.3",
 		"typescript": "catalog:",
-		"wrangler": "^4.127.1",
-		"miniflare": "4.20260424.0",
-		"vitest": "^4.1.11"
+		"vitest": "^4.1.11",
+		"wrangler": "^4.127.1"
 	}
 }
