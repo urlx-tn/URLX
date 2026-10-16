@@ -80,7 +80,7 @@ export const formTemplates: FormTemplate[] = [
 			title: "How was your experience?",
 			description: "A few quick questions to help us improve.",
 			accent: "orange",
-			confirmationMessage: "Thank you for your feedback.",
+			confirmationMessage: "Your feedback helps us get better.",
 			fields: [
 				{
 					id: "rating",
@@ -148,7 +148,7 @@ export const formTemplates: FormTemplate[] = [
 			title: "How did we do?",
 			description: "Two minutes of your time helps us serve you better.",
 			accent: "green",
-			confirmationMessage: "Thank you. We read every answer.",
+			confirmationMessage: "We read every answer and use it to improve.",
 			fields: [
 				{
 					id: "satisfaction",
@@ -336,7 +336,7 @@ export const formTemplates: FormTemplate[] = [
 			title: "Untitled form",
 			description: "",
 			accent: "blue",
-			confirmationMessage: "Thank you for your response.",
+			confirmationMessage: "Your response has been recorded.",
 			fields: [],
 		},
 	},

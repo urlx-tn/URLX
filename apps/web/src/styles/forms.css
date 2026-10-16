@@ -46,6 +46,16 @@
 	outline: 2px solid var(--fa);
 	outline-offset: 2px;
 }
+/* Inside a form (public page and previews) focus follows the form's accent;
+   text fields already draw their own accent ring, so they skip the outline. */
+.f-public-card :focus-visible {
+	outline-color: var(--form-accent, var(--fa));
+}
+.f-input:focus-visible,
+.f-textarea:focus-visible,
+.f-select:focus-visible {
+	outline: none;
+}
 .forms-app h1,
 .forms-app h2,
 .forms-app h3 {

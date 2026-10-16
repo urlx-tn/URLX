@@ -52,7 +52,7 @@ const description = versionData?.description || form?.description || "";
 const confirmationMessage =
 	form?.confirmationMessage ||
 	versionData?.confirmationMessage ||
-	"Thank you for your response.";
+	"Your response has been recorded.";
 const submitted = Astro.url.searchParams.get("submitted") === "1";
 // Only allowlisted accent ids reach the page; `theme` is a light/dark mode, not a colour.
 const accentValue =

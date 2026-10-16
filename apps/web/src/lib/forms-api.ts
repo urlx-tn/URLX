@@ -91,7 +91,7 @@ export function normalizeDraft(
 		confirmationMessage:
 			typeof draft.confirmationMessage === "string"
 				? draft.confirmationMessage
-				: "Thank you for your response.",
+				: "Your response has been recorded.",
 		fields: fields.map((value, index) => {
 			const field = (value && typeof value === "object" ? value : {}) as Record<
 				string,
