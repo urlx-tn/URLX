@@ -487,7 +487,11 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.waitForTimeout(1_000);
 	expect(viteFullReloads).toBe(warmedReloadCount);
 	await page.goto(`${astroOrigin}/tools/forms`);
-	await page.getByRole("button", { name: "Registration" }).click();
+	await expect(
+		page.getByRole("list", { name: "Questions in Registration" }),
+		"Template cards list their real questions",
+	).toContainText("Which session?");
+	await page.getByRole("button", { name: "Use Registration template" }).click();
 	await expect(page).toHaveURL(/\/forms\/[^/]+$/);
 	await expect(page.getByLabel("Form title")).toBeVisible();
 	await expect(page.locator(".forms-app")).toHaveAttribute(
@@ -737,12 +741,17 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 
 	await page.getByRole("tab", { name: /Responses/ }).click();
 	await expect(
+		page.getByRole("heading", { name: "Name for registration" }),
+		"Summary view lists each question under its latest label",
+	).toBeVisible();
+	await page.getByRole("button", { name: "Table" }).click();
+	await expect(
 		page.getByRole("cell", { name: "Synthetic Respondent" }),
 	).toBeVisible();
 	await expect(
-		page.getByText(
-			new RegExp(`Version ${firstPublishedVersionNumber} · 1 response`),
-		),
+		page.locator(".f-version-chip", {
+			hasText: `v${firstPublishedVersionNumber}`,
+		}),
 	).toBeVisible();
 	const exportDownloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export CSV" }).click();

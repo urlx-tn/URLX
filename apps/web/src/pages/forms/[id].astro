@@ -4,6 +4,7 @@ import Layout from "../../layouts/Layout.astro";
 import "../../styles/forms.css";
 import { env } from "cloudflare:workers";
 import { formsReady } from "../../lib/forms-ready";
+import { formsIcon } from "../../lib/forms-ui";
 
 const { id } = Astro.params;
 const formsEnabled = formsReady(
@@ -11,53 +12,57 @@ const formsEnabled = formsReady(
 );
 const title = "Edit form | URLX Forms";
 ---
-<Layout title={title} description="Edit, publish and manage your URLX form." canonicalPath={`/forms/${id}`} chrome={false}>
+<Layout title={title} description="Edit, publish and manage your URLX form." canonicalPath={`/forms/${id}`} chrome={false} clientRouter={false}>
 	<div class="forms-app" data-form-id={id} data-enabled={String(formsEnabled)} inert={formsEnabled} aria-busy={formsEnabled ? "true" : undefined}>
 		<FormsHeader />
 		{!formsEnabled && <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main>}
 		{formsEnabled && <>
 		<main class="forms-main wide">
 			<div class="f-toolbar">
-				<a class="f-icon-btn" href="/forms" aria-label="Back to my forms">←</a>
-				<span class="f-toolbar-title" id="form-title-label">Loading form…</span>
-				<span id="form-save-state" class="f-muted" style="font-size:13px" aria-live="polite"></span>
-				<div class="f-tabs" role="tablist" aria-label="Form sections">
-					<button type="button" data-tab="build" role="tab" aria-selected="true">Build</button>
-					<button type="button" data-tab="share" role="tab" aria-selected="false">Share</button>
-					<button type="button" data-tab="responses" role="tab" aria-selected="false">Responses <span id="response-count">0</span></button>
+				<a class="f-icon-btn" href="/forms" aria-label="Back to my forms" set:html={formsIcon("back", 18)} />
+				<div class="f-toolbar-heading">
+					<span class="f-toolbar-title" id="form-title-label">Loading form…</span>
+					<span id="form-save-state" class="f-save-state" aria-live="polite"></span>
 				</div>
-				<div class="f-toolbar-actions"><button class="f-icon-btn" type="button" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button class="f-icon-btn" type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button><button class="f-btn secondary small" type="button" data-action="preview">Preview</button><button class="f-btn small" type="button" data-action="publish">Publish</button></div>
+				<div class="f-tabs" role="tablist" aria-label="Form sections">
+					<button type="button" data-tab="build" role="tab" aria-selected="true"><Fragment set:html={formsIcon("forms", 16)} />Build</button>
+					<button type="button" data-tab="share" role="tab" aria-selected="false"><Fragment set:html={formsIcon("link", 16)} />Share</button>
+					<button type="button" data-tab="responses" role="tab" aria-selected="false"><Fragment set:html={formsIcon("inbox", 16)} />Responses <span id="response-count" class="f-count">0</span></button>
+				</div>
+				<div class="f-toolbar-actions"><span class="f-history"><button class="f-icon-btn" type="button" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo" set:html={formsIcon("undo", 17)} /><button class="f-icon-btn" type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" set:html={formsIcon("redo", 17)} /></span><button class="f-btn secondary small" type="button" data-action="preview"><Fragment set:html={formsIcon("eye", 16)} />Preview</button><button class="f-btn small" type="button" data-action="publish"><Fragment set:html={formsIcon("send", 15)} />Publish</button></div>
 			</div>
 			<div id="editor-alert" class="f-notice" hidden></div>
 			<section data-panel="build" role="tabpanel">
 				<div class="f-editor-grid">
-					<div class="f-canvas"><div class="f-paper" id="form-paper"><div class="f-band"></div><div class="f-paper-head"><input id="draft-title" value="" aria-label="Form title" placeholder="Untitled form"><textarea id="draft-description" aria-label="Form description" placeholder="Add a description (optional)"></textarea></div><div id="question-list"></div></div></div>
+					<div class="f-canvas"><div class="f-paper" id="form-paper"><div class="f-band"></div><div class="f-paper-head"><input id="draft-title" value="" aria-label="Form title" placeholder="Untitled form"><textarea id="draft-description" aria-label="Form description" placeholder="Add a description (optional)" rows="2"></textarea></div><div id="question-list"></div><div class="f-paper-foot" id="paper-add"></div></div></div>
 					<aside class="f-sidebar" aria-label="Form editor controls">
-						<section class="f-card"><h3>Add a question</h3><div class="f-types" id="field-types"></div></section>
-						<section class="f-card f-settings"><h3>Form appearance</h3><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted" style="font-size:12px;margin:8px 0 0">Changes save automatically.</p></section>
-						<section class="f-card"><h3>Keyboard shortcuts</h3><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd> <kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd> <kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></span></div></section>
+						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("plus", 15)} />Add a question</h3><div class="f-types" id="field-types"></div></section>
+						<section class="f-card f-settings"><h3><span class="f-h-icon" set:html={formsIcon("palette", 15)} />Appearance</h3><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted f-fine">Changes save automatically.</p></section>
+						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("keyboard", 15)} />Shortcuts</h3><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd><kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd><kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd><kbd>↑</kbd><kbd>↓</kbd></span></div><div class="f-keyline"><span>New question below</span><span><kbd>Enter</kbd></span></div></section>
 					</aside>
 				</div>
 			</section>
 			<section data-panel="share" role="tabpanel" hidden id="share-panel"></section>
 			<section data-panel="responses" role="tabpanel" hidden id="responses-panel"></section>
 		</main>
-		<dialog id="preview-dialog" style="width:min(850px,calc(100% - 24px));max-height:90vh;border:0;border-radius:18px;padding:0;box-shadow:0 20px 70px #0004"><div class="f-preview-tools"><span>Preview</span><div class="f-tabs"><button type="button" data-action="preview-device" data-device="desktop" aria-pressed="true">Desktop</button><button type="button" data-action="preview-device" data-device="phone" aria-pressed="false">Phone</button></div></div><div id="preview-content"></div><form method="dialog" style="padding:0 24px 20px"><button class="f-btn secondary" style="width:100%">Close preview</button></form></dialog>
-		<div class="f-toast" role="status" hidden id="form-toast"></div>
+		<dialog id="preview-dialog" class="f-preview-dialog"><div class="f-preview-tools"><span><Fragment set:html={formsIcon("eye", 17)} />Preview</span><div class="f-tabs"><button type="button" data-action="preview-device" data-device="desktop" aria-pressed="true">Desktop</button><button type="button" data-action="preview-device" data-device="phone" aria-pressed="false">Phone</button></div></div><div id="preview-content"></div><form method="dialog" class="f-preview-close"><button class="f-btn secondary">Close preview</button></form></dialog>
 		</>}
 	</div>
 	<script>
 		// @ts-nocheck
 		import { formsRequest, normalizeDraft, type FormDraft, type FormField } from "../../lib/forms-api";
+		import { accentColors, fieldTypeMeta, fieldTypeOrder, formsIcon as icon, previewFormMarkup } from "../../lib/forms-ui";
+		import { confirmAction, errorMessage, showToast } from "../../lib/forms-dialog";
 		import { renderQrPngDataUrl, renderQrSvg } from "../../lib/qr-code";
 		const app = document.querySelector(".forms-app");
 		if (app?.dataset.enabled === "true") {
 		app.inert = true;
 		app.setAttribute("aria-busy", "true");
 		const formId = app.dataset.formId;
-		const types = ["short", "paragraph", "email", "phone", "number", "singlechoice", "multichoice", "date", "rating"];
-		const typeNames = { short:"Short answer", paragraph:"Paragraph", email:"Email", phone:"Phone", number:"Number", singlechoice:"One choice", multichoice:"Several choices", date:"Date", rating:"Rating" };
-		const colors = { blue:"#0071e3", teal:"#0e7c86", green:"#248a3d", orange:"#c2410c", pink:"#c2185b", graphite:"#48484a" };
+		const types = fieldTypeOrder;
+		const typeNames = Object.fromEntries(types.map((type) => [type, fieldTypeMeta[type].name]));
+		const colors = accentColors;
+		const isChoice = (type) => type === "singlechoice" || type === "multichoice";
 		const localKey = `urlx-form-draft:${formId}`;
 		const $ = (selector) => app.querySelector(selector);
 		const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]);
@@ -68,6 +73,7 @@ const title = "Edit form | URLX Forms";
 		let responses = [];
 		let stats = {};
 		let responseTotal = 0;
+		let responsesView = "summary";
 		let selected = "";
 		let activeTab = "build";
 		let saveTimer;
@@ -80,8 +86,9 @@ const title = "Edit form | URLX Forms";
 		let shareUrl = "";
 		let shortUrl = "";
 		function color() { return colors[draft.accent] || draft.accent || colors.blue; }
-		function showToast(text) { const node = $("#form-toast"); node.textContent = text; node.hidden = false; setTimeout(() => { node.hidden = true; }, 2600); }
-		function snapshot() { const next = JSON.stringify(draft); if (history[historyIndex] === next) return; history = history.slice(0, historyIndex + 1); history.push(next); if (history.length > 80) history.shift(); historyIndex = history.length - 1; }
+		function setSaveState(state, text) { const node = $("#form-save-state"); node.dataset.state = state; node.textContent = text; }
+		function syncHistoryButtons() { const undo = $('[data-action="undo"]'); const redo = $('[data-action="redo"]'); if (undo) undo.disabled = historyIndex <= 0; if (redo) redo.disabled = historyIndex >= history.length - 1; }
+		function snapshot() { const next = JSON.stringify(draft); if (history[historyIndex] === next) return; history = history.slice(0, historyIndex + 1); history.push(next); if (history.length > 80) history.shift(); historyIndex = history.length - 1; syncHistoryButtons(); }
 		function capturePendingText() {
 			draft.title = $("#draft-title").value;
 			draft.description = $("#draft-description").value;
@@ -96,7 +103,7 @@ const title = "Edit form | URLX Forms";
 			}
 		}
 		function edit(mutator, structure = false) { if (structure) { clearTimeout(historyTimer); capturePendingText(); snapshot(); } mutator(); render(); if (structure) snapshot(); queueSave(); }
-		function queueSave() { clearTimeout(saveTimer); clearTimeout(historyTimer); historyTimer = setTimeout(snapshot, 450); $("#form-save-state").textContent = "Saving…"; try { localStorage.setItem(localKey, JSON.stringify({ draft, revision })); } catch {} saveTimer = setTimeout(saveDraft, 550); }
+		function queueSave() { clearTimeout(saveTimer); clearTimeout(historyTimer); historyTimer = setTimeout(snapshot, 450); setSaveState("saving", "Saving…"); try { localStorage.setItem(localKey, JSON.stringify({ draft, revision })); } catch {} saveTimer = setTimeout(saveDraft, 550); }
 		async function saveDraft() {
 			if (saveInFlight) { saveTimer = setTimeout(saveDraft, 400); return; }
 			saveInFlight = true;
@@ -104,30 +111,42 @@ const title = "Edit form | URLX Forms";
 				const result = await formsRequest<{ draft?: unknown; revision?: number }>(`/${encodeURIComponent(formId)}/draft`, { method:"PUT", body:JSON.stringify({ draft, revision }) });
 				revision = result.revision ?? revision;
 				localOnly = false;
-				$("#form-save-state").textContent = "Saved";
+				setSaveState("saved", "Saved");
 				try { localStorage.removeItem(localKey); } catch {}
 			} catch (error) {
 				localOnly = true;
-				$("#form-save-state").textContent = "Saved on this device";
+				setSaveState("local", "Saved on this device");
 				const alert = $("#editor-alert"); alert.hidden = false; alert.textContent = "Your changes are saved in this browser while the server is unavailable. They will sync when the connection returns.";
 			}
 			finally { saveInFlight = false; }
 		}
+		const previewText = { short:"Short answer text", paragraph:"Long answer text", email:"name@example.com", phone:"+1 555 010 0000", number:"0", date:"dd / mm / yyyy" };
 		function fieldPreview(field) {
-			if (["singlechoice", "multichoice"].includes(field.type)) return `<div class="q-options">${(field.options || []).map((option) => `<div>◯ ${esc(option)}</div>`).join("")}</div>`;
-			if (field.type === "rating") return `<div class="q-preview" aria-hidden="true">☆　☆　☆　☆　☆</div>`;
-			if (field.type === "paragraph") return `<div class="q-preview" style="height:66px">Long answer</div>`;
-			return `<div class="q-preview">${field.type === "date" ? "Select a date" : field.type === "email" ? "name@example.com" : "Short answer"}</div>`;
+			if (isChoice(field.type)) return "";
+			if (field.type === "rating") return `<div class="q-stars" aria-hidden="true">${[1, 2, 3, 4, 5].map(() => icon("rating", 26)).join("")}</div>`;
+			const glyph = field.type === "short" || field.type === "paragraph" ? "" : icon(field.type, 16);
+			return `<div class="q-preview ${field.type === "paragraph" ? "tall" : ""}" aria-hidden="true">${glyph}<span>${previewText[field.type] || "Short answer text"}</span></div>`;
+		}
+		function typeBadge(type) { const meta = fieldTypeMeta[type] || fieldTypeMeta.short; return `<span class="f-type-badge">${icon(type in fieldTypeMeta ? type : "short", 14)}${esc(meta.name)}</span>`; }
+		function questionCard(field, index) {
+			const options = isChoice(field.type) ? `<div class="q-options">${(field.options || []).map((option, optionIndex) => `<div class="q-option"><span class="q-mark ${field.type === "singlechoice" ? "radio" : "check"}" aria-hidden="true"></span><input data-key="option" data-option="${optionIndex}" value="${esc(option)}" aria-label="Option ${optionIndex + 1}"><button type="button" data-action="remove-option" data-option="${optionIndex}" aria-label="Remove option" title="Remove option" class="f-icon-btn danger-hover">${icon("close", 15)}</button></div>`).join("")}<button type="button" data-action="add-option" class="q-add-option">${icon("plus", 15)}Add option</button></div>` : "";
+			const last = index === draft.fields.length - 1;
+			return `<article class="f-question ${selected === field.id ? "selected" : ""}" data-field="${esc(field.id)}"><div class="q-head"><span class="q-num">${index + 1}</span>${typeBadge(field.type)}</div><div class="q-label-row"><input class="q-label" data-key="label" value="${esc(field.label)}" placeholder="Question ${index + 1}" aria-label="Question ${index + 1}"><strong class="q-asterisk" aria-hidden="true" ${field.required ? "" : "hidden"}>*</strong></div><input class="q-help" data-key="help" value="${esc(field.help)}" placeholder="Add a hint (optional)" aria-label="Question hint">${fieldPreview(field)}${options}<div class="f-q-actions"><label class="q-type-select"><span class="f-sr">Question type</span><select data-action="type-select" aria-label="Question type">${types.map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${typeNames[type]}</option>`).join("")}</select></label><button type="button" class="q-switch" data-action="required" aria-pressed="${field.required}"><span class="q-switch-track" aria-hidden="true"></span>Required</button><span class="q-spacer"></span><button type="button" data-action="up" aria-label="Move up" title="Move up" ${index === 0 ? "disabled" : ""}>${icon("up", 17)}</button><button type="button" data-action="down" aria-label="Move down" title="Move down" ${last ? "disabled" : ""}>${icon("down", 17)}</button><button type="button" data-action="duplicate" aria-label="Duplicate question" title="Duplicate (Ctrl+D)">${icon("copy", 16)}</button><button type="button" class="danger" data-action="delete" aria-label="Delete question" title="Delete">${icon("trash", 16)}</button></div></article>`;
+		}
+		function renderStatic() {
+			const groups = [...new Set(types.map((type) => fieldTypeMeta[type].group))];
+			$("#field-types").innerHTML = groups.map((group) => `<p class="f-type-group">${esc(group)}</p>${types.filter((type) => fieldTypeMeta[type].group === group).map((type) => `<button type="button" class="f-type-tile" data-action="add" data-type="${type}" title="${esc(fieldTypeMeta[type].hint)}"><span class="f-type-icon">${icon(type, 16)}</span><span class="f-type-text"><strong>${esc(fieldTypeMeta[type].name)}</strong><small>${esc(fieldTypeMeta[type].hint)}</small></span></button>`).join("")}`).join("");
+			$("#paper-add").innerHTML = `<span class="f-muted">Add</span>${["short", "paragraph", "singlechoice", "multichoice", "rating"].map((type) => `<button type="button" class="f-quick-add" data-action="add" data-type="${type}" aria-label="Add ${esc(typeNames[type])} question" title="${esc(typeNames[type])}">${icon(type, 16)}</button>`).join("")}`;
 		}
 		function render() {
 			$("#form-title-label").textContent = draft.title || "Untitled form";
 			$("#draft-title").value = draft.title || "";
 			$("#draft-description").value = draft.description || "";
 			$("#form-paper").style.setProperty("--form-accent", color());
-			$("#draft-accent").innerHTML = Object.entries(colors).map(([name, value]) => `<button type="button" data-action="accent" data-accent="${name}" aria-label="${name} accent" aria-pressed="${draft.accent === name}" style="background:${value}"></button>`).join("");
-			$("#field-types").innerHTML = types.map((type) => `<button type="button" data-action="add" data-type="${type}">＋ ${typeNames[type]}</button>`).join("");
-			$("#question-list").innerHTML = draft.fields.map((field, index) => `<article class="f-question ${selected === field.id ? "selected" : ""}" data-field="${esc(field.id)}"><div style="display:flex;align-items:center;gap:6px"><input class="q-label" data-key="label" value="${esc(field.label)}" placeholder="Question ${index + 1}" aria-label="Question ${index + 1}"><strong style="color:#d70015" ${field.required ? "" : "hidden"}>*</strong></div><input class="q-help" data-key="help" value="${esc(field.help)}" placeholder="Add a hint (optional)" aria-label="Question hint">${fieldPreview(field)}${["singlechoice", "multichoice"].includes(field.type) ? `<div class="q-options">${(field.options || []).map((option, optionIndex) => `<div style="display:flex;align-items:center;gap:5px"><span>${field.type === "singlechoice" ? "◯" : "□"}</span><input data-key="option" data-option="${optionIndex}" value="${esc(option)}" aria-label="Option ${optionIndex + 1}"><button type="button" data-action="remove-option" data-option="${optionIndex}" aria-label="Remove option" class="f-icon-btn">×</button></div>`).join("")}<button type="button" data-action="add-option" class="f-icon-btn" style="color:var(--fa)">＋ Add option</button></div>` : ""}<div class="f-q-actions"><select data-action="type-select" aria-label="Question type">${types.map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${typeNames[type]}</option>`).join("")}</select><button type="button" data-action="required">${field.required ? "✓ Required" : "○ Optional"}</button><span style="flex:1"></span><button type="button" data-action="up" aria-label="Move up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-action="down" aria-label="Move down" ${index === draft.fields.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-action="duplicate" aria-label="Duplicate question">Duplicate</button><button type="button" data-action="delete" aria-label="Delete question">Delete</button></div></article>`).join("") || `<p class="f-muted" style="text-align:center;padding:20px">Add your first question using the controls.</p>`;
-			$("#response-count").textContent = String(stats.total ?? responses.length ?? 0);
+			$("#draft-accent").innerHTML = Object.entries(colors).map(([name, value]) => `<button type="button" data-action="accent" data-accent="${name}" aria-label="${name} accent" title="${name[0].toUpperCase()}${name.slice(1)}" aria-pressed="${draft.accent === name}" style="--swatch:${value}">${icon("check", 15)}</button>`).join("");
+			$("#question-list").innerHTML = draft.fields.map(questionCard).join("") || `<div class="f-paper-empty"><span class="f-empty-icon">${icon("plus", 24)}</span><h2>Start with your first question</h2><p>Pick a question type below. You can reorder, duplicate and change types any time.</p></div>`;
+			$("#response-count").textContent = String(stats.total ?? responseTotal ?? responses.length ?? 0);
+			syncHistoryButtons();
 			if (activeTab === "share") renderShare();
 			if (activeTab === "responses") renderResponses();
 		}
@@ -136,7 +155,7 @@ const title = "Edit form | URLX Forms";
 			if (published) { currentForm = published.form || published; shareUrl = published.url || shareUrl; shortUrl = published.shortUrl || shortUrl; }
 			const panel = $("#share-panel"); const slug = currentForm?.slug || ""; const isPublished = Boolean(slug || currentForm?.publishedVersion || currentForm?.published);
 			const url = shareUrl || (slug ? `${location.origin}/f/${slug}` : "");
-			panel.innerHTML = `<div class="f-card f-share-card" style="padding:22px"><section><h2 style="margin:0 0 6px">Share your form</h2><p class="f-muted" style="margin:0 0 17px">Publish it to create a link respondents can open on any device.</p>${url ? `<label class="f-label" for="share-url">Form link</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f-input" id="share-url" readonly value="${esc(url)}" style="flex:1;min-width:220px"><button type="button" class="f-btn secondary" data-action="copy-link">Copy link</button><a class="f-btn secondary" target="_blank" rel="noopener" href="${esc(url)}">Open form</a></div>${shortUrl ? `<p class="f-muted" style="margin:9px 0 0">Short link: <a href="${esc(shortUrl)}" target="_blank" rel="noopener">${esc(shortUrl)}</a></p>` : ""}<div style="margin-top:17px"><label class="f-label" for="form-slug">Form address</label><div style="display:flex;gap:8px"><span style="padding:10px 0;color:var(--fm)">/f/</span><input id="form-slug" class="f-input" value="${esc(slug)}" maxlength="50" pattern="[a-z0-9-]+" aria-label="Form link slug"><button type="button" class="f-btn secondary" data-action="save-slug">Save</button></div></div><p class="f-status live" style="margin-top:15px">Published</p>` : `<div class="f-notice">This form has not been published yet.</div><button type="button" class="f-btn" data-action="publish">Publish form</button>`}</section>${url ? `<section class="f-qr-section"><h3 style="margin:0 0 12px">QR code</h3><div id="share-qr" class="f-qr"></div><div class="f-qr-actions"><a id="qr-png" class="f-btn secondary small" download="urlx-form-qr.png">Download PNG</a><a id="qr-svg" class="f-btn secondary small" download="urlx-form-qr.svg">Download SVG</a><button type="button" class="f-btn secondary small" data-action="print">Print A4 / Save PDF</button></div></section>` : ""}<p class="f-muted" style="grid-column:1/-1;margin:0;font-size:13px">Keep editing any time. New responses use the latest published version.</p></div>`;
+			panel.innerHTML = `<div class="f-share-card"><section class="f-card f-share-main"><div class="f-panel-head"><span class="f-panel-icon">${icon("link", 20)}</span><div><h2>Share your form</h2><p class="f-muted">Publish it to create a link respondents can open on any device.</p></div>${url ? `<p class="f-status live">Published</p>` : ""}</div>${url ? `<label class="f-label" for="share-url">Form link</label><div class="f-inline-field"><input class="f-input" id="share-url" readonly value="${esc(url)}"><button type="button" class="f-btn secondary" data-action="copy-link">${icon("copy", 16)}Copy link</button><a class="f-btn secondary" target="_blank" rel="noopener" href="${esc(url)}">${icon("external", 16)}Open form</a></div>${shortUrl ? `<p class="f-short-link">${icon("link", 15)}<span>Short link: <a href="${esc(shortUrl)}" target="_blank" rel="noopener">${esc(shortUrl)}</a></span></p>` : ""}<div class="f-slug-block"><label class="f-label" for="form-slug">Form address</label><div class="f-inline-field"><span class="f-prefix-input"><span>/f/</span><input id="form-slug" class="f-input" value="${esc(slug)}" maxlength="50" pattern="[a-z0-9-]+" aria-label="Form link slug"></span><button type="button" class="f-btn secondary" data-action="save-slug">Save</button></div></div>` : `<div class="f-notice">This form has not been published yet.</div><button type="button" class="f-btn" data-action="publish">${icon("send", 15)}Publish form</button>`}<p class="f-muted f-fine">Keep editing any time. New responses use the latest published version.</p></section>${url ? `<section class="f-card f-qr-section"><h3>${icon("forms", 16)}QR code</h3><div id="share-qr" class="f-qr"></div><div class="f-qr-actions"><a id="qr-png" class="f-btn secondary small" download="urlx-form-qr.png" aria-disabled="true">${icon("download", 15)}Download PNG</a><a id="qr-svg" class="f-btn secondary small" download="urlx-form-qr.svg" aria-disabled="true">${icon("download", 15)}Download SVG</a><button type="button" class="f-btn secondary small" data-action="print">${icon("print", 15)}Print A4 / Save PDF</button></div></section>` : ""}</div>`;
 			if (!url) return;
 			try {
 				const png = await renderQrPngDataUrl(url, { width:512, margin:2, color:{ dark:"#1d1d1f", light:"#ffffff" } });
@@ -144,56 +163,109 @@ const title = "Edit form | URLX Forms";
 				$("#share-qr").innerHTML = `<img src="${png}" width="216" height="216" alt="QR code for ${esc(draft.title)}">`;
 				$("#qr-png").href = png;
 				$("#qr-svg").href = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
+				$("#qr-png").removeAttribute("aria-disabled"); $("#qr-svg").removeAttribute("aria-disabled");
 			} catch { $("#share-qr").textContent = "QR code could not be generated."; }
 		}
 		async function loadResponses() {
 			try { const result = await formsRequest<{ responses?: unknown[]; stats?: unknown; total?: number }>(`/${encodeURIComponent(formId)}/responses`); responses = Array.isArray(result.responses) ? result.responses : []; stats = result.stats || {}; responseTotal = result.total ?? responses.length; renderResponses(); }
 			catch (error) { $("#responses-panel").innerHTML = `<div class="f-card f-empty"><h2>Responses are unavailable</h2><p>${esc(error instanceof Error ? error.message : "Try again in a moment.")}</p><button class="f-btn secondary" data-action="responses-retry">Try again</button></div>`; }
 		}
-		function renderResponses() {
-			const panel = $("#responses-panel"); const total = stats.total ?? stats.totalResponses ?? responseTotal; const latest = stats.latestAt ?? stats.lastResponseAt;
-			const average = stats.averageRating ?? stats.average ?? "—";
-			if (!responses.length) { panel.innerHTML = `<div class="f-response-stats"><div class="f-card f-stat"><small>Total responses</small><strong>${esc(total)}</strong></div><div class="f-card f-stat"><small>Average rating</small><strong>${esc(average)}</strong></div><div class="f-card f-stat"><small>Latest response</small><strong style="font-size:17px">${latest ? esc(new Date(latest).toLocaleDateString()) : "—"}</strong></div></div><div class="f-card f-empty"><h2>No responses yet</h2><p>Once your form is published and shared, responses will appear here.</p><button type="button" class="f-btn secondary" data-action="export" disabled>Export CSV</button></div>`; return; }
-			const versionGroups = Array.isArray(stats) ? stats : [];
-			const groups = new Map();
-			for (const response of responses) {
-				const versionId = response?.versionId || "unknown";
-				if (!groups.has(versionId)) groups.set(versionId, []);
-				groups.get(versionId).push(response);
+		const relativeTime = (value) => {
+			const time = new Date(value).getTime();
+			if (!Number.isFinite(time)) return "—";
+			const seconds = Math.round((time - Date.now()) / 1000);
+			const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+			const format = new Intl.RelativeTimeFormat(undefined, { numeric:"auto" });
+			for (const [unit, size] of units) if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+			return "just now";
+		};
+		const answerText = (value) => Array.isArray(value) ? value.join(", ") : String(value ?? "");
+		/** Merge per-version stats into one entry per question, newest labels first. */
+		function questionSummaries() {
+			const versions = (Array.isArray(stats) ? stats : []).slice().sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
+			const byId = new Map();
+			for (const version of versions) {
+				for (const field of version.fields || []) if (!byId.has(field.id)) byId.set(field.id, { field, answered:0, distribution:{}, ratingSum:0, ratingCount:0 });
+				for (const question of version.questions || []) {
+					const entry = byId.get(question.fieldId);
+					if (!entry) continue;
+					if (question.distribution) for (const [key, count] of Object.entries(question.distribution)) {
+						entry.distribution[key] = (entry.distribution[key] || 0) + count;
+						if (question.type === "rating") { entry.ratingSum += Number(key) * count; entry.ratingCount += count; }
+					}
+					if (typeof question.answered === "number") entry.answered += question.answered;
+				}
 			}
-			const groupViews = [...groups.entries()].map(([versionId, rows]) => {
-				const definition = versionGroups.find((group) => group.versionId === versionId);
-				const fields = Array.isArray(definition?.fields) ? definition.fields : [];
-				const heads = fields.map((field) => `<th>${esc(field.label || field.id)}</th>`).join("");
-				const body = rows.map((response, index) => {
-					const answers = response?.answers && typeof response.answers === "object" ? response.answers : {};
-					const cells = fields.map((field) => { const value = answers[field.id] ?? ""; return `<td>${esc(Array.isArray(value) ? value.join(", ") : value)}</td>`; }).join("");
-					const submittedAt = response?.createdAt || response?.at;
-					return `<tr><td>${esc(submittedAt ? new Date(submittedAt).toLocaleString() : `Response ${index + 1}`)}</td>${cells}<td><button type="button" class="f-icon-btn" data-action="delete-response" data-response="${esc(response?.id || "")}" aria-label="Delete response">Delete</button></td></tr>`;
-				}).join("");
-				const versionLabel = definition?.version ?? rows[0]?.version ?? "—";
-				const emptyFieldsNote = fields.length ? "" : `<p class="f-muted" style="padding:12px">This version’s field labels are unavailable.</p>`;
-				return `<section class="f-card" style="margin-top:12px"><header style="padding:13px 15px;border-bottom:1px solid var(--fh);font-weight:600">Version ${esc(versionLabel)} <span class="f-muted" style="font-weight:400">· ${rows.length} response${rows.length === 1 ? "" : "s"}</span></header>${emptyFieldsNote}<div class="f-table-scroll"><table class="f-response-table"><thead><tr><th>Received</th>${heads}<th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+			for (const entry of byId.values()) {
+				if (isChoice(entry.field.type)) entry.answered = responses.filter((response) => { const value = response?.answers?.[entry.field.id]; return Array.isArray(value) ? value.length : value !== undefined && value !== ""; }).length;
+				if (entry.field.type === "rating") entry.answered = entry.ratingCount;
+			}
+			return [...byId.values()];
+		}
+		function bars(rows, total) {
+			return `<div class="f-bars">${rows.map(([label, count]) => { const pct = total ? Math.round((count / total) * 100) : 0; return `<div class="f-bar"><div class="f-bar-label"><span>${esc(label)}</span><span class="f-muted">${count} · ${pct}%</span></div><div class="f-bar-track"><span style="width:${pct}%"></span></div></div>`; }).join("")}</div>`;
+		}
+		function summaryCard(entry, index) {
+			const { field } = entry;
+			const head = `<header class="f-sum-head"><span class="q-num">${index + 1}</span><div><h3>${esc(field.label || `Question ${index + 1}`)}</h3><p class="f-muted">${typeBadge(field.type)}<span>${entry.answered} of ${responseTotal} answered</span></p></div></header>`;
+			let body = "";
+			if (isChoice(field.type)) {
+				const options = [...(field.options || []), ...Object.keys(entry.distribution).filter((key) => !(field.options || []).includes(key))];
+				body = bars(options.map((option) => [option, entry.distribution[option] || 0]), field.type === "multichoice" ? entry.answered : Object.values(entry.distribution).reduce((sum, count) => sum + count, 0));
+			} else if (field.type === "rating") {
+				const average = entry.ratingCount ? entry.ratingSum / entry.ratingCount : 0;
+				body = `<div class="f-rating-sum"><div class="f-rating-score"><strong>${entry.ratingCount ? average.toFixed(1) : "—"}</strong><span class="f-rating-stars" aria-label="${average.toFixed(1)} out of 5"><span>${icon("rating", 18).repeat(5)}</span><span class="fill" style="width:${(average / 5) * 100}%">${icon("rating", 18).repeat(5)}</span></span><small class="f-muted">average of ${entry.ratingCount}</small></div>${bars([5, 4, 3, 2, 1].map((n) => [`${n} star${n === 1 ? "" : "s"}`, entry.distribution[String(n)] || 0]), entry.ratingCount)}</div>`;
+			} else {
+				const answers = responses.map((response) => ({ value:answerText(response?.answers?.[field.id]), at:response?.createdAt })).filter((item) => item.value);
+				body = answers.length ? `<ul class="f-answers">${answers.slice(0, 5).map((item) => `<li><span>${esc(item.value)}</span><time class="f-muted">${esc(relativeTime(item.at))}</time></li>`).join("")}</ul>${answers.length > 5 ? `<button type="button" class="q-add-option" data-action="responses-view" data-view="table">See all ${answers.length} answers</button>` : ""}` : `<p class="f-muted f-sum-empty">No answers yet.</p>`;
+			}
+			return `<article class="f-card f-sum">${head}${body}</article>`;
+		}
+		function responsesTable(entries) {
+			const fields = entries.map((entry) => entry.field);
+			const heads = fields.map((field) => `<th scope="col">${esc(field.label || field.id)}</th>`).join("");
+			const versionNumbers = (Array.isArray(stats) ? stats : []).map((version) => Number(version.version)).filter(Number.isFinite);
+			const latestVersion = versionNumbers.length ? Math.max(...versionNumbers) : null;
+			const isOlder = (response) => latestVersion != null && response?.version != null && Number(response.version) < latestVersion;
+			const multiVersion = responses.some(isOlder);
+			const body = responses.map((response) => {
+				const answers = response?.answers && typeof response.answers === "object" ? response.answers : {};
+				const at = response?.createdAt || response?.at;
+				const chip = isOlder(response) ? `<span class="f-version-chip" title="Submitted to an earlier version (v${esc(response.version)}) of this form">v${esc(response.version)}</span>` : "";
+				const cells = fields.map((field) => { const value = answerText(answers[field.id]); return `<td>${value ? esc(value) : '<span class="f-muted">—</span>'}</td>`; }).join("");
+				return `<tr><td><time title="${esc(at ? new Date(at).toLocaleString() : "")}">${esc(at ? relativeTime(at) : "—")}</time>${chip}</td>${cells}<td class="f-row-actions"><button type="button" class="f-icon-btn danger" data-action="delete-response" data-response="${esc(response?.id || "")}" aria-label="Delete response" title="Delete response">${icon("trash", 16)}</button></td></tr>`;
 			}).join("");
-			const latestValue = latest || responses[0]?.createdAt || responses[0]?.at;
-			const latestLabel = latestValue ? new Date(latestValue).toLocaleDateString() : "—";
-			panel.innerHTML = `<div class="f-response-stats"><div class="f-card f-stat"><small>Total responses</small><strong>${esc(total)}</strong></div><div class="f-card f-stat"><small>Average rating</small><strong>${esc(average)}</strong></div><div class="f-card f-stat"><small>Latest response</small><strong style="font-size:17px">${esc(latestLabel)}</strong></div></div><div style="display:flex;justify-content:flex-end;margin:0 0 10px"><button type="button" class="f-btn secondary small" data-action="export">Export CSV</button></div>${groupViews}`;
+			const versionNote = multiVersion ? `<p class="f-muted f-table-note">${icon("clock", 14)}Rows marked with a version were submitted before your latest publish. Their answers are kept as they were.</p>` : "";
+			const more = responseTotal > responses.length ? `<p class="f-muted f-table-note">Showing the latest ${responses.length} of ${responseTotal}. Export CSV for everything.</p>` : "";
+			return `<section class="f-card f-table-card"><div class="f-table-scroll"><table class="f-response-table"><thead><tr><th scope="col">Received</th>${heads}<th><span class="f-sr">Actions</span></th></tr></thead><tbody>${body}</tbody></table></div>${versionNote}${more}</section>`;
+		}
+		function renderResponses() {
+			const panel = $("#responses-panel");
+			$("#response-count").textContent = String(responseTotal ?? 0);
+			const weekAgo = Date.now() - 7 * 86400000;
+			const thisWeek = responses.filter((response) => new Date(response?.createdAt).getTime() >= weekAgo).length;
+			const latest = responses[0]?.createdAt;
+			const kpis = `<div class="f-response-stats"><div class="f-card f-stat"><span class="f-stat-icon">${icon("inbox", 18)}</span><div><small>Responses</small><strong>${esc(responseTotal)}</strong></div></div><div class="f-card f-stat"><span class="f-stat-icon">${icon("date", 18)}</span><div><small>Last 7 days</small><strong>${esc(thisWeek)}</strong></div></div><div class="f-card f-stat"><span class="f-stat-icon">${icon("clock", 18)}</span><div><small>Latest</small><strong class="small">${esc(latest ? relativeTime(latest) : "—")}</strong></div></div></div>`;
+			if (!responses.length) { panel.innerHTML = `${kpis}<div class="f-card f-empty"><span class="f-empty-icon">${icon("inbox", 26)}</span><h2>No responses yet</h2><p>Share your form and answers will show up here as charts and a table.</p><div class="f-empty-actions"><button type="button" class="f-btn" data-tab="share">${icon("link", 15)}Share form</button><button type="button" class="f-btn secondary" data-action="export" disabled>${icon("download", 15)}Export CSV</button></div></div>`; return; }
+			const entries = questionSummaries();
+			const toolbar = `<div class="f-responses-bar"><div class="f-tabs" role="group" aria-label="Response view"><button type="button" data-action="responses-view" data-view="summary" aria-pressed="${responsesView === "summary"}">${icon("rating", 15)}Summary</button><button type="button" data-action="responses-view" data-view="table" aria-pressed="${responsesView === "table"}">${icon("paragraph", 15)}Table</button></div><button type="button" class="f-btn secondary small" data-action="export">${icon("download", 15)}Export CSV</button></div>`;
+			const view = responsesView === "table" ? responsesTable(entries) : `<div class="f-sum-grid">${entries.map(summaryCard).join("")}</div>`;
+			panel.innerHTML = `${kpis}${toolbar}${view}`;
 		}
 		function preview() {
-			const fields = draft.fields.map((field, index) => `<div class="f-public-field">${field.type === "singlechoice" || field.type === "multichoice" ? `<fieldset><legend>${esc(field.label || `Question ${index + 1}`)} ${field.required ? "*" : ""}</legend>${field.options.map((option, i) => `<label class="choice"><input type="${field.type === "singlechoice" ? "radio" : "checkbox"}" name="preview-${index}" ${field.required && i === 0 ? "required" : ""}>${esc(option)}</label>`).join("")}</fieldset>` : field.type === "rating" ? `<fieldset><legend>${esc(field.label || `Question ${index + 1}`)}</legend><label class="choice"><input type="range" min="1" max="5" aria-label="Rating"></label></fieldset>` : `<label for="preview-${index}">${esc(field.label || `Question ${index + 1}`)} ${field.required ? "*" : ""}</label>${field.help ? `<p class="help">${esc(field.help)}</p>` : ""}${field.type === "paragraph" ? `<textarea class="f-textarea" id="preview-${index}" placeholder="Your answer" ${field.required ? "required" : ""}></textarea>` : `<input class="f-input" id="preview-${index}" type="${field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}" ${field.required ? "required" : ""} placeholder="Your answer">`}`}</div>`).join("");
-			$("#preview-content").innerHTML = `<div class="f-public-card" style="--form-accent:${color()}"><div class="f-band"></div><header class="f-public-head"><h1>${esc(draft.title || "Untitled form")}</h1>${draft.description ? `<p>${esc(draft.description)}</p>` : ""}</header><div class="f-public-fields">${fields}</div><div class="f-public-footer"><button class="f-btn" type="button">Submit</button></div></div>`;
+			$("#preview-content").innerHTML = previewFormMarkup({ ...draft, accent:draft.accent }, "preview-");
 			$("#preview-content").classList.remove("phone");
 			$("#preview-dialog").showModal();
 		}
 		async function publish() {
 			const button = app.querySelector('[data-action="publish"]'); if (button) button.disabled = true;
-			try { const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published"); }
-			catch (error) { window.alert(error instanceof Error ? error.message : "Could not publish this form."); }
+			try { const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published", { tone:"success" }); }
+			catch (error) { showToast(errorMessage(error, "Could not publish this form."), { tone:"error" }); }
 			finally { if (button) button.disabled = false; }
 		}
 		app.addEventListener("click", async (event) => {
 			const tab = event.target.closest("[data-tab]"); if (tab) { setTab(tab.dataset.tab); return; }
-			const action = event.target.closest("[data-action]"); if (!action) { const card = event.target.closest("[data-field]"); if (card) { selected = card.dataset.field; app.querySelectorAll(".f-question").forEach((item) => item.classList.toggle("selected", item === card)); } return; }
+			const action = event.target.closest("[data-action]"); if (!action) { selectCard(event.target.closest("[data-field]")); return; }
 			const card = action.closest("[data-field]"); const index = card ? draft.fields.findIndex((field) => field.id === card.dataset.field) : -1; const field = index >= 0 ? draft.fields[index] : null;
 			switch (action.dataset.action) {
 				case "accent": edit(() => { draft.accent = action.dataset.accent; }, true); break;
@@ -203,19 +275,23 @@ const title = "Edit form | URLX Forms";
 				case "remove-option": if (field) edit(() => field.options.splice(Number(action.dataset.option), 1), true); break;
 				case "up": case "down": if (field) { const to = index + (action.dataset.action === "up" ? -1 : 1); if (to >= 0 && to < draft.fields.length) edit(() => { [draft.fields[index], draft.fields[to]] = [draft.fields[to], draft.fields[index]]; }, true); } break;
 				case "duplicate": if (field) { const duplicate = { ...clone(field), id:crypto.randomUUID(), label:`${field.label} (copy)` }; edit(() => { draft.fields.splice(index + 1, 0, duplicate); selected = duplicate.id; }, true); } break;
-				case "delete": if (field && confirm("Delete this question?")) edit(() => draft.fields.splice(index, 1), true); break;
+				case "delete": if (field) { edit(() => { draft.fields.splice(index, 1); selected = draft.fields[Math.min(index, draft.fields.length - 1)]?.id || ""; }, true); showToast(`Deleted “${field.label || "Untitled question"}”`, { action:{ label:"Undo", onClick:() => app.querySelector('[data-action="undo"]')?.click() } }); } break;
 				case "undo": case "redo": { const delta = action.dataset.action === "undo" ? -1 : 1; const next = historyIndex + delta; if (next >= 0 && next < history.length) { historyIndex = next; draft = JSON.parse(history[historyIndex]); render(); queueSave(); } break; }
 				case "preview": preview(); break;
 				case "preview-device": $("#preview-content").classList.toggle("phone", action.dataset.device === "phone"); app.querySelectorAll('[data-action="preview-device"]').forEach((button) => button.setAttribute("aria-pressed", String(button === action))); break;
 				case "publish": await publish(); break;
-				case "save-slug": { const saveButton = action; saveButton.disabled = true; try { const result = await formsRequest<{ form?: FormRecord; url?: string; shortUrl?: string }>(`/${encodeURIComponent(formId)}/slug`, { method:"POST", body:JSON.stringify({ slug:$("#form-slug").value }) }); currentForm = result.form || currentForm; shareUrl = result.url || shareUrl; shortUrl = result.shortUrl || shortUrl; await renderShare(result); showToast("Form address updated"); } catch (error) { window.alert(error instanceof Error ? error.message : "Could not update the address."); saveButton.disabled = false; } break; }
+				case "save-slug": { const saveButton = action; saveButton.disabled = true; try { const result = await formsRequest<{ form?: FormRecord; url?: string; shortUrl?: string }>(`/${encodeURIComponent(formId)}/slug`, { method:"POST", body:JSON.stringify({ slug:$("#form-slug").value }) }); currentForm = result.form || currentForm; shareUrl = result.url || shareUrl; shortUrl = result.shortUrl || shortUrl; await renderShare(result); showToast("Form address updated", { tone:"success" }); } catch (error) { showToast(errorMessage(error, "Could not update the address."), { tone:"error" }); saveButton.disabled = false; } break; }
 				case "copy-link": try { await navigator.clipboard.writeText($("#share-url").value); showToast("Link copied"); } catch { $("#share-url").select(); document.execCommand("copy"); showToast("Link copied"); } break;
 				case "print": window.print(); break;
 				case "responses-retry": loadResponses(); break;
+				case "responses-view": responsesView = action.dataset.view; renderResponses(); break;
 				case "export": window.location.assign(`/api/forms/${encodeURIComponent(formId)}/export.csv`); break;
-				case "delete-response": if (confirm("Delete this response?")) { try { await formsRequest(`/${encodeURIComponent(formId)}/responses/${encodeURIComponent(action.dataset.response)}`, { method:"DELETE" }); await loadResponses(); } catch (error) { window.alert(error.message); } } break;
+				case "delete-response": { const responseId = action.dataset.response; if (!(await confirmAction({ title:"Delete this response?", message:"The answers will be removed permanently and can’t be recovered.", confirmLabel:"Delete response", danger:true }))) break; action.disabled = true; try { await formsRequest(`/${encodeURIComponent(formId)}/responses/${encodeURIComponent(responseId)}`, { method:"DELETE" }); await loadResponses(); showToast("Response deleted"); } catch (error) { action.disabled = false; showToast(errorMessage(error, "Could not delete this response."), { tone:"error" }); } break; }
 			}
 		});
+		function selectCard(card) { if (!card || selected === card.dataset.field) return; selected = card.dataset.field; app.querySelectorAll(".f-question").forEach((item) => item.classList.toggle("selected", item === card)); }
+		// Keyboard users get the same focus mode as clicks: focusing a question selects it.
+		app.addEventListener("focusin", (event) => selectCard(event.target.closest?.("[data-field]")));
 		app.addEventListener("input", (event) => {
 			const input = event.target;
 			if (input.id === "draft-title") { draft.title = input.value; $("#form-title-label").textContent = input.value || "Untitled form"; queueSave(); return; }
@@ -256,10 +332,12 @@ const title = "Edit form | URLX Forms";
 				shortUrl = result.form?.shortUrl || (result.form?.shortCode ? `${location.origin}/u/${result.form.shortCode}` : "");
 				draft = normalizeDraft(result.draft || result.form?.draft || result.form, result.form?.title || "Untitled form");
 				revision = result.revision ?? 0;
-				if (!draft.fields.length) draft.fields.push(newField("short"));
-				selected = draft.fields[0].id;
+				responseTotal = Number(result.form?.responseCount ?? 0);
+				selected = draft.fields[0]?.id || "";
 				try { const cached = JSON.parse(localStorage.getItem(localKey) || "null"); if (cached?.draft && cached.revision === revision) { draft = normalizeDraft(cached.draft); } } catch {}
-				snapshot(); render(); app.inert = false; app.removeAttribute("aria-busy"); app.dataset.ready = "true";
+				renderStatic(); snapshot(); render(); app.inert = false; app.removeAttribute("aria-busy"); app.dataset.ready = "true";
+				// Fill in the Responses badge without waiting for the tab to open.
+				loadResponses();
 			} catch (error) {
 				$("#editor-alert").hidden = false; $("#editor-alert").textContent = error instanceof Error ? error.message : "Could not load this form.";
 				$("#form-title-label").textContent = "Form unavailable";

@@ -4,6 +4,7 @@ import "../../styles/forms.css";
 import { env } from "cloudflare:workers";
 import { proxyApiRequest } from "../../lib/api-proxy";
 import { formsReady } from "../../lib/forms-ready";
+import { accentColors, publicFieldMarkup } from "../../lib/forms-ui";
 
 export const prerender = false;
 const { slug = "" } = Astro.params;
@@ -53,78 +54,38 @@ const confirmationMessage =
 	versionData?.confirmationMessage ||
 	"Thank you for your response.";
 const submitted = Astro.url.searchParams.get("submitted") === "1";
-const accent = versionData?.accent || form?.theme || form?.accent || "#0071e3";
+// Only allowlisted accent ids reach the page; `theme` is a light/dark mode, not a colour.
 const accentValue =
-	(
-		{
-			blue: "#0071e3",
-			teal: "#0e7c86",
-			green: "#248a3d",
-			orange: "#c2410c",
-			pink: "#c2185b",
-			graphite: "#48484a",
-		} as Record<string, string>
-	)[accent] || accent;
-const esc = (value: unknown) =>
-	String(value ?? "").replace(
-		/[&<>"']/g,
-		(c) =>
-			(
-				({
-					"&": "&amp;",
-					"<": "&lt;",
-					">": "&gt;",
-					'"': "&quot;",
-					"'": "&#39;",
-				}) as Record<string, string>
-			)[c] ?? c,
-	);
-function renderField(field: Record<string, any>, index: number) {
-	const id = String(field.id || `question-${index + 1}`);
-	const label = String(field.label || `Question ${index + 1}`);
-	const required = Boolean(field.required);
-	const help = field.help
-		? `<p class="help" id="${esc(id)}-help">${esc(field.help)}</p>`
-		: "";
-	const described = field.help ? `aria-describedby="${esc(id)}-help"` : "";
-	const name = `answers[${id}]`;
-	if (field.type === "singlechoice" || field.type === "multichoice") {
-		const options = Array.isArray(field.options) ? field.options : [];
-		return `<div class="f-public-field"><fieldset ${required ? "required" : ""}><legend>${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</legend>${help}${options.map((option: string, i: number) => `<label class="choice"><input type="${field.type === "singlechoice" ? "radio" : "checkbox"}" name="${esc(name)}${field.type === "multichoice" ? "[]" : ""}" value="${esc(option)}" ${required && field.type === "singlechoice" && i === 0 ? "required" : ""}>${esc(option)}</label>`).join("")}</fieldset></div>`;
-	}
-	if (field.type === "rating")
-		return `<div class="f-public-field"><fieldset><legend>${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</legend>${help}<div class="choice" role="radiogroup" aria-label="${esc(label)}">${[1, 2, 3, 4, 5].map((n) => `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><input type="radio" name="${esc(name)}" value="${n}" ${required && n === 1 ? "required" : ""}>${n}</label>`).join("")}</div></fieldset></div>`;
-	const common = `name="${esc(name)}" id="${esc(id)}" ${required ? "required" : ""} ${described}`;
-	const input =
-		field.type === "paragraph"
-			? `<textarea class="f-textarea" ${common} rows="4"></textarea>`
-			: `<input class="f-input" ${common} type="${field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}" ${field.type === "phone" ? 'inputmode="tel"' : ""}>`;
-	return `<div class="f-public-field"><label for="${esc(id)}">${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</label>${help}${input}</div>`;
-}
+	(accentColors as Record<string, string>)[
+		String(versionData?.accent || form?.accent || "blue")
+	] ?? accentColors.blue;
 const submitVersion = version?.id ?? "";
 const submitToken = result?.submissionToken ?? "";
 const idempotencyKey = result?.idempotencyKey ?? "";
 const pageTitle = `${title} | URLX Forms`;
+const hasRequired = fields.some(
+	(field: Record<string, unknown>) => field.required,
+);
 ---
-<Layout title={pageTitle} description={description || `Fill out ${title} online.`} image={form && canonicalSlug ? `/api/forms/public/${encodeURIComponent(canonicalSlug)}/og.png` : undefined} imageAlt={`${title} form preview`} canonicalPath={`/f/${slug}`} chrome={false}>
+<Layout title={pageTitle} description={description || `Fill out ${title} online.`} image={form && canonicalSlug ? `/api/forms/public/${encodeURIComponent(canonicalSlug)}/og.png` : undefined} imageAlt={`${title} form preview`} canonicalPath={`/f/${slug}`} chrome={false} clientRouter={false}>
 	<div class="forms-app" style={`--form-accent:${accentValue}`}>
 		{formsEnabled && form && version ? (
 			<div class="f-public">
 				<main class="f-public-card">
 					<div class="f-band"></div>
-					{submitted ? <section class="f-public-head" role="status"><h1>Thank you</h1><p>{confirmationMessage}</p></section> : <>
-					<header class="f-public-head"><h1>{title}</h1>{description && <p>{description}</p>}</header>
+					{submitted ? <section class="f-public-head f-thanks" role="status"><span class="f-thanks-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg></span><h1>Thank you</h1><p>{confirmationMessage}</p></section> : <>
+					<header class="f-public-head"><h1>{title}</h1>{description && <p>{description}</p>}{hasRequired && <p class="f-required-note"><span class="f-req">*</span> Required</p>}</header>
 					<form method="post" action={`/f/${encodeURIComponent(slug)}/submit`}>
 						<input type="hidden" name="versionId" value={submitVersion} />
 						<input type="hidden" name="submissionToken" value={submitToken} />
 						<input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 						<div hidden aria-hidden="true"><label>Leave this field empty<input name="website" tabindex="-1" autocomplete="off" /></label></div>
-						<div class="f-public-fields" set:html={fields.map((field: Record<string, any>, index: number) => renderField(field, index)).join("")} />
+						<div class="f-public-fields" set:html={fields.map((field: Record<string, any>, index: number) => publicFieldMarkup(field, index)).join("")} />
 						<div class="f-public-footer"><button class="f-btn" type="submit">Submit</button></div>
 					</form>
 					</>}
 				</main>
-				<p class="f-brand-foot">Made with <a href="/tools/forms" style="color:var(--fa)">URLX Forms</a></p>
+				<p class="f-brand-foot">Made with <a href="/tools/forms">URLX Forms</a> · <a href="/tools/forms">Create your own form</a></p>
 			</div>
 		) : (
 			<main class="forms-main" style="padding-top:100px;text-align:center">

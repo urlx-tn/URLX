@@ -1,9 +1,12 @@
 ---
+import logo from "../../assets/logo.png";
+
 const { current = "forms" } = Astro.props;
 ---
 <header class="forms-header">
-	<a class="forms-brand" href="/tools/forms" aria-label="URLX Forms home"><span aria-hidden="true">↗</span><span>URL<b>X</b></span><small>Forms</small></a>
+	<a class="forms-brand" href="/tools/forms" aria-label="URLX Forms home"><img src={logo.src} alt="URLX" width="1033" height="274" class="forms-brand-logo" loading="eager" /><small>Forms</small></a>
 	<nav class="forms-nav" aria-label="Forms navigation">
+		<a href="/tools/forms" aria-current={current === "home" ? "page" : undefined}>Templates</a>
 		<a href="/forms" aria-current={current === "forms" ? "page" : undefined}>My forms</a>
 		<a href="/tools">More tools</a>
 	</nav>

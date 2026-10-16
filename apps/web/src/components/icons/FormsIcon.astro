@@ -1,7 +1,52 @@
-<svg viewBox="0 0 96 96" fill="none" aria-hidden="true" class="size-20 text-accent">
-	<rect x="12" y="11" width="59" height="74" rx="14" fill="currentColor" opacity=".12" />
-	<rect x="20" y="9" width="58" height="74" rx="13" fill="white" stroke="currentColor" stroke-width="4" />
-	<path d="M32 30h34M32 42h34M32 54h18" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
-	<circle cx="66" cy="67" r="15" fill="currentColor" />
-	<path d="m59 67 5 5 9-10" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+---
+interface Props {
+	class?: string;
+}
+
+const { class: className = "h-auto w-40 max-w-full object-contain" } =
+	Astro.props;
+---
+
+<svg
+	viewBox="0 0 180 128"
+	fill="none"
+	stroke-linecap="round"
+	stroke-linejoin="round"
+	role="img"
+	aria-label="Forms tool icon"
+	class={className}
+>
+	<g stroke="#1d2330" stroke-width="2.8">
+		<!-- link pill -->
+		<rect x="4" y="50" width="52" height="24" rx="12" />
+		<circle cx="17" cy="62" r="6" />
+		<path d="M11 62h12M17 56c-2.6 3.4-2.6 8.6 0 12M17 56c2.6 3.4 2.6 8.6 0 12" stroke-width="1.8" />
+		<path d="M28 56v12" />
+		<!-- arrow -->
+		<path d="M63 57h7M61 62h17M63 67h7M73 55l7 7-7 7" />
+		<!-- form sheet -->
+		<path d="M92 6h50l14 14v86a8 8 0 0 1-8 8H92a8 8 0 0 1-8-8V14a8 8 0 0 1 8-8Z" />
+		<path d="M142 6v10a4 4 0 0 0 4 4h10" />
+		<path d="M95 22h26" stroke-width="4" />
+		<path d="M95 31h40" stroke-width="2.2" />
+		<rect x="95" y="40" width="48" height="12" rx="4" stroke-width="2.4" />
+		<circle cx="100" cy="64" r="4" stroke-width="2.4" />
+		<path d="M110 64h22" stroke-width="2.2" />
+		<circle cx="100" cy="77" r="4" stroke-width="2.4" />
+		<path d="M110 77h16" stroke-width="2.2" />
+		<rect x="96" y="86" width="8" height="8" rx="2" stroke-width="2.4" />
+		<path d="M110 90h19" stroke-width="2.2" />
+	</g>
+	<g stroke="#1a5ff0">
+		<path d="M38 56.5a3.6 3.6 0 0 1 5 0l1.2 1.2a3.6 3.6 0 0 1 0 5l-1 1M41.5 67.5a3.6 3.6 0 0 1-5 0l-1.2-1.2a3.6 3.6 0 0 1 0-5l1-1M38.3 64.5l4-4.5" stroke-width="2.2" />
+		<path d="M98 46h10" stroke-width="2.2" />
+		<path d="m98 90.2 1.8 1.8 3.6-4" stroke-width="2" />
+	</g>
+	<circle cx="100" cy="64" r="2" fill="#1a5ff0" />
+	<rect x="95" y="100" width="22" height="8" rx="4" fill="#1a5ff0" />
+	<!-- sparkle -->
+	<path d="M70 18c.8 4 2 5.2 6 6-4 .8-5.2 2-6 6-.8-4-2-5.2-6-6 4-.8 5.2-2 6-6Z" fill="#1a5ff0" />
+	<!-- URLX mark -->
+	<path d="M148 99l18 23" stroke="#1a5ff0" stroke-width="6" stroke-linecap="butt" />
+	<path d="M167 99l-18 23" stroke="#1d2330" stroke-width="6" stroke-linecap="butt" />
 </svg>
