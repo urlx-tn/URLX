@@ -1,0 +1,135 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import "../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import { proxyApiRequest } from "../../lib/api-proxy";
+import { formsReady } from "../../lib/forms-ready";
+
+export const prerender = false;
+const { slug = "" } = Astro.params;
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+Astro.response.headers.set("Cache-Control", "no-store");
+type PublicForm = {
+	form?: Record<string, any>;
+	version?: Record<string, any>;
+	submissionToken?: string;
+	idempotencyKey?: string;
+};
+let result: PublicForm | null = null;
+let unavailable = false;
+if (formsEnabled && slug) {
+	try {
+		const response = await proxyApiRequest(
+			Astro.request,
+			`/api/forms/public/${encodeURIComponent(slug)}`,
+		);
+		if (response.ok) result = (await response.json()) as PublicForm;
+		else if (response.status === 404) Astro.response.status = 404;
+		else unavailable = true;
+	} catch {
+		unavailable = true;
+	}
+}
+const canonicalSlug = result?.form?.canonicalSlug;
+if (canonicalSlug && canonicalSlug !== slug)
+	return Astro.redirect(`/f/${encodeURIComponent(canonicalSlug)}`, 308);
+const form = result?.form;
+const version = result?.version;
+const versionData =
+	version?.draft && typeof version.draft === "object" ? version.draft : version;
+const fields = Array.isArray(version?.fields)
+	? version.fields
+	: Array.isArray(versionData?.fields)
+		? versionData.fields
+		: Array.isArray(form?.fields)
+			? form.fields
+			: [];
+const title = form?.title || versionData?.title || "Form";
+const description = versionData?.description || form?.description || "";
+const confirmationMessage =
+	form?.confirmationMessage ||
+	versionData?.confirmationMessage ||
+	"Thank you for your response.";
+const submitted = Astro.url.searchParams.get("submitted") === "1";
+const accent = versionData?.accent || form?.theme || form?.accent || "#0071e3";
+const accentValue =
+	(
+		{
+			blue: "#0071e3",
+			teal: "#0e7c86",
+			green: "#248a3d",
+			orange: "#c2410c",
+			pink: "#c2185b",
+			graphite: "#48484a",
+		} as Record<string, string>
+	)[accent] || accent;
+const esc = (value: unknown) =>
+	String(value ?? "").replace(
+		/[&<>"']/g,
+		(c) =>
+			(
+				({
+					"&": "&amp;",
+					"<": "&lt;",
+					">": "&gt;",
+					'"': "&quot;",
+					"'": "&#39;",
+				}) as Record<string, string>
+			)[c] ?? c,
+	);
+function renderField(field: Record<string, any>, index: number) {
+	const id = String(field.id || `question-${index + 1}`);
+	const label = String(field.label || `Question ${index + 1}`);
+	const required = Boolean(field.required);
+	const help = field.help
+		? `<p class="help" id="${esc(id)}-help">${esc(field.help)}</p>`
+		: "";
+	const described = field.help ? `aria-describedby="${esc(id)}-help"` : "";
+	const name = `answers[${id}]`;
+	if (field.type === "singlechoice" || field.type === "multichoice") {
+		const options = Array.isArray(field.options) ? field.options : [];
+		return `<div class="f-public-field"><fieldset ${required ? "required" : ""}><legend>${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</legend>${help}${options.map((option: string, i: number) => `<label class="choice"><input type="${field.type === "singlechoice" ? "radio" : "checkbox"}" name="${esc(name)}${field.type === "multichoice" ? "[]" : ""}" value="${esc(option)}" ${required && field.type === "singlechoice" && i === 0 ? "required" : ""}>${esc(option)}</label>`).join("")}</fieldset></div>`;
+	}
+	if (field.type === "rating")
+		return `<div class="f-public-field"><fieldset><legend>${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</legend>${help}<div class="choice" role="radiogroup" aria-label="${esc(label)}">${[1, 2, 3, 4, 5].map((n) => `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><input type="radio" name="${esc(name)}" value="${n}" ${required && n === 1 ? "required" : ""}>${n}</label>`).join("")}</div></fieldset></div>`;
+	const common = `name="${esc(name)}" id="${esc(id)}" ${required ? "required" : ""} ${described}`;
+	const input =
+		field.type === "paragraph"
+			? `<textarea class="f-textarea" ${common} rows="4"></textarea>`
+			: `<input class="f-input" ${common} type="${field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}" ${field.type === "phone" ? 'inputmode="tel"' : ""}>`;
+	return `<div class="f-public-field"><label for="${esc(id)}">${esc(label)}${required ? " <span style='color:#d70015'>*</span>" : ""}</label>${help}${input}</div>`;
+}
+const submitVersion = version?.id ?? "";
+const submitToken = result?.submissionToken ?? "";
+const idempotencyKey = result?.idempotencyKey ?? "";
+const pageTitle = `${title} | URLX Forms`;
+---
+<Layout title={pageTitle} description={description || `Fill out ${title} online.`} image={form && canonicalSlug ? `/api/forms/public/${encodeURIComponent(canonicalSlug)}/og.png` : undefined} imageAlt={`${title} form preview`} canonicalPath={`/f/${slug}`} chrome={false}>
+	<div class="forms-app" style={`--form-accent:${accentValue}`}>
+		{formsEnabled && form && version ? (
+			<div class="f-public">
+				<main class="f-public-card">
+					<div class="f-band"></div>
+					{submitted ? <section class="f-public-head" role="status"><h1>Thank you</h1><p>{confirmationMessage}</p></section> : <>
+					<header class="f-public-head"><h1>{title}</h1>{description && <p>{description}</p>}</header>
+					<form method="post" action={`/f/${encodeURIComponent(slug)}/submit`}>
+						<input type="hidden" name="versionId" value={submitVersion} />
+						<input type="hidden" name="submissionToken" value={submitToken} />
+						<input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+						<div hidden aria-hidden="true"><label>Leave this field empty<input name="website" tabindex="-1" autocomplete="off" /></label></div>
+						<div class="f-public-fields" set:html={fields.map((field: Record<string, any>, index: number) => renderField(field, index)).join("")} />
+						<div class="f-public-footer"><button class="f-btn" type="submit">Submit</button></div>
+					</form>
+					</>}
+				</main>
+				<p class="f-brand-foot">Made with <a href="/tools/forms" style="color:var(--fa)">URLX Forms</a></p>
+			</div>
+		) : (
+			<main class="forms-main" style="padding-top:100px;text-align:center">
+				<div class="f-card f-empty"><h1>{!formsEnabled ? "Forms are not available" : unavailable ? "This form is temporarily unavailable" : "Form not found"}</h1><p>{!formsEnabled ? "URLX Forms has not been enabled for this deployment." : unavailable ? "Please try again in a little while." : "This form may have been removed or the link may be incorrect."}</p>{unavailable && <a class="f-btn secondary" href={`/f/${encodeURIComponent(slug)}`}>Try again</a>}</div>
+			</main>
+		)}
+	</div>
+</Layout>

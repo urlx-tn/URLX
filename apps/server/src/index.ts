@@ -11,7 +11,8 @@ import { appRouter } from "@urlx/api/routers/index";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-
+import { formsApp } from "./forms";
+import { formsOgApp } from "./forms-og";
 import { securityHeaders } from "./lib/security-headers";
 
 type ServerHonoEnv = {
@@ -35,6 +36,7 @@ app.use(
 		allowMethods: ["GET", "POST", "OPTIONS"],
 		allowHeaders: ["Content-Type", "X-URLX-Visitor-Token"],
 		exposeHeaders: ["Retry-After", "X-URLX-Visitor-Token-Refresh"],
+		credentials: true,
 	}),
 );
 
@@ -50,6 +52,9 @@ export const apiHandler = new OpenAPIHandler(appRouter, {
 		}),
 	],
 });
+
+app.route("/", formsOgApp);
+app.route("/", formsApp);
 
 export const rpcHandler = new RPCHandler(appRouter, {
 	interceptors: [

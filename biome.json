@@ -18,6 +18,7 @@
 			"!**/.vscode",
 			"!**/.astro",
 			"!**/routeTree.gen.ts",
+			"!**/e2e/artifacts",
 			"!**/src-tauri",
 			"!**/.nuxt",
 			"!bts.jsonc",

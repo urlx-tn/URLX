@@ -67,6 +67,24 @@ const visitorTokenKey = new SecretKey({
 	),
 });
 
+const betterAuthSecret = alchemy.env.BETTER_AUTH_SECRET;
+const betterAuthUrl = alchemy.env.BETTER_AUTH_URL;
+const resendApiKey = alchemy.env.RESEND_API_KEY;
+const authEmailFrom = alchemy.env.AUTH_EMAIL_FROM;
+const formsEnabled = Boolean(
+	betterAuthSecret && betterAuthUrl && resendApiKey && authEmailFrom,
+);
+const formsAuthBindings: Record<string, string | ReturnType<typeof secret>> =
+	{};
+if (formsEnabled) {
+	Object.assign(formsAuthBindings, {
+		BETTER_AUTH_SECRET: secret(betterAuthSecret!),
+		BETTER_AUTH_URL: betterAuthUrl!,
+		RESEND_API_KEY: secret(resendApiKey!),
+		AUTH_EMAIL_FROM: authEmailFrom!,
+	});
+}
+
 const db = await D1Database("database", {
 	adopt: true,
 	migrationsDir: "../../packages/db/src/migrations",
@@ -112,6 +130,16 @@ export const server = await Worker("server", {
 	bindings: {
 		DB: db,
 		CORS_ORIGIN: requireValue("CORS_ORIGIN", alchemy.env.CORS_ORIGIN),
+		...formsAuthBindings,
+		FORMS_ENABLED: formsEnabled ? "true" : "false",
+		FORMS_RENDER_RATE_LIMIT: RateLimit({
+			namespace_id: 1006,
+			simple: { limit: 30, period: 60 },
+		}),
+		FORMS_SUBMIT_RATE_LIMIT: RateLimit({
+			namespace_id: 1008,
+			simple: { limit: 10, period: 60 },
+		}),
 		METADATA_VISITOR_RATE_LIMIT: RateLimit({
 			namespace_id: 1002,
 			simple: {
@@ -149,6 +177,8 @@ export const web = await Astro("web", {
 			"PUBLIC_CONVERSION_SERVER_URL",
 			conversion.url,
 		),
+		API: server,
+		FORMS_ENABLED: formsEnabled ? "true" : "false",
 		PUBLIC_SERVER_URL: publicServerUrl,
 	},
 });

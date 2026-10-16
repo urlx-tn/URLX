@@ -5,17 +5,20 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit --pretty false",
+		"test": "vitest run",
 		"compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server"
 	},
 	"dependencies": {
 		"@orpc/openapi": "catalog:",
 		"@orpc/server": "catalog:",
 		"@orpc/zod": "catalog:",
+		"@resvg/resvg-wasm": "2.6.2",
 		"@urlx/api": "workspace:*",
 		"@urlx/db": "workspace:*",
 		"@urlx/env": "workspace:*",
 		"dotenv": "catalog:",
 		"hono": "catalog:",
+		"satori": "0.18.3",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
@@ -25,6 +28,8 @@
 		"alchemy": "catalog:",
 		"tsdown": "^0.22.3",
 		"typescript": "catalog:",
-		"wrangler": "^4.127.1"
+		"wrangler": "^4.127.1",
+		"miniflare": "4.20260424.0",
+		"vitest": "^4.1.11"
 	}
 }

@@ -1,0 +1,58 @@
+---
+import FormsHeader from "../../components/forms/FormsHeader.astro";
+import Layout from "../../layouts/Layout.astro";
+import "../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import { formsReady } from "../../lib/forms-ready";
+
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const title = "Free Online Form Builder | URLX Forms";
+const description =
+	"Create, share and manage forms with URLX Forms. Start from a template or build a form of your own.";
+---
+<Layout title={title} description={description} canonicalPath="/tools/forms" chrome={false}>
+	<div class="forms-app" data-enabled={String(formsEnabled)}>
+		<FormsHeader current="home" />
+		{!formsEnabled ? <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main> : <>
+		<main class="forms-main">
+			<section class="forms-hero">
+				<h1>A form for whatever comes next.</h1>
+				<p>Registrations, feedback, contact forms and more. Build it in minutes, then share one simple link.</p>
+				<p style="margin-top:22px"><a class="f-btn" href="/forms">Create a form <span aria-hidden="true">→</span></a></p>
+			</section>
+			<section aria-labelledby="forms-start-heading">
+				<div style="display:flex;align-items:end;justify-content:space-between;gap:12px"><div><h2 id="forms-start-heading" style="margin:0;font-size:23px">Start with a template</h2><p class="f-muted" style="margin:4px 0 0">Every detail can be changed in the editor.</p></div><a href="/forms" style="color:var(--fa)">My forms</a></div>
+				<div class="f-grid" id="form-templates">
+					<button class="f-template" data-template="registration"><span class="preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Registration</strong><span>Collect names, email addresses and session choices.</span></button>
+					<button class="f-template" data-template="contact"><span class="preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Contact</strong><span>Give people a straightforward way to reach you.</span></button>
+					<button class="f-template" data-template="feedback"><span class="preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Feedback</strong><span>Gather ratings, comments and suggestions.</span></button>
+					<button class="f-template" data-template="blank"><span class="preview" aria-hidden="true"><i></i><i></i></span><strong>Blank form</strong><span>Start fresh with the questions you need.</span></button>
+				</div>
+			</section>
+		</main>
+		</>}
+	</div>
+	<script>
+		// @ts-nocheck
+		import { formsRequest } from "../../lib/forms-api";
+		if (document.querySelector(".forms-app")?.dataset.enabled === "true") {
+		const root = document.querySelector("#form-templates");
+		root?.addEventListener("click", async (event) => {
+			const button = event.target.closest("[data-template]");
+			if (!button) return;
+			button.disabled = true;
+			try {
+				const result = await formsRequest<{ form: { id: string } }>("", { method: "POST", body: JSON.stringify({ template: button.dataset.template, title: "" }) });
+				window.location.assign(`/forms/${encodeURIComponent(result.form.id)}`);
+			} catch (error) {
+				if (error?.status === 401) { window.location.assign(`/forms?signin=1&template=${encodeURIComponent(button.dataset.template)}`); return; }
+				const message = error instanceof Error ? error.message : "Could not create your form. Please try again.";
+				window.alert(message);
+				button.disabled = false;
+			}
+		});
+		}
+	</script>
+</Layout>

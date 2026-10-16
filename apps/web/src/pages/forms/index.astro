@@ -1,0 +1,85 @@
+---
+import FormsHeader from "../../components/forms/FormsHeader.astro";
+import Layout from "../../layouts/Layout.astro";
+import "../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import { formsReady } from "../../lib/forms-ready";
+
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const title = "My forms | URLX Forms";
+---
+<Layout title={title} description="Create and manage your URLX Forms." canonicalPath="/forms" chrome={false}>
+	<div class="forms-app" data-enabled={String(formsEnabled)}>
+		<FormsHeader />
+		{!formsEnabled ? <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main> : <>
+		<main class="forms-main">
+			<div style="display:flex;align-items:end;justify-content:space-between;gap:15px;flex-wrap:wrap">
+				<div><p class="f-muted" style="margin:0 0 4px">URLX Forms</p><h1 style="font-size:34px;letter-spacing:-.025em;line-height:1.15;margin:0">My forms</h1><p class="f-muted" style="margin:8px 0 0">Build a form, share it and keep track of responses.</p></div>
+				<a class="f-btn" href="/tools/forms">＋ New form</a>
+			</div>
+			<div id="forms-usage" style="margin:20px 0 12px" aria-live="polite"></div>
+			<section class="f-card" aria-label="Forms list">
+				<div class="f-list-head"><span>Form</span><span>Status</span><span>Updated</span><span>Responses</span></div>
+				<div id="forms-list" aria-live="polite"><div class="f-empty"><p>Loading your forms…</p></div></div>
+			</section>
+			<p class="f-muted" style="font-size:13px;margin-top:12px">Forms saved in your account are available here.</p>
+		</main>
+		</>}
+	</div>
+	<script>
+		// @ts-nocheck
+		import { formsRequest, requestFormsSignIn, type FormRecord } from "../../lib/forms-api";
+		if (document.querySelector(".forms-app")?.dataset.enabled === "true") {
+		const list = document.querySelector("#forms-list");
+		const usageNode = document.querySelector("#forms-usage");
+		const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[char]);
+		const dateLabel = (value) => { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" }); };
+		async function loadForms() {
+			try {
+				const result = await formsRequest<{ forms: FormRecord[]; usage?: { forms?: number; responses?: number; [key: string]: unknown } }>("");
+				const forms = Array.isArray(result.forms) ? result.forms : [];
+				if (result.usage && usageNode) {
+					const formCount = result.usage.forms ?? forms.length;
+					const responseCount = result.usage.responses;
+					usageNode.innerHTML = `<span class="f-muted" style="font-size:13px">${escapeHtml(formCount)} forms${responseCount == null ? "" : ` · ${escapeHtml(responseCount)} responses`}</span>`;
+				}
+				if (!forms.length) {
+					list.innerHTML = `<div class="f-empty"><h2>Your next form starts here.</h2><p>Choose a template and tailor it to the questions you need.</p><a class="f-btn" href="/tools/forms">Create your first form</a></div>`;
+					return;
+				}
+				list.innerHTML = forms.map((form) => {
+					const live = Boolean(form.slug || form.status === "published" || form.status === "live");
+					const updated = form.updatedAt ?? form.createdAt;
+					return `<div class="f-list-row"><span><a href="/forms/${encodeURIComponent(form.id)}">${escapeHtml(form.title || "Untitled form")}</a><br><span class="f-muted" style="font-size:13px">${live && form.slug ? `/f/${escapeHtml(form.slug)}` : "Draft"}</span></span><span class="f-status ${live ? "live" : ""}">${live ? "Published" : "Draft"}</span><span class="f-muted">${dateLabel(updated)}</span><span>${escapeHtml(form.responseCount ?? 0)} <button type="button" class="f-icon-btn" data-delete-form="${escapeHtml(form.id)}" aria-label="Delete ${escapeHtml(form.title || "form")}">Delete</button></span></div>`;
+				}).join("");
+			} catch (error) {
+				if (error && error.status === 401) {
+					list.innerHTML = `<div class="f-empty" style="max-width:520px;margin:auto"><div aria-hidden="true" style="font-size:34px;margin-bottom:7px">✉</div><h2>Sign in to manage your forms</h2><p>Enter your email and we’ll send you a secure link. It expires after 10 minutes.</p><form id="forms-signin" style="text-align:left"><label class="f-label" for="signin-email">Email address</label><input class="f-input" type="email" id="signin-email" name="email" autocomplete="email" required placeholder="you@example.com"><p id="signin-status" class="f-muted" aria-live="polite" style="font-size:13px;min-height:20px"></p><button class="f-btn" type="submit" style="width:100%">Send sign-in link</button></form></div>`;
+					list.querySelector("#forms-signin")?.addEventListener("submit", async (event) => {
+						event.preventDefault();
+						const form = event.currentTarget;
+						const button = form.querySelector("button[type=submit]");
+						const status = form.querySelector("#signin-status");
+						button.disabled = true; status.textContent = "Sending…";
+						try { await requestFormsSignIn(form.elements.email.value, `${location.origin}/forms`); form.innerHTML = `<div class="f-notice" role="status">Check your inbox for a sign-in link. You can close this page after you open it.</div>`; }
+						catch (error) { status.textContent = error instanceof Error ? error.message : "Could not send the link."; button.disabled = false; }
+					});
+					return;
+				}
+				list.innerHTML = `<div class="f-empty"><h2>Couldn’t load your forms</h2><p>${escapeHtml(error instanceof Error ? error.message : "Check your connection and try again.")}</p><button class="f-btn secondary" id="forms-retry">Try again</button><p style="margin:10px 0 0"><a href="/tools/forms" style="color:var(--fa)">Create a form</a></p></div>`;
+				list.querySelector("#forms-retry")?.addEventListener("click", loadForms);
+			}
+		}
+		list?.addEventListener("click", async (event) => {
+			const button = event.target.closest("[data-delete-form]");
+			if (!button || !confirm("Delete this form and its responses? This cannot be undone.")) return;
+			button.disabled = true;
+			try { await formsRequest(`/${encodeURIComponent(button.dataset.deleteForm)}`, { method:"DELETE" }); await loadForms(); }
+			catch (error) { window.alert(error instanceof Error ? error.message : "Could not delete this form."); button.disabled = false; }
+		});
+		loadForms();
+		}
+	</script>
+</Layout>

@@ -1,0 +1,272 @@
+---
+import FormsHeader from "../../components/forms/FormsHeader.astro";
+import Layout from "../../layouts/Layout.astro";
+import "../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import { formsReady } from "../../lib/forms-ready";
+
+const { id } = Astro.params;
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const title = "Edit form | URLX Forms";
+---
+<Layout title={title} description="Edit, publish and manage your URLX form." canonicalPath={`/forms/${id}`} chrome={false}>
+	<div class="forms-app" data-form-id={id} data-enabled={String(formsEnabled)} inert={formsEnabled} aria-busy={formsEnabled ? "true" : undefined}>
+		<FormsHeader />
+		{!formsEnabled && <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main>}
+		{formsEnabled && <>
+		<main class="forms-main wide">
+			<div class="f-toolbar">
+				<a class="f-icon-btn" href="/forms" aria-label="Back to my forms">←</a>
+				<span class="f-toolbar-title" id="form-title-label">Loading form…</span>
+				<span id="form-save-state" class="f-muted" style="font-size:13px" aria-live="polite"></span>
+				<div class="f-tabs" role="tablist" aria-label="Form sections">
+					<button type="button" data-tab="build" role="tab" aria-selected="true">Build</button>
+					<button type="button" data-tab="share" role="tab" aria-selected="false">Share</button>
+					<button type="button" data-tab="responses" role="tab" aria-selected="false">Responses <span id="response-count">0</span></button>
+				</div>
+				<div class="f-toolbar-actions"><button class="f-icon-btn" type="button" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button class="f-icon-btn" type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button><button class="f-btn secondary small" type="button" data-action="preview">Preview</button><button class="f-btn small" type="button" data-action="publish">Publish</button></div>
+			</div>
+			<div id="editor-alert" class="f-notice" hidden></div>
+			<section data-panel="build" role="tabpanel">
+				<div class="f-editor-grid">
+					<div class="f-canvas"><div class="f-paper" id="form-paper"><div class="f-band"></div><div class="f-paper-head"><input id="draft-title" value="" aria-label="Form title" placeholder="Untitled form"><textarea id="draft-description" aria-label="Form description" placeholder="Add a description (optional)"></textarea></div><div id="question-list"></div></div></div>
+					<aside class="f-sidebar" aria-label="Form editor controls">
+						<section class="f-card"><h3>Add a question</h3><div class="f-types" id="field-types"></div></section>
+						<section class="f-card f-settings"><h3>Form appearance</h3><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted" style="font-size:12px;margin:8px 0 0">Changes save automatically.</p></section>
+						<section class="f-card"><h3>Keyboard shortcuts</h3><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd> <kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd> <kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></span></div></section>
+					</aside>
+				</div>
+			</section>
+			<section data-panel="share" role="tabpanel" hidden id="share-panel"></section>
+			<section data-panel="responses" role="tabpanel" hidden id="responses-panel"></section>
+		</main>
+		<dialog id="preview-dialog" style="width:min(850px,calc(100% - 24px));max-height:90vh;border:0;border-radius:18px;padding:0;box-shadow:0 20px 70px #0004"><div class="f-preview-tools"><span>Preview</span><div class="f-tabs"><button type="button" data-action="preview-device" data-device="desktop" aria-pressed="true">Desktop</button><button type="button" data-action="preview-device" data-device="phone" aria-pressed="false">Phone</button></div></div><div id="preview-content"></div><form method="dialog" style="padding:0 24px 20px"><button class="f-btn secondary" style="width:100%">Close preview</button></form></dialog>
+		<div class="f-toast" role="status" hidden id="form-toast"></div>
+		</>}
+	</div>
+	<script>
+		// @ts-nocheck
+		import { formsRequest, normalizeDraft, type FormDraft, type FormField } from "../../lib/forms-api";
+		import { renderQrPngDataUrl, renderQrSvg } from "../../lib/qr-code";
+		const app = document.querySelector(".forms-app");
+		if (app?.dataset.enabled === "true") {
+		app.inert = true;
+		app.setAttribute("aria-busy", "true");
+		const formId = app.dataset.formId;
+		const types = ["short", "paragraph", "email", "phone", "number", "singlechoice", "multichoice", "date", "rating"];
+		const typeNames = { short:"Short answer", paragraph:"Paragraph", email:"Email", phone:"Phone", number:"Number", singlechoice:"One choice", multichoice:"Several choices", date:"Date", rating:"Rating" };
+		const colors = { blue:"#0071e3", teal:"#0e7c86", green:"#248a3d", orange:"#c2410c", pink:"#c2185b", graphite:"#48484a" };
+		const localKey = `urlx-form-draft:${formId}`;
+		const $ = (selector) => app.querySelector(selector);
+		const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]);
+		const clone = (value) => JSON.parse(JSON.stringify(value));
+		const newField = (type) => ({ id: crypto.randomUUID(), type, label: "Question", help: "", required: false, options: ["Option 1", "Option 2"] });
+		let draft = { title:"Untitled form", description:"", accent:"blue", fields:[] };
+		let revision = 0;
+		let responses = [];
+		let stats = {};
+		let responseTotal = 0;
+		let selected = "";
+		let activeTab = "build";
+		let saveTimer;
+		let saveInFlight = false;
+		let localOnly = false;
+		let history = [];
+		let historyIndex = -1;
+		let historyTimer;
+		let currentForm = {};
+		let shareUrl = "";
+		let shortUrl = "";
+		function color() { return colors[draft.accent] || draft.accent || colors.blue; }
+		function showToast(text) { const node = $("#form-toast"); node.textContent = text; node.hidden = false; setTimeout(() => { node.hidden = true; }, 2600); }
+		function snapshot() { const next = JSON.stringify(draft); if (history[historyIndex] === next) return; history = history.slice(0, historyIndex + 1); history.push(next); if (history.length > 80) history.shift(); historyIndex = history.length - 1; }
+		function capturePendingText() {
+			draft.title = $("#draft-title").value;
+			draft.description = $("#draft-description").value;
+			for (const card of app.querySelectorAll("[data-field]")) {
+				const field = draft.fields.find((item) => item.id === card.dataset.field);
+				if (!field) continue;
+				for (const input of card.querySelectorAll("input[data-key], textarea[data-key]")) {
+					if (input.dataset.key === "label") field.label = input.value;
+					if (input.dataset.key === "help") field.help = input.value;
+					if (input.dataset.key === "option") field.options[Number(input.dataset.option)] = input.value;
+				}
+			}
+		}
+		function edit(mutator, structure = false) { if (structure) { clearTimeout(historyTimer); capturePendingText(); snapshot(); } mutator(); render(); if (structure) snapshot(); queueSave(); }
+		function queueSave() { clearTimeout(saveTimer); clearTimeout(historyTimer); historyTimer = setTimeout(snapshot, 450); $("#form-save-state").textContent = "Saving…"; try { localStorage.setItem(localKey, JSON.stringify({ draft, revision })); } catch {} saveTimer = setTimeout(saveDraft, 550); }
+		async function saveDraft() {
+			if (saveInFlight) { saveTimer = setTimeout(saveDraft, 400); return; }
+			saveInFlight = true;
+			try {
+				const result = await formsRequest<{ draft?: unknown; revision?: number }>(`/${encodeURIComponent(formId)}/draft`, { method:"PUT", body:JSON.stringify({ draft, revision }) });
+				revision = result.revision ?? revision;
+				localOnly = false;
+				$("#form-save-state").textContent = "Saved";
+				try { localStorage.removeItem(localKey); } catch {}
+			} catch (error) {
+				localOnly = true;
+				$("#form-save-state").textContent = "Saved on this device";
+				const alert = $("#editor-alert"); alert.hidden = false; alert.textContent = "Your changes are saved in this browser while the server is unavailable. They will sync when the connection returns.";
+			}
+			finally { saveInFlight = false; }
+		}
+		function fieldPreview(field) {
+			if (["singlechoice", "multichoice"].includes(field.type)) return `<div class="q-options">${(field.options || []).map((option) => `<div>◯ ${esc(option)}</div>`).join("")}</div>`;
+			if (field.type === "rating") return `<div class="q-preview" aria-hidden="true">☆　☆　☆　☆　☆</div>`;
+			if (field.type === "paragraph") return `<div class="q-preview" style="height:66px">Long answer</div>`;
+			return `<div class="q-preview">${field.type === "date" ? "Select a date" : field.type === "email" ? "name@example.com" : "Short answer"}</div>`;
+		}
+		function render() {
+			$("#form-title-label").textContent = draft.title || "Untitled form";
+			$("#draft-title").value = draft.title || "";
+			$("#draft-description").value = draft.description || "";
+			$("#form-paper").style.setProperty("--form-accent", color());
+			$("#draft-accent").innerHTML = Object.entries(colors).map(([name, value]) => `<button type="button" data-action="accent" data-accent="${name}" aria-label="${name} accent" aria-pressed="${draft.accent === name}" style="background:${value}"></button>`).join("");
+			$("#field-types").innerHTML = types.map((type) => `<button type="button" data-action="add" data-type="${type}">＋ ${typeNames[type]}</button>`).join("");
+			$("#question-list").innerHTML = draft.fields.map((field, index) => `<article class="f-question ${selected === field.id ? "selected" : ""}" data-field="${esc(field.id)}"><div style="display:flex;align-items:center;gap:6px"><input class="q-label" data-key="label" value="${esc(field.label)}" placeholder="Question ${index + 1}" aria-label="Question ${index + 1}"><strong style="color:#d70015" ${field.required ? "" : "hidden"}>*</strong></div><input class="q-help" data-key="help" value="${esc(field.help)}" placeholder="Add a hint (optional)" aria-label="Question hint">${fieldPreview(field)}${["singlechoice", "multichoice"].includes(field.type) ? `<div class="q-options">${(field.options || []).map((option, optionIndex) => `<div style="display:flex;align-items:center;gap:5px"><span>${field.type === "singlechoice" ? "◯" : "□"}</span><input data-key="option" data-option="${optionIndex}" value="${esc(option)}" aria-label="Option ${optionIndex + 1}"><button type="button" data-action="remove-option" data-option="${optionIndex}" aria-label="Remove option" class="f-icon-btn">×</button></div>`).join("")}<button type="button" data-action="add-option" class="f-icon-btn" style="color:var(--fa)">＋ Add option</button></div>` : ""}<div class="f-q-actions"><select data-action="type-select" aria-label="Question type">${types.map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${typeNames[type]}</option>`).join("")}</select><button type="button" data-action="required">${field.required ? "✓ Required" : "○ Optional"}</button><span style="flex:1"></span><button type="button" data-action="up" aria-label="Move up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-action="down" aria-label="Move down" ${index === draft.fields.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-action="duplicate" aria-label="Duplicate question">Duplicate</button><button type="button" data-action="delete" aria-label="Delete question">Delete</button></div></article>`).join("") || `<p class="f-muted" style="text-align:center;padding:20px">Add your first question using the controls.</p>`;
+			$("#response-count").textContent = String(stats.total ?? responses.length ?? 0);
+			if (activeTab === "share") renderShare();
+			if (activeTab === "responses") renderResponses();
+		}
+		function setTab(tab) { activeTab = tab; app.querySelectorAll("[data-tab]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.tab === tab))); app.querySelectorAll("[data-panel]").forEach((panel) => panel.hidden = panel.dataset.panel !== tab); if (tab === "share") renderShare(); if (tab === "responses") loadResponses(); }
+		async function renderShare(published) {
+			if (published) { currentForm = published.form || published; shareUrl = published.url || shareUrl; shortUrl = published.shortUrl || shortUrl; }
+			const panel = $("#share-panel"); const slug = currentForm?.slug || ""; const isPublished = Boolean(slug || currentForm?.publishedVersion || currentForm?.published);
+			const url = shareUrl || (slug ? `${location.origin}/f/${slug}` : "");
+			panel.innerHTML = `<div class="f-card f-share-card" style="padding:22px"><section><h2 style="margin:0 0 6px">Share your form</h2><p class="f-muted" style="margin:0 0 17px">Publish it to create a link respondents can open on any device.</p>${url ? `<label class="f-label" for="share-url">Form link</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f-input" id="share-url" readonly value="${esc(url)}" style="flex:1;min-width:220px"><button type="button" class="f-btn secondary" data-action="copy-link">Copy link</button><a class="f-btn secondary" target="_blank" rel="noopener" href="${esc(url)}">Open form</a></div>${shortUrl ? `<p class="f-muted" style="margin:9px 0 0">Short link: <a href="${esc(shortUrl)}" target="_blank" rel="noopener">${esc(shortUrl)}</a></p>` : ""}<div style="margin-top:17px"><label class="f-label" for="form-slug">Form address</label><div style="display:flex;gap:8px"><span style="padding:10px 0;color:var(--fm)">/f/</span><input id="form-slug" class="f-input" value="${esc(slug)}" maxlength="50" pattern="[a-z0-9-]+" aria-label="Form link slug"><button type="button" class="f-btn secondary" data-action="save-slug">Save</button></div></div><p class="f-status live" style="margin-top:15px">Published</p>` : `<div class="f-notice">This form has not been published yet.</div><button type="button" class="f-btn" data-action="publish">Publish form</button>`}</section>${url ? `<section class="f-qr-section"><h3 style="margin:0 0 12px">QR code</h3><div id="share-qr" class="f-qr"></div><div class="f-qr-actions"><a id="qr-png" class="f-btn secondary small" download="urlx-form-qr.png">Download PNG</a><a id="qr-svg" class="f-btn secondary small" download="urlx-form-qr.svg">Download SVG</a><button type="button" class="f-btn secondary small" data-action="print">Print A4 / Save PDF</button></div></section>` : ""}<p class="f-muted" style="grid-column:1/-1;margin:0;font-size:13px">Keep editing any time. New responses use the latest published version.</p></div>`;
+			if (!url) return;
+			try {
+				const png = await renderQrPngDataUrl(url, { width:512, margin:2, color:{ dark:"#1d1d1f", light:"#ffffff" } });
+				const svg = await renderQrSvg(url, { width:512, margin:2, color:{ dark:"#1d1d1f", light:"#ffffff" } });
+				$("#share-qr").innerHTML = `<img src="${png}" width="216" height="216" alt="QR code for ${esc(draft.title)}">`;
+				$("#qr-png").href = png;
+				$("#qr-svg").href = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
+			} catch { $("#share-qr").textContent = "QR code could not be generated."; }
+		}
+		async function loadResponses() {
+			try { const result = await formsRequest<{ responses?: unknown[]; stats?: unknown; total?: number }>(`/${encodeURIComponent(formId)}/responses`); responses = Array.isArray(result.responses) ? result.responses : []; stats = result.stats || {}; responseTotal = result.total ?? responses.length; renderResponses(); }
+			catch (error) { $("#responses-panel").innerHTML = `<div class="f-card f-empty"><h2>Responses are unavailable</h2><p>${esc(error instanceof Error ? error.message : "Try again in a moment.")}</p><button class="f-btn secondary" data-action="responses-retry">Try again</button></div>`; }
+		}
+		function renderResponses() {
+			const panel = $("#responses-panel"); const total = stats.total ?? stats.totalResponses ?? responseTotal; const latest = stats.latestAt ?? stats.lastResponseAt;
+			const average = stats.averageRating ?? stats.average ?? "—";
+			if (!responses.length) { panel.innerHTML = `<div class="f-response-stats"><div class="f-card f-stat"><small>Total responses</small><strong>${esc(total)}</strong></div><div class="f-card f-stat"><small>Average rating</small><strong>${esc(average)}</strong></div><div class="f-card f-stat"><small>Latest response</small><strong style="font-size:17px">${latest ? esc(new Date(latest).toLocaleDateString()) : "—"}</strong></div></div><div class="f-card f-empty"><h2>No responses yet</h2><p>Once your form is published and shared, responses will appear here.</p><button type="button" class="f-btn secondary" data-action="export" disabled>Export CSV</button></div>`; return; }
+			const versionGroups = Array.isArray(stats) ? stats : [];
+			const groups = new Map();
+			for (const response of responses) {
+				const versionId = response?.versionId || "unknown";
+				if (!groups.has(versionId)) groups.set(versionId, []);
+				groups.get(versionId).push(response);
+			}
+			const groupViews = [...groups.entries()].map(([versionId, rows]) => {
+				const definition = versionGroups.find((group) => group.versionId === versionId);
+				const fields = Array.isArray(definition?.fields) ? definition.fields : [];
+				const heads = fields.map((field) => `<th>${esc(field.label || field.id)}</th>`).join("");
+				const body = rows.map((response, index) => {
+					const answers = response?.answers && typeof response.answers === "object" ? response.answers : {};
+					const cells = fields.map((field) => { const value = answers[field.id] ?? ""; return `<td>${esc(Array.isArray(value) ? value.join(", ") : value)}</td>`; }).join("");
+					const submittedAt = response?.createdAt || response?.at;
+					return `<tr><td>${esc(submittedAt ? new Date(submittedAt).toLocaleString() : `Response ${index + 1}`)}</td>${cells}<td><button type="button" class="f-icon-btn" data-action="delete-response" data-response="${esc(response?.id || "")}" aria-label="Delete response">Delete</button></td></tr>`;
+				}).join("");
+				const versionLabel = definition?.version ?? rows[0]?.version ?? "—";
+				const emptyFieldsNote = fields.length ? "" : `<p class="f-muted" style="padding:12px">This version’s field labels are unavailable.</p>`;
+				return `<section class="f-card" style="margin-top:12px"><header style="padding:13px 15px;border-bottom:1px solid var(--fh);font-weight:600">Version ${esc(versionLabel)} <span class="f-muted" style="font-weight:400">· ${rows.length} response${rows.length === 1 ? "" : "s"}</span></header>${emptyFieldsNote}<div class="f-table-scroll"><table class="f-response-table"><thead><tr><th>Received</th>${heads}<th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+			}).join("");
+			const latestValue = latest || responses[0]?.createdAt || responses[0]?.at;
+			const latestLabel = latestValue ? new Date(latestValue).toLocaleDateString() : "—";
+			panel.innerHTML = `<div class="f-response-stats"><div class="f-card f-stat"><small>Total responses</small><strong>${esc(total)}</strong></div><div class="f-card f-stat"><small>Average rating</small><strong>${esc(average)}</strong></div><div class="f-card f-stat"><small>Latest response</small><strong style="font-size:17px">${esc(latestLabel)}</strong></div></div><div style="display:flex;justify-content:flex-end;margin:0 0 10px"><button type="button" class="f-btn secondary small" data-action="export">Export CSV</button></div>${groupViews}`;
+		}
+		function preview() {
+			const fields = draft.fields.map((field, index) => `<div class="f-public-field">${field.type === "singlechoice" || field.type === "multichoice" ? `<fieldset><legend>${esc(field.label || `Question ${index + 1}`)} ${field.required ? "*" : ""}</legend>${field.options.map((option, i) => `<label class="choice"><input type="${field.type === "singlechoice" ? "radio" : "checkbox"}" name="preview-${index}" ${field.required && i === 0 ? "required" : ""}>${esc(option)}</label>`).join("")}</fieldset>` : field.type === "rating" ? `<fieldset><legend>${esc(field.label || `Question ${index + 1}`)}</legend><label class="choice"><input type="range" min="1" max="5" aria-label="Rating"></label></fieldset>` : `<label for="preview-${index}">${esc(field.label || `Question ${index + 1}`)} ${field.required ? "*" : ""}</label>${field.help ? `<p class="help">${esc(field.help)}</p>` : ""}${field.type === "paragraph" ? `<textarea class="f-textarea" id="preview-${index}" placeholder="Your answer" ${field.required ? "required" : ""}></textarea>` : `<input class="f-input" id="preview-${index}" type="${field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}" ${field.required ? "required" : ""} placeholder="Your answer">`}`}</div>`).join("");
+			$("#preview-content").innerHTML = `<div class="f-public-card" style="--form-accent:${color()}"><div class="f-band"></div><header class="f-public-head"><h1>${esc(draft.title || "Untitled form")}</h1>${draft.description ? `<p>${esc(draft.description)}</p>` : ""}</header><div class="f-public-fields">${fields}</div><div class="f-public-footer"><button class="f-btn" type="button">Submit</button></div></div>`;
+			$("#preview-content").classList.remove("phone");
+			$("#preview-dialog").showModal();
+		}
+		async function publish() {
+			const button = app.querySelector('[data-action="publish"]'); if (button) button.disabled = true;
+			try { const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published"); }
+			catch (error) { window.alert(error instanceof Error ? error.message : "Could not publish this form."); }
+			finally { if (button) button.disabled = false; }
+		}
+		app.addEventListener("click", async (event) => {
+			const tab = event.target.closest("[data-tab]"); if (tab) { setTab(tab.dataset.tab); return; }
+			const action = event.target.closest("[data-action]"); if (!action) { const card = event.target.closest("[data-field]"); if (card) { selected = card.dataset.field; app.querySelectorAll(".f-question").forEach((item) => item.classList.toggle("selected", item === card)); } return; }
+			const card = action.closest("[data-field]"); const index = card ? draft.fields.findIndex((field) => field.id === card.dataset.field) : -1; const field = index >= 0 ? draft.fields[index] : null;
+			switch (action.dataset.action) {
+				case "accent": edit(() => { draft.accent = action.dataset.accent; }, true); break;
+				case "add": { const next = newField(action.dataset.type); edit(() => { draft.fields.push(next); selected = next.id; }, true); break; }
+				case "required": if (field) edit(() => { field.required = !field.required; }, true); break;
+				case "add-option": if (field) edit(() => field.options.push(`Option ${field.options.length + 1}`), true); break;
+				case "remove-option": if (field) edit(() => field.options.splice(Number(action.dataset.option), 1), true); break;
+				case "up": case "down": if (field) { const to = index + (action.dataset.action === "up" ? -1 : 1); if (to >= 0 && to < draft.fields.length) edit(() => { [draft.fields[index], draft.fields[to]] = [draft.fields[to], draft.fields[index]]; }, true); } break;
+				case "duplicate": if (field) { const duplicate = { ...clone(field), id:crypto.randomUUID(), label:`${field.label} (copy)` }; edit(() => { draft.fields.splice(index + 1, 0, duplicate); selected = duplicate.id; }, true); } break;
+				case "delete": if (field && confirm("Delete this question?")) edit(() => draft.fields.splice(index, 1), true); break;
+				case "undo": case "redo": { const delta = action.dataset.action === "undo" ? -1 : 1; const next = historyIndex + delta; if (next >= 0 && next < history.length) { historyIndex = next; draft = JSON.parse(history[historyIndex]); render(); queueSave(); } break; }
+				case "preview": preview(); break;
+				case "preview-device": $("#preview-content").classList.toggle("phone", action.dataset.device === "phone"); app.querySelectorAll('[data-action="preview-device"]').forEach((button) => button.setAttribute("aria-pressed", String(button === action))); break;
+				case "publish": await publish(); break;
+				case "save-slug": { const saveButton = action; saveButton.disabled = true; try { const result = await formsRequest<{ form?: FormRecord; url?: string; shortUrl?: string }>(`/${encodeURIComponent(formId)}/slug`, { method:"POST", body:JSON.stringify({ slug:$("#form-slug").value }) }); currentForm = result.form || currentForm; shareUrl = result.url || shareUrl; shortUrl = result.shortUrl || shortUrl; await renderShare(result); showToast("Form address updated"); } catch (error) { window.alert(error instanceof Error ? error.message : "Could not update the address."); saveButton.disabled = false; } break; }
+				case "copy-link": try { await navigator.clipboard.writeText($("#share-url").value); showToast("Link copied"); } catch { $("#share-url").select(); document.execCommand("copy"); showToast("Link copied"); } break;
+				case "print": window.print(); break;
+				case "responses-retry": loadResponses(); break;
+				case "export": window.location.assign(`/api/forms/${encodeURIComponent(formId)}/export.csv`); break;
+				case "delete-response": if (confirm("Delete this response?")) { try { await formsRequest(`/${encodeURIComponent(formId)}/responses/${encodeURIComponent(action.dataset.response)}`, { method:"DELETE" }); await loadResponses(); } catch (error) { window.alert(error.message); } } break;
+			}
+		});
+		app.addEventListener("input", (event) => {
+			const input = event.target;
+			if (input.id === "draft-title") { draft.title = input.value; $("#form-title-label").textContent = input.value || "Untitled form"; queueSave(); return; }
+			if (input.id === "draft-description") { draft.description = input.value; queueSave(); return; }
+			const card = input.closest("[data-field]"); const field = card && draft.fields.find((item) => item.id === card.dataset.field); if (!field) return;
+			if (input.dataset.key === "label") field.label = input.value;
+			if (input.dataset.key === "help") field.help = input.value;
+			if (input.dataset.key === "option") field.options[Number(input.dataset.option)] = input.value;
+			queueSave();
+		});
+		app.addEventListener("change", (event) => {
+			const select = event.target.closest('[data-action="type-select"]');
+			if (!select) return;
+			const card = select.closest("[data-field]");
+			const field = card && draft.fields.find((item) => item.id === card.dataset.field);
+			if (!field) return;
+			edit(() => {
+				field.type = select.value;
+				if (["singlechoice", "multichoice"].includes(field.type) && !field.options?.length) field.options = ["Option 1", "Option 2"];
+				selected = field.id;
+			}, true);
+		});
+		document.addEventListener("keydown", (event) => {
+			if (event.isComposing || event.target.closest("textarea,[contenteditable=true]") || activeTab !== "build") return;
+			const target = event.target;
+			const targetField = target.closest("[data-field]");
+			if (event.key === "Enter" && target.matches(".q-label")) { event.preventDefault(); const field = draft.fields.find((item) => item.id === targetField?.dataset.field); if (field) { const next = newField(field.type); edit(() => { draft.fields.splice(draft.fields.indexOf(field) + 1, 0, next); selected = next.id; }, true); requestAnimationFrame(() => app.querySelector(`[data-field="${next.id}"] .q-label`)?.focus()); } return; }
+			if (event.key === "Backspace" && target.matches(".q-label") && target.value === "" && draft.fields.length > 1) { event.preventDefault(); const index = draft.fields.findIndex((field) => field.id === targetField?.dataset.field); edit(() => { draft.fields.splice(index, 1); selected = draft.fields[Math.max(0, index - 1)]?.id || ""; }, true); return; }
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); const action = app.querySelector(`[data-action="${event.shiftKey ? "redo" : "undo"}"]`); action?.click(); }
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") { event.preventDefault(); const action = app.querySelector(`[data-field="${selected}"] [data-action="duplicate"]`); action?.click(); }
+			if (event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); app.querySelector(`[data-field="${selected}"] [data-action="${event.key === "ArrowUp" ? "up" : "down"}"]`)?.click(); }
+		});
+		async function init() {
+			try {
+				const result = await formsRequest<{ form?: FormRecord; draft?: unknown; revision?: number; versions?: unknown[]; usage?: unknown }>(`/${encodeURIComponent(formId)}`);
+				currentForm = result.form || {};
+				shareUrl = result.form?.url || (result.form?.slug ? `${location.origin}/f/${result.form.slug}` : "");
+				shortUrl = result.form?.shortUrl || (result.form?.shortCode ? `${location.origin}/u/${result.form.shortCode}` : "");
+				draft = normalizeDraft(result.draft || result.form?.draft || result.form, result.form?.title || "Untitled form");
+				revision = result.revision ?? 0;
+				if (!draft.fields.length) draft.fields.push(newField("short"));
+				selected = draft.fields[0].id;
+				try { const cached = JSON.parse(localStorage.getItem(localKey) || "null"); if (cached?.draft && cached.revision === revision) { draft = normalizeDraft(cached.draft); } } catch {}
+				snapshot(); render(); app.inert = false; app.removeAttribute("aria-busy"); app.dataset.ready = "true";
+			} catch (error) {
+				$("#editor-alert").hidden = false; $("#editor-alert").textContent = error instanceof Error ? error.message : "Could not load this form.";
+				$("#form-title-label").textContent = "Form unavailable";
+				app.inert = false; app.removeAttribute("aria-busy"); app.dataset.ready = "true";
+			}
+		}
+		init();
+		}
+	</script>
+</Layout>
