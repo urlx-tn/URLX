@@ -548,6 +548,7 @@ export class FormsService {
 				),
 			)
 			.limit(1);
+		const limits = await this.getLimits();
 		const stats = await this.responseStats(id, versions);
 		return {
 			responses,
@@ -555,7 +556,7 @@ export class FormsService {
 			offset,
 			limit,
 			usage: usage?.responseCount ?? 0,
-			monthlyLimit: maxResponsesPerMonth,
+			monthlyLimit: limits.maxMonthlyResponses,
 			stats,
 		};
 	}

@@ -34,9 +34,15 @@ const title = "My forms | URLX Forms";
 		import { formsRequest, requestFormsSignIn, type FormRecord } from "../../lib/forms-api";
 		import { confirmAction, errorMessage, showToast } from "../../lib/forms-dialog";
 		import { accentColors, formsIcon as icon } from "../../lib/forms-ui";
+		import { formTemplates } from "@urlx/api/modules/forms/forms.templates";
+		import { startFromTemplate } from "../../lib/forms-start";
 		if (document.querySelector(".forms-app")?.dataset.enabled === "true") {
 		const list = document.querySelector("#forms-list");
 		const usageNode = document.querySelector("#forms-usage");
+		const templateIds = new Set(formTemplates.map((template) => template.id));
+		const requestedTemplate = new URLSearchParams(location.search).get("template");
+		const resumeTemplate = requestedTemplate && templateIds.has(requestedTemplate) ? requestedTemplate : null;
+		let resumedTemplate = false;
 		const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[char]);
 		const dateLabel = (value) => { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" }); };
 		async function loadForms() {
@@ -47,6 +53,18 @@ const title = "My forms | URLX Forms";
 					const formCount = result.usage.forms ?? forms.length;
 					const responseCount = result.usage.responses;
 					usageNode.innerHTML = `<span class="f-usage-chip">${icon("forms", 15)}<strong>${escapeHtml(formCount)}</strong> form${formCount === 1 ? "" : "s"}</span>${responseCount == null ? "" : `<span class="f-usage-chip">${icon("inbox", 15)}<strong>${escapeHtml(responseCount)}</strong> response${responseCount === 1 ? "" : "s"}</span>`}`;
+				}
+				if (resumeTemplate && !resumedTemplate) {
+					resumedTemplate = true;
+					const callbackUrl = new URL(location.href);
+					callbackUrl.searchParams.delete("template");
+					callbackUrl.searchParams.delete("signin");
+					history.replaceState(null, "", `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`);
+					list.innerHTML = `<div class="f-empty"><p>Preparing your selected template…</p><button type="button" class="f-btn" id="resume-template">Continue</button></div>`;
+					const resumeButton = list.querySelector("#resume-template");
+					resumeButton.addEventListener("click", () => startFromTemplate(resumeTemplate, resumeButton));
+					startFromTemplate(resumeTemplate, resumeButton);
+					return;
 				}
 				if (!forms.length) {
 					list.innerHTML = `<div class="f-empty"><span class="f-empty-icon">${icon("forms", 26)}</span><h2>Your next form starts here.</h2><p>Choose a template and tailor it to the questions you need.</p><a class="f-btn" href="/tools/forms">Create your first form</a></div>`;
@@ -68,7 +86,12 @@ const title = "My forms | URLX Forms";
 						const button = form.querySelector("button[type=submit]");
 						const status = form.querySelector("#signin-status");
 						button.disabled = true; status.textContent = "Sending…";
-						try { await requestFormsSignIn(form.elements.email.value, `${location.origin}/forms`); form.innerHTML = `<div class="f-notice" role="status">Check your inbox for a sign-in link. You can close this page after you open it.</div>`; }
+						try {
+							const callbackUrl = new URL("/forms", location.origin);
+							if (resumeTemplate) callbackUrl.searchParams.set("template", resumeTemplate);
+							await requestFormsSignIn(form.elements.email.value, callbackUrl.toString());
+							form.innerHTML = `<div class="f-notice" role="status">Check your inbox for a sign-in link. You can close this page after you open it.</div>`;
+						}
 						catch (error) { status.textContent = error instanceof Error ? error.message : "Could not send the link."; button.disabled = false; }
 					});
 					return;

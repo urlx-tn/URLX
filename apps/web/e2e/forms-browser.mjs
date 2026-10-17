@@ -451,10 +451,14 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		} catch {}
 	});
 	const artifacts = resolve(here, "artifacts");
-	const screenshots = resolve(here, "screenshots");
+	const screenshots = process.env.URLX_FORMS_E2E_SCREENSHOT_DIR
+		? resolve(process.env.URLX_FORMS_E2E_SCREENSHOT_DIR)
+		: resolve(here, "screenshots");
 	await mkdir(artifacts, { recursive: true });
 	await mkdir(screenshots, { recursive: true });
-	await page.goto(`${astroOrigin}/forms`);
+	await page.goto(`${astroOrigin}/tools/forms`);
+	await page.getByRole("button", { name: "Use Registration template" }).click();
+	await expect(page).toHaveURL(/\/forms\?signin=1&template=registration$/);
 	await expect(
 		page.getByRole("heading", { name: "Sign in to manage your forms" }),
 	).toBeVisible();
@@ -470,14 +474,33 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	expect(link).toBeTruthy();
 	const authUrl = new URL(link);
 	expect(forbiddenHostnames.has(authUrl.hostname)).toBe(true);
+	let failResumedCreate = true;
+	await page.route("**/api/forms", async (route) => {
+		if (route.request().method() === "POST" && failResumedCreate) {
+			failResumedCreate = false;
+			await route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({ error: "TEMPORARY_FAILURE" }),
+			});
+			return;
+		}
+		await route.continue();
+	});
 	await page.goto(authUrl.toString());
-	await expect(page).toHaveURL(/\/forms(?:[?#].*)?$/);
+	await expect(page.locator("#resume-template")).toBeEnabled();
+	expect(new URL(page.url()).searchParams.has("template")).toBe(false);
+	await page.locator("#resume-template").click();
+	await expect(page).toHaveURL(/\/forms\/[^/]+$/);
 	expect(
 		(await context.cookies()).some(
 			(cookie) => cookie.name === "urlx-forms.session_token",
 		),
 	).toBe(true);
-	await page.goto(`${astroOrigin}/forms/e2e-dependency-warmup`);
+	await expect(page.getByLabel("Form title")).toHaveValue(
+		"Workshop registration",
+	);
+	const formId = new URL(page.url()).pathname.split("/").at(-1);
 	await expect(page.locator(".forms-app")).toHaveAttribute(
 		"data-ready",
 		"true",
@@ -491,14 +514,12 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		page.getByRole("list", { name: "Questions in Registration" }),
 		"Template cards list their real questions",
 	).toContainText("Which session?");
-	await page.getByRole("button", { name: "Use Registration template" }).click();
-	await expect(page).toHaveURL(/\/forms\/[^/]+$/);
+	await page.goto(`${astroOrigin}/forms/${encodeURIComponent(formId)}`);
 	await expect(page.getByLabel("Form title")).toBeVisible();
 	await expect(page.locator(".forms-app")).toHaveAttribute(
 		"data-ready",
 		"true",
 	);
-	const formId = new URL(page.url()).pathname.split("/").at(-1);
 	const editedTitle = `E2E registration ${runId}`;
 	const reloadCountBeforeEdit = viteFullReloads;
 	await page.waitForTimeout(650);
@@ -562,6 +583,141 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 			{ timeout: 20_000 },
 		)
 		.toBe(editedTitle);
+
+	const offlineTitle = `Offline recovery ${runId}`;
+	await context.setOffline(true);
+	await page.getByLabel("Form title").fill(offlineTitle);
+	await expect(page.locator("#form-save-state")).toHaveAttribute(
+		"data-state",
+		"local",
+	);
+	await context.setOffline(false);
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(offlineTitle);
+
+	let failFlapRequest;
+	let signalFlapRequest;
+	const flapRequestStarted = new Promise((resolveStarted) => {
+		signalFlapRequest = resolveStarted;
+	});
+	const failFlap = new Promise((resolveFailure) => {
+		failFlapRequest = resolveFailure;
+	});
+	let holdFlapRequest = true;
+	await page.route(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}/draft`,
+		async (route) => {
+			if (holdFlapRequest && route.request().method() === "PUT") {
+				holdFlapRequest = false;
+				signalFlapRequest();
+				await failFlap;
+				await route.abort("failed");
+				return;
+			}
+			await route.continue();
+		},
+	);
+	const flapTitle = `Reconnect during save ${runId}`;
+	await page.getByLabel("Form title").fill(flapTitle);
+	await flapRequestStarted;
+	await context.setOffline(true);
+	await context.setOffline(false);
+	failFlapRequest();
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(flapTitle);
+	await page.unroute(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}/draft`,
+	);
+
+	let abortDraft = true;
+	const draftUrl = `${astroOrigin}/api/forms/${encodeURIComponent(formId)}/draft`;
+	await page.route(draftUrl, async (route) => {
+		if (abortDraft && route.request().method() === "PUT") {
+			abortDraft = false;
+			await route.abort("failed");
+			return;
+		}
+		await route.continue();
+	});
+	const recoveredTitle = `Reload recovery ${runId}`;
+	await page.getByLabel("Form title").fill(recoveredTitle);
+	await expect(page.locator("#form-save-state")).toHaveAttribute(
+		"data-state",
+		"local",
+	);
+	await page.unroute(draftUrl);
+	await page.reload();
+	await expect(page.locator(".forms-app")).toHaveAttribute(
+		"data-ready",
+		"true",
+	);
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(recoveredTitle);
+
+	let releaseFirstSave;
+	let signalFirstSave;
+	const firstSaveStarted = new Promise((resolveStarted) => {
+		signalFirstSave = resolveStarted;
+	});
+	const blockedSave = new Promise((resolveBlocked) => {
+		releaseFirstSave = resolveBlocked;
+	});
+	let holdNextDraft = true;
+	await page.route(draftUrl, async (route) => {
+		if (holdNextDraft && route.request().method() === "PUT") {
+			holdNextDraft = false;
+			signalFirstSave();
+			await blockedSave;
+		}
+		await route.continue();
+	});
+	const inFlightTitle = `First save ${runId}`;
+	const latestTitle = `Latest save ${runId}`;
+	await page.getByLabel("Form title").fill(inFlightTitle);
+	await page.waitForTimeout(600);
+	await firstSaveStarted;
+	await page.getByLabel("Form title").fill(latestTitle);
+	releaseFirstSave();
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(latestTitle);
+	await page.unroute(draftUrl);
+
 	await page.screenshot({
 		path: resolve(screenshots, "forms-editor-desktop.png"),
 		fullPage: true,
@@ -572,6 +728,15 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.getByRole("button", { name: "Phone", exact: true }).click();
 	await expect(page.locator("#preview-content")).toHaveClass(/phone/);
 	await page.getByRole("button", { name: "Close preview" }).click();
+	const publishTitle = `Publish flush ${runId}`;
+	const publishRequestOrder = [];
+	const recordSavePublishRequest = (request) => {
+		const url = new URL(request.url());
+		if (url.pathname.endsWith("/draft")) publishRequestOrder.push("draft");
+		if (url.pathname.endsWith("/publish")) publishRequestOrder.push("publish");
+	};
+	page.on("request", recordSavePublishRequest);
+	await page.getByLabel("Form title").fill(publishTitle);
 	const publishResponsePromise = page.waitForResponse(
 		(response) =>
 			response.request().method() === "POST" &&
@@ -582,6 +747,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	);
 	await page.getByRole("button", { name: "Publish" }).click();
 	const publishResponse = await publishResponsePromise;
+	page.off("request", recordSavePublishRequest);
 	const publishBody = await publishResponse.text();
 	expect(
 		publishResponse.status(),
@@ -589,6 +755,12 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	).toBe(200);
 	const firstPublish = JSON.parse(publishBody);
 	const firstPublishedVersionId = firstPublish.version;
+	expect(publishRequestOrder).toEqual(["draft", "publish"]);
+	const firstPublishedTitle = await d1
+		.prepare("SELECT title FROM form_versions WHERE id = ?")
+		.bind(firstPublishedVersionId)
+		.first("title");
+	expect(firstPublishedTitle).toBe(publishTitle);
 	const firstPublishedVersion = await d1
 		.prepare(
 			"SELECT id, version FROM form_versions WHERE form_id = ? AND published_at IS NOT NULL ORDER BY version DESC LIMIT 1",
@@ -654,7 +826,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	expect(mappedSyntheticRequests).toBeGreaterThan(0);
 	await expect(shortPage).toHaveURL(new RegExp(`/f/${slug}$`));
 	await expect(
-		shortPage.getByRole("heading", { name: `E2E registration ${runId}` }),
+		shortPage.getByRole("heading", { name: publishTitle }),
 	).toBeVisible();
 
 	await page.setViewportSize({ width: 390, height: 844 });
@@ -683,7 +855,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	const publicPage = await publicContext.newPage();
 	await publicPage.goto(publicUrl, { timeout: 15_000 });
 	await expect(
-		publicPage.getByRole("heading", { name: `E2E registration ${runId}` }),
+		publicPage.getByRole("heading", { name: publishTitle }),
 	).toBeVisible();
 	await expect(publicPage.getByLabel("Full name")).toBeVisible();
 	await publicPage
@@ -708,6 +880,36 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		.first("version_id");
 	expect(submittedVersionId).toBe(firstPublishedVersionId);
 
+	const currentBeforeStaleCache = await page.request.get(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+	);
+	const staleCacheBase = await currentBeforeStaleCache.json();
+	const staleCacheDraft = structuredClone(staleCacheBase.draft);
+	staleCacheDraft.title = `Stale local cache ${runId}`;
+	await page.evaluate(
+		({ key, value }) => localStorage.setItem(key, JSON.stringify(value)),
+		{
+			key: `urlx-form-draft:${formId}`,
+			value: {
+				draft: staleCacheDraft,
+				revision: staleCacheBase.revision - 1,
+				editVersion: 1,
+			},
+		},
+	);
+	await page.reload();
+	await expect(page.locator(".forms-app")).toHaveAttribute(
+		"data-ready",
+		"true",
+	);
+	await expect(page.getByLabel("Form title")).toHaveValue(
+		staleCacheDraft.title,
+	);
+	await page.getByRole("button", { name: "Reload latest" }).click();
+	await expect(page.getByLabel("Form title")).toHaveValue(
+		staleCacheBase.draft.title,
+	);
+
 	await page.getByRole("tab", { name: "Build" }).click();
 	await page.locator(".q-label").first().fill("Name for registration");
 	await expect
@@ -722,13 +924,69 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 			{ timeout: 20_000 },
 		)
 		.toBe("Name for registration");
+	const currentForConflict = await page.request.get(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+	);
+	const conflictBase = await currentForConflict.json();
+	const competingDraft = structuredClone(conflictBase.draft);
+	competingDraft.description = "Changed in another editor";
+	const competingSave = await page.request.put(
+		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}/draft`,
+		{
+			data: { draft: competingDraft, revision: conflictBase.revision },
+		},
+	);
+	expect(competingSave.status()).toBe(200);
+	const localConflictTitle = `Local conflict ${runId}`;
+	await page.getByLabel("Form title").fill(localConflictTitle);
+	let publishWhileConflicted = false;
+	const watchConflictedPublish = (request) => {
+		if (
+			request.method() === "POST" &&
+			new URL(request.url()).pathname.endsWith("/publish")
+		)
+			publishWhileConflicted = true;
+	};
+	page.on("request", watchConflictedPublish);
 	await page.getByRole("button", { name: "Publish" }).click();
+	await expect(
+		page.getByRole("button", { name: "Keep my changes and overwrite" }),
+	).toBeVisible();
+	expect(publishWhileConflicted).toBe(false);
+	await page
+		.getByRole("button", { name: "Keep my changes and overwrite" })
+		.click();
+	await expect(page.locator("#form-save-state")).toHaveAttribute(
+		"data-state",
+		"saved",
+	);
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await response.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(localConflictTitle);
+	page.off("request", watchConflictedPublish);
+	const resolvedPublishPromise = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			new URL(response.url()).pathname.endsWith("/publish"),
+	);
+	await page.getByRole("button", { name: "Publish" }).click();
+	const resolvedPublish = await resolvedPublishPromise;
+	expect(resolvedPublish.status()).toBe(200);
 	await expect(page.getByLabel("Form link slug")).toBeVisible();
 	const versionResponse = await page.request.get(
 		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
 	);
 	expect(versionResponse.status()).toBe(200);
 	const versionResult = await versionResponse.json();
+	expect(versionResult.publishedVersion.title).toBe(localConflictTitle);
 	expect(versionResult.publishedVersion.fields[0].label).toBe(
 		"Name for registration",
 	);

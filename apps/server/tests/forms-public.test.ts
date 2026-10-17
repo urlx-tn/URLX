@@ -53,7 +53,10 @@ describe("public forms Hono routes", () => {
 		const form = await service.create(owner, {
 			title: "Native form",
 			accent: "orange",
-			fields: [{ id: "email", type: "email", label: "Email", required: true }],
+			fields: [
+				{ id: "email", type: "email", label: "Email", required: true },
+				{ id: "date", type: "date", label: "Date", required: false },
+			],
 		});
 		await service.setSlug(owner, form!.form!.id, "native-form");
 		await service.publish(
@@ -123,11 +126,39 @@ describe("public forms Hono routes", () => {
 			env as never,
 		);
 		expect(rejected.status).toBe(403);
+		for (const date of [
+			"0000-01-01",
+			"1900-02-29",
+			"2026-02-29",
+			"2026-1-01",
+			"not-a-date",
+		]) {
+			const invalidDate = await formsApp.request(
+				"/api/forms/public/native-form/submit",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						accept: "application/json",
+					},
+					body: JSON.stringify({
+						versionId: token.version.id,
+						submissionToken: token.submissionToken,
+						idempotencyKey: token.idempotencyKey,
+						answers: { email: "person@example.com", date },
+					}),
+				},
+				env as never,
+			);
+			expect(invalidDate.status).toBe(422);
+			expect(await invalidDate.json()).toMatchObject({ error: "INVALID_DATE" });
+		}
 		const good = new URLSearchParams({
 			versionId: token.version.id,
 			submissionToken: token.submissionToken,
 			idempotencyKey: token.idempotencyKey,
 			"answers[email]": "person@example.com",
+			"answers[date]": "2000-02-29",
 		});
 		const submitted = await formsApp.request(
 			"/api/forms/public/native-form/submit",

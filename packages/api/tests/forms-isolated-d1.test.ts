@@ -180,6 +180,10 @@ describe("forms isolated D1 lifecycle", () => {
 			"nonce-one",
 			{},
 		);
+		expect(
+			(await limitedService.responses(limitedOwner, one!.form!.id))
+				?.monthlyLimit,
+		).toBe(1);
 		await expect(
 			limitedService.acceptResponse(
 				one!.form!.id,

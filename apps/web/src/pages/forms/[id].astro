@@ -78,8 +78,11 @@ const title = "Edit form | URLX Forms";
 		let selected = "";
 		let activeTab = "build";
 		let saveTimer;
-		let saveInFlight = false;
 		let localOnly = false;
+		let editVersion = 0;
+		let savedVersion = 0;
+		let savePromise = null;
+		let pendingConflict = null;
 		let history = [];
 		let historyIndex = -1;
 		let historyTimer;
@@ -105,23 +108,110 @@ const title = "Edit form | URLX Forms";
 			}
 		}
 		function edit(mutator, structure = false) { if (structure) { clearTimeout(historyTimer); capturePendingText(); snapshot(); } mutator(); render(); if (structure) snapshot(); queueSave(); }
-		function queueSave() { clearTimeout(saveTimer); clearTimeout(historyTimer); historyTimer = setTimeout(snapshot, 450); setSaveState("saving", "Saving…"); try { localStorage.setItem(localKey, JSON.stringify({ draft, revision })); } catch {} saveTimer = setTimeout(saveDraft, 550); }
-		async function saveDraft() {
-			if (saveInFlight) { saveTimer = setTimeout(saveDraft, 400); return; }
-			saveInFlight = true;
-			try {
-				const result = await formsRequest<{ draft?: unknown; revision?: number }>(`/${encodeURIComponent(formId)}/draft`, { method:"PUT", body:JSON.stringify({ draft, revision }) });
-				revision = result.revision ?? revision;
-				localOnly = false;
-				setSaveState("saved", "Saved");
-				try { localStorage.removeItem(localKey); } catch {}
-			} catch (error) {
-				localOnly = true;
-				setSaveState("local", "Saved on this device");
-				const alert = $("#editor-alert"); alert.hidden = false; alert.textContent = "Your changes are saved in this browser while the server is unavailable. They will sync when the connection returns.";
-			}
-			finally { saveInFlight = false; }
+		function cacheDraft() { try { localStorage.setItem(localKey, JSON.stringify({ draft, revision, editVersion })); } catch {} }
+		function showLocalSaveState(message = "Your changes are stored in this browser. They’ll sync when the connection returns.") {
+			localOnly = true;
+			setSaveState("local", "Saved on this device");
+			const alert = $("#editor-alert"); alert.hidden = false; alert.textContent = message;
 		}
+		function showConflict(remoteDraft, remoteRevision, message = "This form changed elsewhere. Reload the latest version, or keep your changes and overwrite it.") {
+			pendingConflict = { draft:normalizeDraft(remoteDraft), revision:remoteRevision };
+			const alert = $("#editor-alert");
+			alert.hidden = false;
+			alert.setAttribute("role", "alert");
+			alert.innerHTML = `${esc(message)} <button type="button" class="f-btn secondary small" data-action="resolve-conflict" data-resolution="reload">Reload latest</button> <button type="button" class="f-btn small" data-action="resolve-conflict" data-resolution="overwrite">Keep my changes and overwrite</button>`;
+			setSaveState("conflict", "Conflict");
+		}
+		function queueSave() {
+			editVersion++;
+			clearTimeout(saveTimer);
+			clearTimeout(historyTimer);
+			historyTimer = setTimeout(snapshot, 450);
+			cacheDraft();
+			if (pendingConflict) return;
+			setSaveState("saving", "Saving…");
+			saveTimer = setTimeout(() => { void flushDraft(); }, 550);
+		}
+		async function flushDraft() {
+			clearTimeout(saveTimer);
+			saveTimer = undefined;
+			if (pendingConflict) return false;
+			if (savePromise) return savePromise;
+			if (savedVersion >= editVersion) return true;
+			if (!navigator.onLine) { showLocalSaveState(); return false; }
+			savePromise = (async () => {
+				let attemptedVersion = 0;
+				try {
+					while (savedVersion < editVersion) {
+						const savingVersion = editVersion;
+						attemptedVersion = savingVersion;
+						const body = JSON.stringify({ draft:clone(draft), revision });
+						const result = await formsRequest<{ draft?: unknown; revision?: number }>(`/${encodeURIComponent(formId)}/draft`, { method:"PUT", body });
+						revision = result.revision ?? revision;
+						savedVersion = savingVersion;
+						if (savedVersion === editVersion) {
+							localOnly = false;
+							try { localStorage.removeItem(localKey); } catch {}
+						} else cacheDraft();
+					}
+					localOnly = false;
+					const alert = $("#editor-alert");
+					if (!pendingConflict) alert.hidden = true;
+					setSaveState("saved", "Saved");
+					return true;
+				} catch (error) {
+					const data = error && typeof error === "object" ? error.data : null;
+					if (error?.status === 409 && data?.draft && Number.isInteger(data.revision)) {
+						showConflict(data.draft, data.revision);
+						return false;
+					}
+					showLocalSaveState(error instanceof Error && error.message ? `Could not save your changes. They are stored in this browser. ${error.message}` : undefined);
+					if (editVersion > attemptedVersion && navigator.onLine && saveTimer === undefined)
+						saveTimer = setTimeout(() => { void flushDraft(); }, 550);
+					return false;
+				} finally {
+					savePromise = null;
+				}
+			})();
+			return savePromise;
+		}
+		async function resolveConflict(resolution) {
+			if (!pendingConflict) return;
+			const observedRevision = pendingConflict.revision;
+			try {
+				const latest = await formsRequest<{ form?: FormRecord; draft?: unknown; revision?: number }>(`/${encodeURIComponent(formId)}`);
+				const latestDraft = normalizeDraft(latest.draft || latest.form?.draft || latest.form, latest.form?.title || "Untitled form");
+				const latestRevision = latest.revision ?? 0;
+				if (resolution === "overwrite" && latestRevision !== observedRevision) {
+					showConflict(latestDraft, latestRevision, "This form changed again. Review the latest version before overwriting it.");
+					return;
+				}
+				pendingConflict = null;
+				revision = latestRevision;
+				if (resolution === "reload") {
+					draft = latestDraft;
+					editVersion = savedVersion = 0;
+					try { localStorage.removeItem(localKey); } catch {}
+					history = []; historyIndex = -1; snapshot(); render();
+					localOnly = false;
+					$("#editor-alert").hidden = true;
+					setSaveState("saved", "Saved");
+					return;
+				}
+				queueSave();
+				await flushDraft();
+			} catch (error) {
+				if (pendingConflict) showConflict(pendingConflict.draft, pendingConflict.revision, error instanceof Error && error.message ? `Could not check the latest version. ${error.message}` : "Could not check the latest version.");
+			}
+		}
+		window.addEventListener("online", () => {
+			const retryLocalDraft = () => { if (localOnly && !pendingConflict) void flushDraft(); };
+			if (savePromise) {
+				void savePromise.then(retryLocalDraft);
+				return;
+			}
+			retryLocalDraft();
+		});
 		const previewText = { short:"Short answer text", paragraph:"Long answer text", email:"name@example.com", phone:"+1 555 010 0000", number:"0", date:"dd / mm / yyyy" };
 		function fieldPreview(field) {
 			if (isChoice(field.type)) return "";
@@ -262,7 +352,13 @@ const title = "Edit form | URLX Forms";
 		}
 		async function publish() {
 			const button = app.querySelector('[data-action="publish"]'); if (button) button.disabled = true;
-			try { const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published", { tone:"success" }); }
+			try {
+				if (!(await flushDraft())) {
+					showToast(pendingConflict ? "Resolve the draft conflict before publishing." : "Could not save your latest changes. Try publishing again when the save succeeds.", { tone:"error" });
+					return;
+				}
+				const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published", { tone:"success" });
+			}
 			catch (error) { showToast(errorMessage(error, "Could not publish this form."), { tone:"error" }); }
 			finally { if (button) button.disabled = false; }
 		}
@@ -287,6 +383,7 @@ const title = "Edit form | URLX Forms";
 				case "copy-link": try { await navigator.clipboard.writeText($("#share-url").value); showToast("Link copied"); } catch { $("#share-url").select(); document.execCommand("copy"); showToast("Link copied"); } break;
 				case "print": window.print(); break;
 				case "responses-retry": loadResponses(); break;
+				case "resolve-conflict": await resolveConflict(action.dataset.resolution); break;
 				case "responses-view": responsesView = action.dataset.view; renderResponses(); break;
 				case "export": window.location.assign(`/api/forms/${encodeURIComponent(formId)}/export.csv`); break;
 				case "delete-response": { const responseId = action.dataset.response; if (!(await confirmAction({ title:"Delete this response?", message:"The answers will be removed permanently and can’t be recovered.", confirmLabel:"Delete response", danger:true }))) break; action.disabled = true; try { await formsRequest(`/${encodeURIComponent(formId)}/responses/${encodeURIComponent(responseId)}`, { method:"DELETE" }); await loadResponses(); showToast("Response deleted"); } catch (error) { action.disabled = false; showToast(errorMessage(error, "Could not delete this response."), { tone:"error" }); } break; }
@@ -335,11 +432,31 @@ const title = "Edit form | URLX Forms";
 				shareUrl = result.form?.url || (result.form?.slug ? `${location.origin}/f/${result.form.slug}` : "");
 				shortUrl = result.form?.shortUrl || (result.form?.shortCode ? `${location.origin}/u/${result.form.shortCode}` : "");
 				draft = normalizeDraft(result.draft || result.form?.draft || result.form, result.form?.title || "Untitled form");
+				const serverDraft = draft;
 				revision = result.revision ?? 0;
 				responseTotal = Number(result.form?.responseCount ?? 0);
 				selected = draft.fields[0]?.id || "";
-				try { const cached = JSON.parse(localStorage.getItem(localKey) || "null"); if (cached?.draft && cached.revision === revision) { draft = normalizeDraft(cached.draft); } } catch {}
+				let recoverCached = false;
+				let staleCached = false;
+				try {
+					const cached = JSON.parse(localStorage.getItem(localKey) || "null");
+					if (cached?.draft) {
+						const cachedDraft = normalizeDraft(cached.draft);
+						if (JSON.stringify(cachedDraft) === JSON.stringify(serverDraft)) localStorage.removeItem(localKey);
+						else {
+							draft = cachedDraft;
+							editVersion = Number.isInteger(cached.editVersion) && cached.editVersion > 0 ? cached.editVersion : 1;
+							recoverCached = cached.revision === revision;
+							staleCached = !recoverCached;
+						}
+					}
+				} catch {}
 				renderStatic(); snapshot(); render(); app.inert = false; app.removeAttribute("aria-busy"); app.dataset.ready = "true";
+				if (staleCached) showConflict(serverDraft, revision, "A newer version of this form is already saved. Reload it, or review the conflict before overwriting it.");
+				else if (recoverCached) {
+					if (navigator.onLine) void flushDraft();
+					else showLocalSaveState();
+				}
 				// Fill in the Responses badge without waiting for the tab to open.
 				loadResponses();
 			} catch (error) {
