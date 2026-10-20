@@ -8,7 +8,7 @@ import {
 	formTemplates,
 } from "@urlx/api/modules/forms/forms.templates";
 import { formsReady } from "../../lib/forms-ready";
-import { fieldTypeMeta, formsIcon, templateIcons } from "../../lib/forms-ui";
+import { formsIcon, templatePreviewMarkup } from "../../lib/forms-ui";
 
 const formsEnabled = formsReady(
 	env as typeof env & Parameters<typeof formsReady>[0],
@@ -38,17 +38,9 @@ const ordered = [
 	...formTemplates.filter((template) => template.id === "blank"),
 	...formTemplates.filter((template) => template.id !== "blank"),
 ];
-// Cards show what actually differs between templates: their questions.
-const shownQuestions = 4;
 const templates = ordered.map((template) => ({
 	...template,
-	icon: formsIcon(templateIcons[template.id] ?? "forms", 20),
-	questions: template.draft.fields.slice(0, shownQuestions).map((field) => ({
-		label: field.label,
-		icon: formsIcon(field.type, 14),
-		type: fieldTypeMeta[field.type].name,
-	})),
-	more: Math.max(0, template.draft.fields.length - shownQuestions),
+	preview: templatePreviewMarkup(template.draft),
 }));
 const filters = [
 	{ id: "all", label: "All", count: templates.length },
@@ -84,17 +76,14 @@ const filters = [
 				<div class="f-grid" id="form-templates">
 					{templates.map((template) => (
 						<article class:list={["f-template", { blank: template.id === "blank" }]} data-category={template.category}>
-							<div class="f-template-head"><span class="f-template-icon" set:html={template.icon} /><span class="f-template-kicker">{template.category === "Start" ? "From scratch" : template.category}</span></div>
-							<h3 class="f-template-name">{template.name}</h3>
-							<p class="f-template-summary">{template.summary}</p>
+							<div class="f-template-head"><span class="f-template-kicker">{template.category === "Start" ? "From scratch" : template.category}</span></div>
 							{template.id === "blank" ? (
 								<p class="f-template-empty">No questions yet. Add exactly the ones you need.</p>
 							) : (
-								<ul class="f-template-questions" aria-label={`Questions in ${template.name}`}>
-									{template.questions.map((question) => <li><span title={question.type} set:html={question.icon} /><span>{question.label}</span></li>)}
-									{template.more > 0 && <li class="more">+{template.more} more</li>}
-								</ul>
+								<Fragment set:html={template.preview} />
 							)}
+							<h3 class="f-template-name">{template.name}</h3>
+							<p class="f-template-summary">{template.summary}</p>
 							<div class="f-template-actions">
 								<button type="button" class="f-btn small" data-template={template.id} aria-label={template.id === "blank" ? "Start a blank form" : `Use ${template.name} template`}>{template.id === "blank" ? "Start blank" : "Use template"}</button>
 								{template.id !== "blank" && <a class="f-btn secondary small" href={`/tools/forms/templates/${template.id}`} aria-label={`Preview ${template.name}`}>Preview</a>}

@@ -18,35 +18,40 @@ const title = "Edit form | URLX Forms";
 		{!formsEnabled && <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main>}
 		{formsEnabled && <>
 		<main class="forms-main wide">
+			<h1 class="f-sr">Form builder</h1>
 			<div class="f-toolbar">
-				<a class="f-icon-btn" href="/forms" aria-label="Back to my forms" set:html={formsIcon("back", 18)} />
-				<div class="f-toolbar-heading">
-					<span class="f-toolbar-title" id="form-title-label">Loading form…</span>
-					<span id="form-save-state" class="f-save-state" aria-live="polite"></span>
+				<div class="f-toolbar-top">
+					<a class="f-icon-btn" href="/forms" aria-label="Back to my forms" set:html={formsIcon("back", 18)} />
+					<div class="f-toolbar-heading">
+						<span class="f-toolbar-title" id="form-title-label">Loading form…</span>
+						<span id="form-save-state" class="f-save-state" aria-live="polite"></span>
+					</div>
 				</div>
-				<div class="f-tabs" role="tablist" aria-label="Form sections">
-					<button type="button" data-tab="build" role="tab" aria-selected="true"><Fragment set:html={formsIcon("forms", 16)} />Build</button>
-					<button type="button" data-tab="share" role="tab" aria-selected="false"><Fragment set:html={formsIcon("link", 16)} />Share</button>
-					<button type="button" data-tab="responses" role="tab" aria-selected="false"><Fragment set:html={formsIcon("inbox", 16)} />Responses <span id="response-count" class="f-count">0</span></button>
+				<div class="f-toolbar-bottom">
+					<div class="f-tabs" role="tablist" aria-label="Form sections">
+						<button type="button" id="build-tab" data-tab="build" role="tab" aria-controls="build-panel" aria-selected="true" tabindex="0"><Fragment set:html={formsIcon("forms", 16)} />Build</button>
+						<button type="button" id="share-tab" data-tab="share" role="tab" aria-controls="share-panel" aria-selected="false" tabindex="-1"><Fragment set:html={formsIcon("link", 16)} />Share</button>
+						<button type="button" id="responses-tab" data-tab="responses" role="tab" aria-controls="responses-panel" aria-selected="false" tabindex="-1"><Fragment set:html={formsIcon("inbox", 16)} />Responses <span id="response-count" class="f-count">0</span></button>
+					</div>
+					<div class="f-toolbar-actions"><span class="f-history"><button class="f-icon-btn" type="button" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo" set:html={formsIcon("undo", 17)} /><button class="f-icon-btn" type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" set:html={formsIcon("redo", 17)} /></span><button class="f-btn secondary small" type="button" data-action="preview"><Fragment set:html={formsIcon("eye", 16)} />Preview</button><button class="f-btn small" type="button" data-action="publish"><Fragment set:html={formsIcon("send", 15)} />Publish</button></div>
 				</div>
-				<div class="f-toolbar-actions"><span class="f-history"><button class="f-icon-btn" type="button" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo" set:html={formsIcon("undo", 17)} /><button class="f-icon-btn" type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" set:html={formsIcon("redo", 17)} /></span><button class="f-btn secondary small" type="button" data-action="preview"><Fragment set:html={formsIcon("eye", 16)} />Preview</button><button class="f-btn small" type="button" data-action="publish"><Fragment set:html={formsIcon("send", 15)} />Publish</button></div>
 			</div>
 			<div id="editor-alert" class="f-notice" hidden></div>
-			<section data-panel="build" role="tabpanel">
+			<section id="build-panel" data-panel="build" role="tabpanel" aria-labelledby="build-tab" tabindex="0">
 				<div class="f-editor-grid">
 					<div class="f-canvas"><div class="f-paper" id="form-paper"><div class="f-band"></div><div class="f-paper-head"><input id="draft-title" value="" aria-label="Form title" placeholder="Untitled form"><textarea id="draft-description" aria-label="Form description" placeholder="Add a description (optional)" rows="2"></textarea></div><div id="question-list"></div><div class="f-paper-foot" id="paper-add"></div></div></div>
 					<aside class="f-sidebar" aria-label="Form editor controls">
-						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("plus", 15)} />Add a question</h3><div class="f-types" id="field-types"></div></section>
-						<section class="f-card f-settings"><h3><span class="f-h-icon" set:html={formsIcon("palette", 15)} />Appearance</h3><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted f-fine">Changes save automatically.</p></section>
-					<section class="f-card f-settings"><h3><span class="f-h-icon" set:html={formsIcon("check", 15)} />After submitting</h3><label class="f-label" for="draft-confirmation">Message people see</label><textarea id="draft-confirmation" class="f-textarea f-confirm-input" maxlength="500" rows="3" placeholder="Your response has been recorded."></textarea><p class="f-muted f-fine">Shown under “Thank you”. Publish again to update the live form.</p></section>
-						<section class="f-card"><h3><span class="f-h-icon" set:html={formsIcon("keyboard", 15)} />Shortcuts</h3><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd><kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd><kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd><kbd>↑</kbd><kbd>↓</kbd></span></div><div class="f-keyline"><span>New question below</span><span><kbd>Enter</kbd></span></div></section>
+						<section class="f-card"><h2><span class="f-h-icon" set:html={formsIcon("plus", 15)} />Add a question</h2><div class="f-types" id="field-types"></div></section>
+						<section class="f-card f-settings"><h2><span class="f-h-icon" set:html={formsIcon("palette", 15)} />Appearance</h2><span class="f-label">Accent colour</span><div id="draft-accent" class="f-accent-swatches" role="group" aria-label="Form accent colour"></div><p class="f-muted f-fine">Changes save automatically.</p></section>
+					<section class="f-card f-settings"><h2><span class="f-h-icon" set:html={formsIcon("check", 15)} />After submitting</h2><label class="f-label" for="draft-confirmation">Message people see</label><textarea id="draft-confirmation" class="f-textarea f-confirm-input" maxlength="500" rows="3" placeholder="Your response has been recorded."></textarea><p class="f-muted f-fine">Shown under “Thank you”. Publish again to update the live form.</p></section>
+						<section class="f-card"><h2><span class="f-h-icon" set:html={formsIcon("keyboard", 15)} />Shortcuts</h2><div class="f-keyline"><span>Undo / redo</span><span><kbd>Ctrl</kbd><kbd>Z</kbd></span></div><div class="f-keyline"><span>Duplicate question</span><span><kbd>Ctrl</kbd><kbd>D</kbd></span></div><div class="f-keyline"><span>Move question</span><span><kbd>Alt</kbd><kbd>↑</kbd><kbd>↓</kbd></span></div><div class="f-keyline"><span>New question below</span><span><kbd>Enter</kbd></span></div></section>
 					</aside>
 				</div>
 			</section>
-			<section data-panel="share" role="tabpanel" hidden id="share-panel"></section>
-			<section data-panel="responses" role="tabpanel" hidden id="responses-panel"></section>
+			<section data-panel="share" role="tabpanel" hidden id="share-panel" aria-labelledby="share-tab" tabindex="0"></section>
+			<section data-panel="responses" role="tabpanel" hidden id="responses-panel" aria-labelledby="responses-tab" tabindex="0"></section>
 		</main>
-		<dialog id="preview-dialog" class="f-preview-dialog"><div class="f-preview-tools"><span><Fragment set:html={formsIcon("eye", 17)} />Preview</span><div class="f-tabs"><button type="button" data-action="preview-device" data-device="desktop" aria-pressed="true">Desktop</button><button type="button" data-action="preview-device" data-device="phone" aria-pressed="false">Phone</button></div></div><div id="preview-content"></div><form method="dialog" class="f-preview-close"><button class="f-btn secondary">Close preview</button></form></dialog>
+		<dialog id="preview-dialog" class="f-preview-dialog" aria-labelledby="preview-title"><div class="f-preview-tools"><span id="preview-title"><Fragment set:html={formsIcon("eye", 17)} />Preview</span><div class="f-tabs"><button type="button" data-action="preview-device" data-device="desktop" aria-pressed="true">Desktop</button><button type="button" data-action="preview-device" data-device="phone" aria-pressed="false">Phone</button></div></div><div id="preview-content"></div><form method="dialog" class="f-preview-close"><button class="f-btn secondary">Close preview</button></form></dialog>
 		</>}
 	</div>
 	<script>
@@ -237,13 +242,14 @@ const title = "Edit form | URLX Forms";
 			if (document.activeElement !== $("#draft-confirmation")) $("#draft-confirmation").value = draft.confirmationMessage || "";
 			$("#form-paper").style.setProperty("--form-accent", color());
 			$("#draft-accent").innerHTML = Object.entries(colors).map(([name, value]) => `<button type="button" data-action="accent" data-accent="${name}" aria-label="${name} accent" title="${name[0].toUpperCase()}${name.slice(1)}" aria-pressed="${draft.accent === name}" style="--swatch:${value}">${icon("check", 15)}</button>`).join("");
-			$("#question-list").innerHTML = draft.fields.map(questionCard).join("") || `<div class="f-paper-empty"><span class="f-empty-icon">${icon("plus", 24)}</span><h2>Start with your first question</h2><p>Pick a question type below. You can reorder, duplicate and change types any time.</p></div>`;
+			const questionHint = `<p class="f-question-hint">Edit a question directly, or select it for more options.</p>`;
+			$("#question-list").innerHTML = draft.fields.length ? `${questionHint}${draft.fields.map(questionCard).join("")}` : `<div class="f-paper-empty"><span class="f-empty-icon">${icon("plus", 24)}</span><h2>Start with your first question</h2><p>Choose a type in Add a question, or use the quick-add buttons at the bottom of this form.</p></div>`;
 			$("#response-count").textContent = String(stats.total ?? responseTotal ?? responses.length ?? 0);
 			syncHistoryButtons();
 			if (activeTab === "share") renderShare();
 			if (activeTab === "responses") renderResponses();
 		}
-		function setTab(tab) { activeTab = tab; app.querySelectorAll("[data-tab]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.tab === tab))); app.querySelectorAll("[data-panel]").forEach((panel) => panel.hidden = panel.dataset.panel !== tab); if (tab === "share") renderShare(); if (tab === "responses") loadResponses(); }
+		function setTab(tab) { activeTab = tab; app.querySelectorAll('[role="tab"][data-tab]').forEach((button) => { const active = button.dataset.tab === tab; button.setAttribute("aria-selected", String(active)); button.tabIndex = active ? 0 : -1; }); app.querySelectorAll("[data-panel]").forEach((panel) => panel.hidden = panel.dataset.panel !== tab); if (tab === "share") renderShare(); if (tab === "responses") loadResponses(); }
 		async function renderShare(published) {
 			if (published) { currentForm = published.form || published; shareUrl = published.url || shareUrl; shortUrl = published.shortUrl || shortUrl; }
 			const panel = $("#share-panel"); const slug = currentForm?.slug || ""; const isPublished = Boolean(slug || currentForm?.publishedVersion || currentForm?.published);
@@ -388,6 +394,17 @@ const title = "Edit form | URLX Forms";
 				case "export": window.location.assign(`/api/forms/${encodeURIComponent(formId)}/export.csv`); break;
 				case "delete-response": { const responseId = action.dataset.response; if (!(await confirmAction({ title:"Delete this response?", message:"The answers will be removed permanently and can’t be recovered.", confirmLabel:"Delete response", danger:true }))) break; action.disabled = true; try { await formsRequest(`/${encodeURIComponent(formId)}/responses/${encodeURIComponent(responseId)}`, { method:"DELETE" }); await loadResponses(); showToast("Response deleted"); } catch (error) { action.disabled = false; showToast(errorMessage(error, "Could not delete this response."), { tone:"error" }); } break; }
 			}
+		});
+		app.addEventListener("keydown", (event) => {
+			const current = event.target.closest?.('[role="tab"][data-tab]');
+			if (!current) return;
+			const tabs = [...app.querySelectorAll('[role="tab"][data-tab]')];
+			const index = tabs.indexOf(current);
+			const nextIndex = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+			if (nextIndex < 0) return;
+			event.preventDefault();
+			tabs[nextIndex].focus();
+			setTab(tabs[nextIndex].dataset.tab);
 		});
 		function selectCard(card) { if (!card || selected === card.dataset.field) return; selected = card.dataset.field; app.querySelectorAll(".f-question").forEach((item) => item.classList.toggle("selected", item === card)); }
 		// Keyboard users get the same focus mode as clicks: focusing a question selects it.

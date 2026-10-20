@@ -130,21 +130,6 @@ export const fieldTypeMeta: Record<
 	},
 };
 
-/** A recognisable glyph per starter template, shown on gallery cards. */
-export const templateIcons: Record<string, FormsIconName> = {
-	registration: "ticket",
-	rsvp: "date",
-	feedback: "chat",
-	satisfaction: "smile",
-	contact: "email",
-	job: "briefcase",
-	order: "bag",
-	booking: "clock",
-	newsletter: "megaphone",
-	waitlist: "list",
-	blank: "plus",
-};
-
 export const accentColors: Record<FormAccentId, string> = {
 	blue: "#0071e3",
 	teal: "#0e7c86",
@@ -153,6 +138,84 @@ export const accentColors: Record<FormAccentId, string> = {
 	pink: "#c2185b",
 	graphite: "#48484a",
 };
+
+const templatePreviewFieldScore: Record<string, number> = {
+	singlechoice: 5,
+	multichoice: 5,
+	rating: 5,
+	date: 4,
+	paragraph: 4,
+	number: 3,
+	short: 1,
+	email: 1,
+	phone: 1,
+};
+
+function templatePreviewFields(fields: PublicField[]) {
+	if (fields.length <= 2) return fields;
+
+	// Prefer two characteristic questions. If a template has only one, pair it
+	// with a familiar identity question so the preview still reads as a form.
+	const primaryIndex = fields.findIndex((field) =>
+		["short", "email", "phone"].includes(field.type ?? ""),
+	);
+	const distinctive = fields
+		.map((field, index) => ({
+			index,
+			score: templatePreviewFieldScore[field.type ?? ""] ?? 0,
+		}))
+		.filter(({ score }) => score >= 3)
+		.sort((a, b) => b.score - a.score || a.index - b.index);
+	const selected = distinctive.slice(0, 2).map(({ index }) => index);
+	if (
+		selected.length < 2 &&
+		primaryIndex >= 0 &&
+		!selected.includes(primaryIndex)
+	)
+		selected.push(primaryIndex);
+
+	for (let index = 0; selected.length < 2 && index < fields.length; index++) {
+		if (!selected.includes(index)) selected.push(index);
+	}
+
+	return selected.sort((a, b) => a - b).map((index) => fields[index]);
+}
+
+function templatePreviewControl(field: PublicField) {
+	if (field.type === "rating")
+		return '<span class="f-template-mini-stars">★★★★★</span>';
+	if (field.type === "singlechoice" || field.type === "multichoice") {
+		const options = Array.isArray(field.options)
+			? field.options.slice(0, 2)
+			: [];
+		const kind = field.type === "multichoice" ? "checkboxes" : "radios";
+		return `<span class="f-template-mini-options ${kind}">${options
+			.map((option) => `<span>${escapeHtml(option)}</span>`)
+			.join("")}</span>`;
+	}
+	if (field.type === "paragraph")
+		return '<span class="f-template-mini-lines"><i></i><i></i></span>';
+	if (field.type === "date")
+		return '<span class="f-template-mini-input date"><i></i></span>';
+	return '<span class="f-template-mini-input"></span>';
+}
+
+/** Small decorative form preview for the template gallery cards. */
+export function templatePreviewMarkup(draft: {
+	title?: string;
+	accent?: string;
+	fields: PublicField[];
+}) {
+	const accent =
+		accentColors[(draft.accent ?? "blue") as FormAccentId] ?? accentColors.blue;
+	const fields = templatePreviewFields(draft.fields);
+	return `<div class="f-template-preview" style="--f-template-accent:${accent}" aria-hidden="true"><div class="f-template-mini-top"><span></span><span></span><span></span></div><p class="f-template-preview-title">${escapeHtml(draft.title || "Untitled form")}</p><div class="f-template-mini-fields">${fields
+		.map(
+			(field) =>
+				`<div class="f-template-mini-field"><span class="f-template-mini-label">${escapeHtml(field.label || "Question")}</span>${templatePreviewControl(field)}</div>`,
+		)
+		.join("")}</div></div>`;
+}
 
 const escapeHtml = (value: unknown) =>
 	String(value ?? "").replace(

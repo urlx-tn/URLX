@@ -64,12 +64,16 @@ const pageTitle = template
 				</div>
 				<div class="f-tpl-layout">
 					<aside class="f-tpl-info">
-						<h1>{template.name}</h1>
-						<p class="f-tpl-summary">{template.summary}</p>
-						<p class="f-tpl-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{count} questions</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min to fill in</span></p>
-						<button type="button" class="f-btn large f-tpl-use" data-template={template.id}>Use this template <span aria-hidden="true">→</span></button>
-						<p class="f-muted f-fine">Free. Change every question, colour and setting afterwards.</p>
-						<p class="f-tpl-keys f-muted"><kbd>←</kbd><kbd>→</kbd> to flip through templates</p>
+						<div class="f-tpl-copy">
+							<h1>{template.name}</h1>
+							<p class="f-tpl-summary">{template.summary}</p>
+							<p class="f-tpl-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{count} questions</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min to fill in</span></p>
+						</div>
+						<div class="f-tpl-actions">
+							<button type="button" class="f-btn large f-tpl-use" data-template={template.id}>Use this template <span aria-hidden="true">→</span></button>
+							<p class="f-muted f-fine">Free. Change every question, colour and setting afterwards.</p>
+							<p class="f-tpl-keys f-muted"><kbd>←</kbd><kbd>→</kbd> to flip through templates</p>
+						</div>
 					</aside>
 					<section class="f-tpl-stage" aria-label="Form preview">
 						<p class="f-tpl-stage-label"><Fragment set:html={formsIcon("eye", 14)} />Preview: what respondents will see</p>

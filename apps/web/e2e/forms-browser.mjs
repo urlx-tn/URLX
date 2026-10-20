@@ -401,7 +401,7 @@ test.beforeAll(async () => {
 			"--host-resolver-rules=MAP forms-e2e.test 127.0.0.1, EXCLUDE localhost",
 		],
 	});
-});
+}, 120_000);
 
 test.afterAll(async () => {
 	await browser?.close();
@@ -433,6 +433,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	const context = await browser.newContext({
 		viewport: { width: 1440, height: 1100 },
 		acceptDownloads: true,
+		reducedMotion: "reduce",
 	});
 	let mappedSyntheticRequests = 0;
 	context.on("request", (request) => {
@@ -453,10 +454,130 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	const artifacts = resolve(here, "artifacts");
 	const screenshots = process.env.URLX_FORMS_E2E_SCREENSHOT_DIR
 		? resolve(process.env.URLX_FORMS_E2E_SCREENSHOT_DIR)
-		: resolve(here, "screenshots");
+		: resolve(artifacts, "screenshots");
 	await mkdir(artifacts, { recursive: true });
 	await mkdir(screenshots, { recursive: true });
 	await page.goto(`${astroOrigin}/tools/forms`);
+	const registrationCard = page.locator(".f-template").filter({
+		has: page.locator(".f-template-name", { hasText: "Registration" }),
+	});
+	const registrationPreview = registrationCard.locator(".f-template-preview");
+	await expect(registrationCard).toHaveCount(1);
+	await expect(registrationPreview).toHaveAttribute("aria-hidden", "true");
+	await expect(
+		registrationPreview.locator(".f-template-mini-field"),
+	).toHaveCount(2);
+	await expect(
+		registrationPreview.locator(
+			"a, button, input, select, textarea, [tabindex]",
+		),
+	).toHaveCount(0);
+	await expect(
+		registrationCard.getByRole("button", { name: "Use Registration template" }),
+	).toBeVisible();
+	await expect(
+		registrationCard.getByRole("link", { name: "Preview Registration" }),
+	).toBeVisible();
+	const checkResponsivePage = async (
+		targetPage,
+		pageName,
+		{ checkAppWidth = true, visibleSelector = "" } = {},
+	) => {
+		for (const viewport of [
+			{ name: "desktop-1440", width: 1440, height: 1100 },
+			{ name: "desktop-1920", width: 1920, height: 1200 },
+			{ name: "mobile-390", width: 390, height: 844 },
+			{ name: "narrow-320", width: 320, height: 844 },
+		]) {
+			await targetPage.setViewportSize(viewport);
+			const dimensions = await targetPage.evaluate(() => ({
+				viewport: document.documentElement.clientWidth,
+				document: document.documentElement.scrollWidth,
+				app: document.querySelector(".forms-app")?.scrollWidth ?? 0,
+			}));
+			expect(
+				dimensions.document,
+				`${pageName} document overflow at ${viewport.width}px`,
+			).toBeLessThanOrEqual(dimensions.viewport);
+			if (checkAppWidth)
+				expect(
+					dimensions.app,
+					`${pageName} app overflow at ${viewport.width}px`,
+				).toBeLessThanOrEqual(dimensions.viewport);
+			if (visibleSelector) {
+				const controlsFit = await targetPage
+					.locator(visibleSelector)
+					.evaluateAll((elements) =>
+						elements
+							.filter((element) => element.getClientRects().length > 0)
+							.every((element) => {
+								const bounds = element.getBoundingClientRect();
+								return bounds.left >= -1 && bounds.right <= innerWidth + 1;
+							}),
+					);
+				expect(
+					controlsFit,
+					`${pageName} controls fit at ${viewport.width}px`,
+				).toBe(true);
+			}
+			await targetPage.screenshot({
+				path: resolve(screenshots, `${pageName}-${viewport.name}.png`),
+				fullPage: true,
+			});
+		}
+	};
+	// The gallery hero glow is intentionally clipped; check visible cards and controls directly.
+	await checkResponsivePage(page, "forms-template-gallery", {
+		checkAppWidth: false,
+		visibleSelector: ".f-template .f-template-actions > *",
+	});
+	await page.setViewportSize({ width: 1440, height: 1100 });
+	const categoryFilter = page.locator("[data-filter]").nth(1);
+	await categoryFilter.focus();
+	await page.keyboard.press("Enter");
+	await expect(categoryFilter).toHaveAttribute("aria-pressed", "true");
+	const selectedCategory = await categoryFilter.getAttribute("data-filter");
+	const visibleCategories = await page
+		.locator(".f-template:not([hidden])")
+		.evaluateAll((cards) =>
+			cards.map((card) => card.getAttribute("data-category")),
+		);
+	expect(
+		visibleCategories.every(
+			(category) => category === selectedCategory || category === "Start",
+		),
+	).toBe(true);
+	const allFilter = page.locator('[data-filter="all"]');
+	await allFilter.focus();
+	await page.keyboard.press("Enter");
+	await expect(allFilter).toHaveAttribute("aria-pressed", "true");
+	await expect(page.locator(".f-template:not([hidden])")).toHaveCount(
+		await page.locator(".f-template").count(),
+	);
+	await page.getByRole("link", { name: "Preview Feedback" }).click();
+	await expect(page).toHaveURL(/\/tools\/forms\/templates\/feedback$/);
+	await expect(
+		page.getByRole("heading", { name: "Feedback", exact: true }),
+	).toBeVisible();
+	const templateStage = page.locator(".f-tpl-stage");
+	await expect(templateStage).toBeVisible();
+	await expect(
+		templateStage.getByRole("heading", { name: "How was your experience?" }),
+	).toBeVisible();
+	await expect(templateStage.locator(".f-public-field").first()).toBeVisible();
+	await expect(templateStage.locator(".f-stars")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: /Use this template/ }),
+	).toBeVisible();
+	await checkResponsivePage(page, "forms-template-detail");
+	await page.getByRole("button", { name: /Use this template/ }).click();
+	await expect(page).toHaveURL(/\/forms\?signin=1&template=feedback$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/tools\/forms\/templates\/feedback$/);
+	await page.goBack();
+	await expect(
+		page.getByRole("heading", { name: "Start with a template" }),
+	).toBeVisible();
 	await page.getByRole("button", { name: "Use Registration template" }).click();
 	await expect(page).toHaveURL(/\/forms\?signin=1&template=registration$/);
 	await expect(
@@ -510,10 +631,27 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.waitForTimeout(1_000);
 	expect(viteFullReloads).toBe(warmedReloadCount);
 	await page.goto(`${astroOrigin}/tools/forms`);
+	await expect(registrationCard.locator(".f-template-preview")).toBeVisible();
+	await page.getByRole("button", { name: "Start a blank form" }).click();
+	await expect(page).toHaveURL(/\/forms\/[^/]+$/);
+	await expect(page.locator(".forms-app")).toHaveAttribute(
+		"data-ready",
+		"true",
+	);
+	await expect(page.locator(".f-paper-empty p")).toHaveText(
+		"Choose a type in Add a question, or use the quick-add buttons at the bottom of this form.",
+	);
 	await expect(
-		page.getByRole("list", { name: "Questions in Registration" }),
-		"Template cards list their real questions",
-	).toContainText("Which session?");
+		page.getByRole("heading", { name: "Add a question" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Add Short answer question" }),
+	).toBeVisible();
+	await page.setViewportSize({ width: 1440, height: 1100 });
+	await page.screenshot({
+		path: resolve(screenshots, "forms-builder-blank-desktop-1440.png"),
+		fullPage: true,
+	});
 	await page.goto(`${astroOrigin}/forms/${encodeURIComponent(formId)}`);
 	await expect(page.getByLabel("Form title")).toBeVisible();
 	await expect(page.locator(".forms-app")).toHaveAttribute(
@@ -717,18 +855,39 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		)
 		.toBe(latestTitle);
 	await page.unroute(draftUrl);
-
-	await page.screenshot({
-		path: resolve(screenshots, "forms-editor-desktop.png"),
-		fullPage: true,
-	});
+	const galleryTitle = "Workshop registration";
+	await page.getByLabel("Form title").fill(galleryTitle);
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.title;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(galleryTitle);
+	await expect(page.locator(".f-question-hint")).toHaveText(
+		"Edit a question directly, or select it for more options.",
+	);
+	await checkResponsivePage(page, "forms-builder");
+	await page.setViewportSize({ width: 1440, height: 1100 });
 
 	await page.getByRole("button", { name: "Preview" }).click();
 	await expect(page.getByRole("dialog")).toBeVisible();
+	await expect(page.locator("#preview-content")).toBeVisible();
+	await page.locator("#preview-dialog").screenshot({
+		path: resolve(screenshots, "forms-builder-preview-desktop-1440.png"),
+	});
 	await page.getByRole("button", { name: "Phone", exact: true }).click();
 	await expect(page.locator("#preview-content")).toHaveClass(/phone/);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.locator("#preview-dialog").screenshot({
+		path: resolve(screenshots, "forms-builder-preview-mobile-390.png"),
+	});
 	await page.getByRole("button", { name: "Close preview" }).click();
-	const publishTitle = `Publish flush ${runId}`;
+	const publishTitle = `Workshop ${runId.slice(-6)}`;
 	const publishRequestOrder = [];
 	const recordSavePublishRequest = (request) => {
 		const url = new URL(request.url());
@@ -838,18 +997,11 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		path: resolve(screenshots, "forms-responses-mobile.png"),
 		fullPage: true,
 	});
-	const mobileEditor = await context.newPage();
-	await mobileEditor.setViewportSize({ width: 390, height: 844 });
-	await mobileEditor.goto(page.url());
-	await expect(mobileEditor.locator(".f-editor-grid")).toBeVisible();
-	await mobileEditor.screenshot({
-		path: resolve(screenshots, "forms-editor-mobile.png"),
-		fullPage: true,
-	});
 
 	const publicContext = await browser.newContext({
 		javaScriptEnabled: false,
 		viewport: { width: 390, height: 844 },
+		reducedMotion: "reduce",
 	});
 	await routeSyntheticPublicOrigin(publicContext);
 	const publicPage = await publicContext.newPage();
@@ -857,6 +1009,10 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await expect(
 		publicPage.getByRole("heading", { name: publishTitle }),
 	).toBeVisible();
+	await expect(publicPage.locator(".f-public-form")).toBeVisible();
+	await expect(publicPage.locator(".f-public-field").first()).toBeVisible();
+	await checkResponsivePage(publicPage, "forms-public-respondent");
+	await publicPage.setViewportSize({ width: 390, height: 844 });
 	await expect(publicPage.getByLabel("Full name")).toBeVisible();
 	await publicPage
 		.getByLabel("Full name")
@@ -1023,7 +1179,6 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		fullPage: true,
 	});
 	await publicContext.close();
-	await mobileEditor.close();
 	await shortPage.close();
 	await context.close();
 	await testInfo.attach("local-run-id", {
