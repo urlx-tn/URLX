@@ -10,6 +10,8 @@ These screenshots come from a local preview with synthetic data.
 
 ![Forms editor on desktop](forms/screenshots/forms-editor-desktop.png)
 
+![Form preview from the editor](forms/screenshots/forms-editor-preview-desktop.png)
+
 ![Forms editor at a 390px viewport](forms/screenshots/forms-editor-mobile.png)
 
 ![Responses summary](forms/screenshots/forms-responses-desktop.png)

@@ -673,7 +673,9 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await page.getByLabel("Form title").fill(editedTitle);
 	await page
 		.getByLabel("Form description")
-		.fill("A browser-created form from an isolated local D1 database.");
+		.fill(
+			"Join our workshop. Tell us a little about yourself to reserve your place.",
+		);
 	const firstSave = await firstDraftPut;
 	expect(
 		firstSave,
@@ -856,7 +858,10 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		.toBe(latestTitle);
 	await page.unroute(draftUrl);
 	const galleryTitle = "Workshop registration";
+	const galleryDescription =
+		"Join our workshop. Tell us a little about yourself to reserve your place.";
 	await page.getByLabel("Form title").fill(galleryTitle);
+	await page.getByLabel("Form description").fill(galleryDescription);
 	await expect
 		.poll(
 			async () => {
@@ -868,9 +873,24 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 			{ timeout: 20_000 },
 		)
 		.toBe(galleryTitle);
+	await expect
+		.poll(
+			async () => {
+				const result = await page.request.get(
+					`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
+				);
+				return (await result.json()).draft?.description;
+			},
+			{ timeout: 20_000 },
+		)
+		.toBe(galleryDescription);
 	await expect(page.locator(".f-question-hint")).toHaveText(
 		"Edit a question directly, or select it for more options.",
 	);
+	await page.locator("#draft-title").evaluate((element) => element.blur());
+	await page
+		.locator("#draft-description")
+		.evaluate((element) => element.blur());
 	await checkResponsivePage(page, "forms-builder");
 	await page.setViewportSize({ width: 1440, height: 1100 });
 
@@ -887,7 +907,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		path: resolve(screenshots, "forms-builder-preview-mobile-390.png"),
 	});
 	await page.getByRole("button", { name: "Close preview" }).click();
-	const publishTitle = `Workshop ${runId.slice(-6)}`;
+	const publishTitle = "Workshop registration";
 	const publishRequestOrder = [];
 	const recordSavePublishRequest = (request) => {
 		const url = new URL(request.url());
@@ -1016,10 +1036,10 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await expect(publicPage.getByLabel("Full name")).toBeVisible();
 	await publicPage
 		.getByLabel("Full name")
-		.fill("Synthetic Respondent", { timeout: 10_000 });
+		.fill("Sample attendee", { timeout: 10_000 });
 	await publicPage
 		.getByLabel("Email")
-		.fill("respondent@example.invalid", { timeout: 10_000 });
+		.fill("attendee@example.invalid", { timeout: 10_000 });
 	await publicPage
 		.getByRole("button", { name: "Submit" })
 		.click({ timeout: 15_000 });
@@ -1035,6 +1055,18 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		.bind(formId)
 		.first("version_id");
 	expect(submittedVersionId).toBe(firstPublishedVersionId);
+
+	await page.setViewportSize({ width: 1440, height: 1100 });
+	await page.getByRole("tab", { name: "Build" }).click();
+	await page.getByRole("tab", { name: /Responses/ }).click();
+	await expect(page.locator(".f-response-stats .f-stat").first()).toContainText(
+		"1",
+	);
+	await expect(page.locator(".f-toast")).toBeHidden();
+	await page.screenshot({
+		path: resolve(screenshots, "forms-responses-desktop-1440.png"),
+		fullPage: true,
+	});
 
 	const currentBeforeStaleCache = await page.request.get(
 		`${astroOrigin}/api/forms/${encodeURIComponent(formId)}`,
@@ -1160,7 +1192,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	).toBeVisible();
 	await page.getByRole("button", { name: "Table" }).click();
 	await expect(
-		page.getByRole("cell", { name: "Synthetic Respondent" }),
+		page.getByRole("cell", { name: "Sample attendee" }),
 	).toBeVisible();
 	await expect(
 		page.locator(".f-version-chip", {
@@ -1173,7 +1205,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	const exportPath = resolve(artifacts, "forms-responses.csv");
 	await exportDownload.saveAs(exportPath);
 	const exportCsv = await readFile(exportPath, "utf8");
-	expect(exportCsv).toContain("Synthetic Respondent");
+	expect(exportCsv).toContain("Sample attendee");
 	await page.screenshot({
 		path: resolve(screenshots, "forms-responses-with-data.png"),
 		fullPage: true,
