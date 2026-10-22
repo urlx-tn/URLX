@@ -1,11 +1,14 @@
 ---
+import { env } from "cloudflare:workers";
 import logo from "../assets/logo.png";
+import { formsReady } from "../lib/forms-ready";
 import {
 	additionalTools,
 	allToolsLink,
 	isNavigationLinkActive,
 	primaryProducts,
 } from "../lib/navigation";
+import FormsIcon from "./icons/FormsIcon.astro";
 import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
 import QRCodeGeneratorIcon from "./icons/QRCodeGeneratorIcon.astro";
 import UrlCleanerIcon from "./icons/UrlCleanerIcon.astro";
@@ -23,10 +26,26 @@ const showHeaderSearch = currentPath === "/tools/link-in-bio";
 const visiblePrimaryProducts = primaryProducts.filter(
 	(link) => link.isDiscoverable,
 );
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const primaryProductsWithForms = formsEnabled
+	? [
+			...visiblePrimaryProducts,
+			{
+				label: "Forms",
+				navLabel: "Forms",
+				href: "/tools/forms",
+				description: "Create forms and review responses",
+				category: "Create",
+				isDiscoverable: true,
+			},
+		]
+	: visiblePrimaryProducts;
 const isAdditionalToolActive = additionalTools.some((link) =>
 	isNavigationLinkActive(currentPath, link.href),
 );
-const createTools = visiblePrimaryProducts.filter(
+const createTools = primaryProductsWithForms.filter(
 	(link) => link.category === "Create",
 );
 const cleanTools = additionalTools.filter((link) => link.category === "Clean");
@@ -44,6 +63,7 @@ const toolIcons = {
 	"/tools/url-metadata": UrlMetadataIcon,
 	"/tools/url-to-markdown": UrlToMarkdownIcon,
 	"/tools/url-to-html": UrlToHtmlIcon,
+	"/tools/forms": FormsIcon,
 };
 ---
 
@@ -127,7 +147,7 @@ const toolIcons = {
 			}
 			<div class="hidden items-center gap-1 lg:flex">
 				{
-					visiblePrimaryProducts.map((link) => (
+					primaryProductsWithForms.map((link) => (
 						<a
 							href={link.href}
 							aria-current={isNavigationLinkActive(currentPath, link.href)
@@ -194,7 +214,9 @@ const toolIcons = {
 									<div class="mt-2 space-y-1">
 										{
 											createTools.map((link) => {
-												const Icon = toolIcons[link.href];
+								const Icon =
+									toolIcons[link.href as keyof typeof toolIcons] ??
+									UrlShortenerIcon;
 												return (
 													<a
 														href={link.href}
@@ -390,7 +412,7 @@ const toolIcons = {
 					data-product-nav="panel"
 				>
 					{
-						visiblePrimaryProducts.map((link) => (
+						primaryProductsWithForms.map((link) => (
 							<a
 								href={link.href}
 								aria-current={isNavigationLinkActive(currentPath, link.href)

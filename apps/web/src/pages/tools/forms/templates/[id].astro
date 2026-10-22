@@ -1,0 +1,123 @@
+---
+import FormsHeader from "../../../../components/forms/FormsHeader.astro";
+import Layout from "../../../../layouts/Layout.astro";
+import "../../../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import {
+	formTemplateCategories,
+	formTemplates,
+} from "@urlx/api/modules/forms/forms.templates";
+import { formsReady } from "../../../../lib/forms-ready";
+import { formsIcon, previewFormMarkup } from "../../../../lib/forms-ui";
+
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const template = formTemplates.find(
+	(item) => item.id === Astro.params.id && item.id !== "blank",
+);
+if (!template) Astro.response.status = 404;
+const count = template?.draft.fields.length ?? 0;
+const minutes = Math.max(1, Math.ceil((count * 20) / 60));
+// Same order as the gallery, grouped by category, so prev/next feels predictable.
+const browsable = formTemplateCategories.flatMap((category) =>
+	formTemplates.filter((item) => item.category === category),
+);
+const position = template
+	? browsable.findIndex((item) => item.id === template.id)
+	: -1;
+const previous =
+	position >= 0
+		? browsable[(position - 1 + browsable.length) % browsable.length]
+		: undefined;
+const next =
+	position >= 0 ? browsable[(position + 1) % browsable.length] : undefined;
+const pageTitle = template
+	? `${template.name} form template | URLX Forms`
+	: "Template not found | URLX Forms";
+---
+<Layout title={pageTitle} description={template ? `${template.summary} Free ${template.name.toLowerCase()} form template you can customise and share in minutes.` : "This template does not exist."} canonicalPath={`/tools/forms/templates/${Astro.params.id}`} chrome={false} clientRouter={false}>
+	<div class="forms-app" data-enabled={String(formsEnabled)}>
+		<FormsHeader current="home" />
+		{!formsEnabled || !template ? (
+			<main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>{!formsEnabled ? "URLX Forms is not enabled" : "Template not found"}</h1><p>{!formsEnabled ? "This feature has not been configured for this deployment." : "It may have been renamed. Browse all templates instead."}</p><a class="f-btn secondary" href="/tools/forms#forms-start-heading">All templates</a></div></main>
+		) : (
+			<main class="forms-main f-tpl-page">
+				<div class="f-tpl-top">
+					<nav class="f-crumbs" aria-label="Breadcrumb"><a href="/tools/forms#forms-start-heading"><Fragment set:html={formsIcon("back", 15)} />All templates</a><span aria-hidden="true">/</span><span>{template.category}</span></nav>
+					<div class="f-tpl-pager">
+						<div class="f-tpl-browse">
+							<button type="button" class="f-tpl-browse-toggle" aria-expanded="false" aria-controls="template-menu"><Fragment set:html={formsIcon("list", 15)} />Browse templates<Fragment set:html={formsIcon("down", 14)} /></button>
+							<div class="f-tpl-menu" id="template-menu" hidden>
+								{formTemplateCategories.map((category) => (
+									<section>
+										<p>{category}</p>
+										<ul>{browsable.filter((item) => item.category === category).map((item) => <li><a href={`/tools/forms/templates/${item.id}`} aria-current={item.id === template.id ? "page" : undefined}>{item.name}</a></li>)}</ul>
+									</section>
+								))}
+							</div>
+						</div>
+						<span class="f-muted">{position + 1} of {browsable.length}</span>
+						{previous && <a href={`/tools/forms/templates/${previous.id}`} rel="prev" data-pager="prev" aria-label={`Previous template: ${previous.name}`} title={`Previous: ${previous.name} (←)`}><Fragment set:html={formsIcon("back", 15)} /><span>{previous.name}</span></a>}
+						{next && <a href={`/tools/forms/templates/${next.id}`} rel="next" data-pager="next" aria-label={`Next template: ${next.name}`} title={`Next: ${next.name} (→)`}><span>{next.name}</span><Fragment set:html={formsIcon("back", 15)} /></a>}
+					</div>
+				</div>
+				<div class="f-tpl-layout">
+					<aside class="f-tpl-info">
+						<div class="f-tpl-copy">
+							<h1>{template.name}</h1>
+							<p class="f-tpl-summary">{template.summary}</p>
+							<p class="f-tpl-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{count} questions</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min to fill in</span></p>
+						</div>
+						<div class="f-tpl-actions">
+							<button type="button" class="f-btn large f-tpl-use" data-template={template.id}>Use this template <span aria-hidden="true">→</span></button>
+							<p class="f-muted f-fine">Free. Change every question, colour and setting afterwards.</p>
+							<p class="f-tpl-keys f-muted"><kbd>←</kbd><kbd>→</kbd> to flip through templates</p>
+						</div>
+					</aside>
+					<section class="f-tpl-stage" aria-label="Form preview">
+						<p class="f-tpl-stage-label"><Fragment set:html={formsIcon("eye", 14)} />Preview: what respondents will see</p>
+						<Fragment set:html={previewFormMarkup(template.draft, "tpl-")} />
+					</section>
+				</div>
+			</main>
+		)}
+	</div>
+	<script>
+		// @ts-nocheck
+		import { startFromTemplate } from "../../../../lib/forms-start";
+		document.querySelector(".f-tpl-use")?.addEventListener("click", (event) => startFromTemplate(event.currentTarget.dataset.template, event.currentTarget));
+		// "Browse templates" menu, styled like the main header's "More tools".
+		const toggle = document.querySelector(".f-tpl-browse-toggle");
+		const menu = document.querySelector("#template-menu");
+		const setMenu = (open) => { if (!toggle || !menu) return; menu.hidden = !open; toggle.setAttribute("aria-expanded", String(open)); };
+		toggle?.addEventListener("click", () => setMenu(menu.hidden));
+		document.addEventListener("click", (event) => { if (!event.target.closest?.(".f-tpl-browse")) setMenu(false); });
+		document.addEventListener("keydown", (event) => { if (event.key === "Escape" && menu && !menu.hidden) { setMenu(false); toggle.focus(); } });
+		// Warm neighbouring templates so switching feels instant: prev/next now,
+		// anything in the menu or pager on hover/focus.
+		const warmed = new Set();
+		const warm = (href) => {
+			if (!href || warmed.has(href)) return;
+			warmed.add(href);
+			const link = document.createElement("link");
+			link.rel = "prefetch";
+			link.href = href;
+			document.head.appendChild(link);
+		};
+		document.querySelectorAll("[data-pager]").forEach((link) => warm(link.getAttribute("href")));
+		for (const type of ["pointerenter", "focusin"])
+			document.addEventListener(type, (event) => {
+				const link = event.target.closest?.(".f-tpl-menu a, .f-tpl-pager a, .f-crumbs a");
+				if (link) warm(link.getAttribute("href"));
+			}, true);
+		// Arrow keys flip between templates (ignored while typing in the preview).
+		document.addEventListener("keydown", (event) => {
+			if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+			if (event.target.closest?.("input, textarea, select, [contenteditable=true]")) return;
+			if (menu && !menu.hidden) return;
+			const link = event.key === "ArrowLeft" ? document.querySelector('[data-pager="prev"]') : event.key === "ArrowRight" ? document.querySelector('[data-pager="next"]') : null;
+			if (link) { event.preventDefault(); link.click(); }
+		});
+	</script>
+</Layout>

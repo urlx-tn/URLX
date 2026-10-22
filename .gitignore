@@ -49,6 +49,7 @@ lerna-debug.log*
 # Testing
 coverage
 .nyc_output
+/apps/web/e2e/artifacts/
 
 # Misc
 *.tgz
