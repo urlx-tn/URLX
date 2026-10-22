@@ -119,8 +119,8 @@ formsApp.post("/api/forms/:id/publish", async (c) => {
 	if (owner instanceof Response) return owner;
 	try {
 		const body = await c.req
-			.json<{ slug?: string }>()
-			.catch(() => ({}) as { slug?: string });
+			.json<{ slug?: string; respondentAccess?: string }>()
+			.catch(() => ({}) as { slug?: string; respondentAccess?: string });
 		const service = new FormsService(createDb(c.env.DB));
 		const result = await service.publish(
 			owner.id,
@@ -128,6 +128,7 @@ formsApp.post("/api/forms/:id/publish", async (c) => {
 			body.slug,
 			c.env.CORS_ORIGIN ?? c.env.BETTER_AUTH_URL ?? "",
 			c.env.SHORT_URL_BASE ?? c.env.CORS_ORIGIN ?? "",
+			body.respondentAccess as "public" | "verified_email",
 		);
 		return result
 			? c.json({
@@ -267,6 +268,29 @@ formsApp.get("/api/forms/public/:slug", async (c) => {
 		return c.json({ error: "FORM_NOT_FOUND" }, 404, {
 			"Cache-Control": "no-store",
 		});
+	const respondentAccess = found.version.respondentAccess;
+	const requiresSignIn =
+		respondentAccess === "verified_email" && !(await getVerifiedRespondent(c));
+	if (requiresSignIn) {
+		return c.json(
+			{
+				form: {
+					id: found.form.id,
+					title: found.version.title,
+					description: found.version.description,
+					theme: found.form.theme,
+					accent: found.version.accent,
+					slug: found.canonicalSlug,
+					canonicalSlug: found.canonicalSlug,
+				},
+				version: { id: found.version.id, fields: [] },
+				requiresSignIn: true,
+				respondentAccess,
+			},
+			200,
+			{ "Cache-Control": "no-store" },
+		);
+	}
 	const idempotencyKey = crypto.randomUUID();
 	const submissionToken = await issueSubmissionToken(c.env, {
 		formId: found.form.id,
@@ -290,6 +314,8 @@ formsApp.get("/api/forms/public/:slug", async (c) => {
 			version: { id: found.version.id, fields: found.version.fields },
 			submissionToken,
 			idempotencyKey,
+			requiresSignIn: false,
+			respondentAccess,
 		},
 		200,
 		{ "Cache-Control": "no-store" },
@@ -307,6 +333,14 @@ formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 	let body: SubmissionBody = { answers: {} };
 	try {
 		const slug = c.req.param("slug").toLowerCase();
+		const service = new FormsService(createDb(c.env.DB));
+		found = await service.getPublic(slug);
+		if (!found) throw new FormsError("FORM_NOT_FOUND", 404);
+		if (
+			found.version.respondentAccess === "verified_email" &&
+			!(await getVerifiedRespondent(c))
+		)
+			throw new FormsError("SIGN_IN_REQUIRED", 401);
 		body = await readSubmissionBody(c.req.raw);
 		const token = await verifySubmissionToken(
 			c.env,
@@ -322,9 +356,7 @@ formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 			throw new FormsError("INVALID_SUBMISSION_TOKEN", 403);
 		if (body.honeypot)
 			return successResponse(c, slug, { responseId: "", duplicate: false });
-		const service = new FormsService(createDb(c.env.DB));
-		found = await service.getPublic(slug);
-		if (!found || found.form.id !== token.formId)
+		if (found.form.id !== token.formId)
 			throw new FormsError("FORM_NOT_FOUND", 404);
 		const version = await service.getVersion(found.form.id, token.versionId);
 		if (!version) throw new FormsError("FORM_VERSION_CLOSED", 409);
@@ -383,6 +415,12 @@ function tryCreateAuth(env: FormsAuthEnv) {
 	} catch {
 		return null;
 	}
+}
+async function getVerifiedRespondent(c: FormsContext) {
+	const auth = tryCreateAuth(c.env);
+	if (!auth) return null;
+	const session = await auth.api.getSession({ headers: c.req.raw.headers });
+	return session?.user.emailVerified ? session.user : null;
 }
 function errorResponse(c: FormsContext, error: unknown) {
 	if (error instanceof FormsError) {

@@ -15,6 +15,8 @@ import {
 	type FormFieldDto,
 	formAccentIds,
 	formFieldTypes,
+	type RespondentAccessMode,
+	respondentAccessModes,
 } from "./forms.types";
 
 export type FormsDb = ReturnType<typeof createDb>;
@@ -232,7 +234,10 @@ export class FormsService {
 		requestedSlug: string | undefined,
 		publicBaseUrl: string,
 		shortUrlBase: string,
+		respondentAccess: RespondentAccessMode,
 	) {
+		if (!respondentAccessModes.includes(respondentAccess))
+			throw new FormsError("RESPONDENT_ACCESS_REQUIRED", 400);
 		let current = await this.get(ownerId, id);
 		if (!current || !current.draft) return null;
 		// A blank draft can be saved, but respondents should never see an empty form.
@@ -277,22 +282,61 @@ export class FormsService {
 			.limit(1);
 		const now = this.now();
 		if (!latest) throw new FormsError("DRAFT_NOT_FOUND", 409);
+		// Published versions are immutable. Re-publishing without an intervening
+		// draft still creates a snapshot so the access decision has its own version.
+		const publishedVersionId =
+			latest.publishedAt !== null ? crypto.randomUUID() : latest.id;
 		try {
-			await this.db.batch([
-				this.db
-					.update(formVersions)
-					.set({ publishedAt: now })
-					.where(
-						and(eq(formVersions.id, latest.id), eq(formVersions.formId, id)),
-					),
-				this.db
-					.update(forms)
-					.set({ updatedAt: now })
-					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
-			]);
+			if (latest.publishedAt !== null) {
+				await this.db.batch([
+					this.db.insert(formVersions).values({
+						id: publishedVersionId,
+						formId: id,
+						version: latest.version + 1,
+						fieldsJson: latest.fieldsJson,
+						title: latest.title,
+						description: latest.description,
+						confirmationMessage: latest.confirmationMessage,
+						accent: latest.accent,
+						respondentAccess,
+						createdAt: now,
+						publishedAt: now,
+					}),
+					this.db
+						.update(forms)
+						.set({ updatedAt: now })
+						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
+				]);
+			} else {
+				const [published] = await this.db.batch([
+					this.db
+						.update(formVersions)
+						.set({ publishedAt: now, respondentAccess })
+						.where(
+							and(
+								eq(formVersions.id, latest.id),
+								eq(formVersions.formId, id),
+								isNull(formVersions.publishedAt),
+							),
+						)
+						.returning({ id: formVersions.id }),
+					this.db
+						.update(forms)
+						.set({ updatedAt: now })
+						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
+				]);
+				if (!published.length) throw new FormsError("REVISION_CONFLICT", 409);
+			}
 		} catch (error) {
+			if (error instanceof FormsError) throw error;
 			if (errorText(error).includes("forms_owner_published_limit"))
 				throw new FormsError("PUBLISHED_FORM_LIMIT", 409);
+			if (
+				errorText(error).includes(
+					"form_versions.form_id, form_versions.version",
+				)
+			)
+				throw new FormsError("REVISION_CONFLICT", 409);
 			throw error;
 		}
 		let shortCode = current.form.shortCode;
@@ -321,7 +365,7 @@ export class FormsService {
 			? {
 					...result,
 					form: { ...result.form, slug: current.form.slug },
-					version: latest.id,
+					version: publishedVersionId,
 					url: new URL(
 						`/f/${encodeURIComponent(current.form.slug)}`,
 						publicBaseUrl,
@@ -449,6 +493,7 @@ export class FormsService {
 					confirmationMessage: version.confirmationMessage ?? "",
 					fields: parseFields(version.fieldsJson),
 					accent: version.accent,
+					respondentAccess: version.respondentAccess as RespondentAccessMode,
 					publishedAt: version.publishedAt,
 				}
 			: null;
@@ -689,6 +734,7 @@ export class FormsService {
 					confirmationMessage: version.confirmationMessage ?? "",
 					fields: parseFields(version.fieldsJson),
 					accent: version.accent,
+					respondentAccess: version.respondentAccess as RespondentAccessMode,
 					publishedAt: version.publishedAt,
 				}
 			: null;

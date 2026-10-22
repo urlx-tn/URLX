@@ -27,6 +27,7 @@ beforeAll(async () => {
 		"0000_faulty_iron_patriot.sql",
 		"0001_handy_shocker.sql",
 		"0002_forms_auth.sql",
+		"0003_respondent_access.sql",
 	];
 	for (const name of names) {
 		const sql = await readFile(
@@ -70,6 +71,7 @@ describe("forms isolated D1 lifecycle", () => {
 				undefined,
 				"https://forms.example.invalid",
 				"https://s.example.invalid",
+				"public",
 			),
 		).rejects.toMatchObject({ code: "NO_QUESTIONS", status: 400 });
 	});
@@ -92,6 +94,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		const v1 = published!.version;
 		await service.save(
@@ -143,6 +146,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		await limitedService.save(
 			limitedOwner,
@@ -157,6 +161,7 @@ describe("forms isolated D1 lifecycle", () => {
 				"cap-one",
 				"https://forms.example.invalid",
 				"https://s.example.invalid",
+				"public",
 			),
 		).resolves.toMatchObject({ version: expect.any(String) });
 		const two = await limitedService.create(limitedOwner, {
@@ -172,6 +177,7 @@ describe("forms isolated D1 lifecycle", () => {
 				undefined,
 				"https://forms.example.invalid",
 				"https://s.example.invalid",
+				"public",
 			),
 		).rejects.toMatchObject({ code: "PUBLISHED_FORM_LIMIT" });
 		await limitedService.acceptResponse(
@@ -206,6 +212,7 @@ describe("forms isolated D1 lifecycle", () => {
 				undefined,
 				"https://forms.example.invalid",
 				"https://s.example.invalid",
+				"public",
 			),
 		).resolves.toMatchObject({ version: expect.any(String) });
 		const tombstoneOwner = "synthetic-tombstone-owner";
@@ -258,6 +265,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		await d1
 			.prepare(
@@ -313,6 +321,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		await service.setSlug(owner, first!.form!.id, "new-address");
 		const oldAddress = await service.getPublic("first-address");
@@ -407,6 +416,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		if (!published) throw new Error("Expected the draft to publish");
 		const updatedAfterPublish = await draftService.save(
@@ -441,6 +451,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		expect(first?.form.slug).toMatch(
 			/^a-friendly-registration-form-[a-z0-9]{8}$/,
@@ -454,9 +465,62 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		expect(second?.form.slug).toBe(first?.form.slug);
 		expect(second?.shortUrl).toBe(first?.shortUrl);
+	});
+
+	it("keeps respondent access attached to the published version until republish", async () => {
+		const form = await service.create(owner, {
+			title: "Access policy",
+			accent: "blue",
+			fields: sampleFields,
+		});
+		const id = form!.form!.id;
+		await service.setSlug(owner, id, "access-policy");
+		await service.publish(
+			owner,
+			id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+		const originalPublic = await service.getPublic("access-policy");
+		await service.save(owner, id, {
+			title: "Access policy draft",
+			accent: "teal",
+			fields: sampleFields,
+		});
+		expect(
+			(await service.getPublic("access-policy"))?.version.respondentAccess,
+		).toBe("public");
+		await service.publish(
+			owner,
+			id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"verified_email",
+		);
+		const verified = await service.getPublic("access-policy");
+		expect(verified?.version.respondentAccess).toBe("verified_email");
+		expect(verified?.version.id).not.toBe(originalPublic?.version.id);
+		await service.publish(
+			owner,
+			id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+		const publicAgain = await service.getPublic("access-policy");
+		expect(publicAgain?.version.respondentAccess).toBe("public");
+		expect(publicAgain?.version.id).not.toBe(verified?.version.id);
+		expect(
+			(await service.getVersion(id, verified!.version.id))?.respondentAccess,
+		).toBe("verified_email");
 	});
 
 	it("counts a concurrent idempotent insert once and closes collection atomically", async () => {
@@ -472,6 +536,7 @@ describe("forms isolated D1 lifecycle", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		const attempts = await Promise.all([
 			service.acceptResponse(

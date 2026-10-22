@@ -23,6 +23,10 @@ export const formAccentIds = [
 ] as const;
 export type FormAccentId = (typeof formAccentIds)[number];
 
+/** Respondent access is stored on an immutable published form version. */
+export const respondentAccessModes = ["public", "verified_email"] as const;
+export type RespondentAccessMode = (typeof respondentAccessModes)[number];
+
 export type FormFieldDto = {
 	id: string;
 	type: FormFieldType;

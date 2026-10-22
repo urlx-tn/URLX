@@ -6,6 +6,13 @@ import { createDb } from "@urlx/db";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { formsApp, localFormRateLimit } from "../src/forms";
+import { formsOgApp } from "../src/forms-og";
+
+vi.mock("../src/forms-og/renderer", () => ({
+	renderFormOg: vi.fn(async (_meta: unknown, fields: unknown[]) =>
+		new TextEncoder().encode(JSON.stringify(fields)),
+	),
+}));
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 let mf: Miniflare;
@@ -22,6 +29,7 @@ beforeAll(async () => {
 		"0000_faulty_iron_patriot.sql",
 		"0001_handy_shocker.sql",
 		"0002_forms_auth.sql",
+		"0003_respondent_access.sql",
 	]) {
 		const sql = await readFile(
 			resolve(testDirectory, `../../../packages/db/src/migrations/${name}`),
@@ -65,6 +73,7 @@ describe("public forms Hono routes", () => {
 			undefined,
 			"https://forms.example.invalid",
 			"https://s.example.invalid",
+			"public",
 		);
 		const env = {
 			DB: d1,
@@ -226,6 +235,70 @@ describe("public forms Hono routes", () => {
 		expect(cloudflareLimited.status).toBe(429);
 	});
 
+	it("requires a verified Better Auth session for gated rendering and submission", async () => {
+		const d1 = await mf.getD1Database("DB");
+		const owner = "synthetic-respondent-gate-owner";
+		await d1
+			.prepare(
+				"INSERT INTO `user` (id,name,email,email_verified,created_at,updated_at) VALUES (?, 'Owner', 'gate-owner@example.invalid', 1, 1, 1)",
+			)
+			.bind(owner)
+			.run();
+		const service = new FormsService(createDb(d1));
+		const form = await service.create(owner, {
+			title: "Email protected",
+			accent: "teal",
+			fields: [
+				{ id: "answer", type: "short", label: "Answer", required: false },
+			],
+		});
+		await service.publish(
+			owner,
+			form!.form!.id,
+			"email-protected",
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"verified_email",
+		);
+		const env = {
+			DB: d1,
+			FORMS_ENABLED: true,
+			BETTER_AUTH_SECRET: "synthetic-respondent-gate-secret-not-for-deployment",
+			BETTER_AUTH_URL: "https://forms.example.invalid",
+			RESEND_API_KEY: "re_test_not_sent",
+			AUTH_EMAIL_FROM: "URLX <forms@example.invalid>",
+		};
+		const og = await formsOgApp.request(
+			"/api/forms/public/email-protected/og.png",
+			{},
+			env as never,
+		);
+		expect(og.status).toBe(200);
+		expect(og.headers.get("cache-control")).toBe("no-store");
+		expect(await og.text()).toBe("[]");
+		const anonymousForm = await formsApp.request(
+			"/api/forms/public/email-protected",
+			{},
+			env as never,
+		);
+		const anonymousData = (await anonymousForm.json()) as Record<string, any>;
+		expect(anonymousData.requiresSignIn).toBe(true);
+		expect(anonymousData.version.fields).toEqual([]);
+		expect(anonymousData.form.confirmationMessage).toBeUndefined();
+		expect(anonymousData.submissionToken).toBeUndefined();
+		const bypass = await formsApp.request(
+			"/api/forms/public/email-protected/submit",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ answers: {} }),
+			},
+			env as never,
+		);
+		expect(bypass.status).toBe(401);
+		expect(await bypass.json()).toMatchObject({ error: "SIGN_IN_REQUIRED" });
+	});
+
 	it("sends a passwordless link through a captured local mail transport and completes the cookie session", async () => {
 		const d1 = await mf.getD1Database("DB");
 		const env = {
@@ -237,6 +310,8 @@ describe("public forms Hono routes", () => {
 			SHORT_URL_BASE: "https://s.example.invalid",
 			RESEND_API_KEY: "re_test_not_sent",
 			AUTH_EMAIL_FROM: "URLX <forms@example.invalid>",
+			FORMS_RENDER_RATE_LIMIT: { limit: async () => ({ success: true }) },
+			FORMS_SUBMIT_RATE_LIMIT: { limit: async () => ({ success: true }) },
 		};
 		let capturedHtml = "";
 		let capturedTo: string[] = [];
@@ -292,8 +367,78 @@ describe("public forms Hono routes", () => {
 			);
 			expect(dashboard.status).toBe(200);
 			expect(dashboard.headers.get("cache-control")).toBe("no-store");
+			const respondentOwner = "synthetic-respondent-authorized-owner";
+			await d1
+				.prepare(
+					"INSERT INTO `user` (id,name,email,email_verified,created_at,updated_at) VALUES (?, 'Owner', 'authorized-owner@example.invalid', 1, 1, 1)",
+				)
+				.bind(respondentOwner)
+				.run();
+			const respondentForm = await new FormsService(createDb(d1)).create(
+				respondentOwner,
+				{
+					title: "Verified response",
+					accent: "pink",
+					fields: [
+						{ id: "answer", type: "short", label: "Answer", required: true },
+					],
+				},
+			);
+			await new FormsService(createDb(d1)).publish(
+				respondentOwner,
+				respondentForm!.form!.id,
+				"verified-response",
+				"https://forms.example.invalid",
+				"https://s.example.invalid",
+				"verified_email",
+			);
+			const anonRead = await formsApp.request(
+				"/api/forms/public/verified-response",
+				{ headers: { "cf-connecting-ip": "198.51.100.77" } },
+				env as never,
+			);
+			const anonymousData = (await anonRead.json()) as {
+				requiresSignIn?: boolean;
+			};
+			expect(anonymousData.requiresSignIn).toBe(true);
+			const authorizedRead = await formsApp.request(
+				"/api/forms/public/verified-response",
+				{
+					headers: {
+						cookie: sessionCookie!,
+						"cf-connecting-ip": "198.51.100.77",
+					},
+				},
+				env as never,
+			);
+			const authorizedData = (await authorizedRead.json()) as {
+				version: { id: string };
+				submissionToken: string;
+				idempotencyKey: string;
+			};
+			expect(authorizedRead.status).toBe(200);
+			expect(authorizedData.submissionToken).toBeTruthy();
+			const respondentAccepted = await formsApp.request(
+				"/api/forms/public/verified-response/submit",
+				{
+					method: "POST",
+					headers: {
+						cookie: sessionCookie!,
+						"cf-connecting-ip": "198.51.100.77",
+						"content-type": "application/json",
+						accept: "application/json",
+					},
+					body: JSON.stringify({
+						versionId: authorizedData.version.id,
+						submissionToken: authorizedData.submissionToken,
+						idempotencyKey: authorizedData.idempotencyKey,
+						answers: { answer: "hello" },
+					}),
+				},
+				env as never,
+			);
+			expect(respondentAccepted.status).toBe(200);
 			const foreignOwner = "synthetic-foreign-owner";
-			const d1 = await mf.getD1Database("DB");
 			await d1
 				.prepare(
 					"INSERT INTO `user` (id,name,email,email_verified,created_at,updated_at) VALUES (?, 'Foreign', 'foreign@example.invalid', 1, 1, 1)",
@@ -334,7 +479,10 @@ describe("public forms Hono routes", () => {
 							cookie: sessionCookie!,
 							"content-type": "application/json",
 						},
-						body: JSON.stringify({ slug: "foreign-private" }),
+						body: JSON.stringify({
+							slug: "foreign-private",
+							respondentAccess: "public",
+						}),
 					},
 					env as never,
 				),
@@ -399,7 +547,7 @@ describe("public forms Hono routes", () => {
 				env as never,
 			);
 			expect(saved.status).toBe(200);
-			const published = await formsApp.request(
+			const missingAccessChoice = await formsApp.request(
 				`/api/forms/${createdBody.form.id}/publish`,
 				{
 					method: "POST",
@@ -408,6 +556,25 @@ describe("public forms Hono routes", () => {
 						"content-type": "application/json",
 					},
 					body: JSON.stringify({ slug: "csv-test-form" }),
+				},
+				env as never,
+			);
+			expect(missingAccessChoice.status).toBe(400);
+			expect(await missingAccessChoice.json()).toMatchObject({
+				error: "RESPONDENT_ACCESS_REQUIRED",
+			});
+			const published = await formsApp.request(
+				`/api/forms/${createdBody.form.id}/publish`,
+				{
+					method: "POST",
+					headers: {
+						cookie: sessionCookie!,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						slug: "csv-test-form",
+						respondentAccess: "public",
+					}),
 				},
 				env as never,
 			);

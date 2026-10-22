@@ -64,6 +64,23 @@ Bare Astro development proxies to `PUBLIC_SERVER_URL` only when it resolves to
 `localhost`, `127.0.0.1`, or `::1`. Cloudflare deployments use the internal `API`
 service binding. A missing or non-local API target returns 503.
 
+## Respondent access
+
+Every publish asks the creator to choose who may respond. **Anyone with the
+link** keeps submissions anonymous. **Verified email required** asks respondents
+to sign in with a one-time email link before viewing the questions or submitting;
+the server checks the Better Auth session on both form render and submission.
+Changing this choice takes effect when you publish; publishing again creates a
+new version while preserving the earlier version's access policy. Existing
+published versions migrate as public forms, so their links remain usable.
+
+Verified email adds friction for casual abuse, but it does not guarantee that a
+response is genuine or that bots cannot sign up. Public forms keep the existing
+honeypot, signed submission token, request limits, payload validation, and owner
+response quotas. Verified sign-in restricts who can open the form, but responses
+are still anonymous to the form owner. Use operational review or an anti-bot
+challenge for forms facing active spam.
+
 ## Limits and response retention
 
 The current owner limits are 25 published forms, 1,000 accepted responses per

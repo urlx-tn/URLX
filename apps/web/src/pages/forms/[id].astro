@@ -58,7 +58,7 @@ const title = "Edit form | URLX Forms";
 		// @ts-nocheck
 		import { formsRequest, normalizeDraft, type FormDraft, type FormField } from "../../lib/forms-api";
 		import { accentColors, fieldTypeMeta, fieldTypeOrder, formsIcon as icon, previewFormMarkup } from "../../lib/forms-ui";
-		import { confirmAction, errorMessage, showToast } from "../../lib/forms-dialog";
+		import { chooseRespondentAccess, confirmAction, errorMessage, showToast } from "../../lib/forms-dialog";
 		import { renderQrPngDataUrl, renderQrSvg } from "../../lib/qr-code";
 		const app = document.querySelector(".forms-app");
 		if (app?.dataset.enabled === "true") {
@@ -92,6 +92,7 @@ const title = "Edit form | URLX Forms";
 		let historyIndex = -1;
 		let historyTimer;
 		let currentForm = {};
+		let pendingRespondentAccess = null;
 		let shareUrl = "";
 		let shortUrl = "";
 		function color() { return colors[draft.accent] || draft.accent || colors.blue; }
@@ -253,8 +254,11 @@ const title = "Edit form | URLX Forms";
 		async function renderShare(published) {
 			if (published) { currentForm = published.form || published; shareUrl = published.url || shareUrl; shortUrl = published.shortUrl || shortUrl; }
 			const panel = $("#share-panel"); const slug = currentForm?.slug || ""; const isPublished = Boolean(slug || currentForm?.publishedVersion || currentForm?.published);
+			const respondentAccess = currentForm?.publishedVersion?.respondentAccess || "public";
+			const accessLabel = respondentAccess === "verified_email" ? "Verified email required" : "Anyone with the link";
+			const accessHelp = respondentAccess === "verified_email" ? "Respondents sign in with a one-time email link before they can answer." : "Respondents can open and submit without signing in.";
 			const url = shareUrl || (slug ? `${location.origin}/f/${slug}` : "");
-			panel.innerHTML = `<div class="f-share-card"><section class="f-card f-share-main"><div class="f-panel-head"><span class="f-panel-icon">${icon("link", 20)}</span><div><h2>Share your form</h2><p class="f-muted">Publish it to create a link respondents can open on any device.</p></div>${url ? `<p class="f-status live">Published</p>` : ""}</div>${url ? `<label class="f-label" for="share-url">Form link</label><div class="f-inline-field"><input class="f-input" id="share-url" readonly value="${esc(url)}"><button type="button" class="f-btn secondary" data-action="copy-link">${icon("copy", 16)}Copy link</button><a class="f-btn secondary" target="_blank" rel="noopener" href="${esc(url)}">${icon("external", 16)}Open form</a></div>${shortUrl ? `<p class="f-short-link">${icon("link", 15)}<span>Short link: <a href="${esc(shortUrl)}" target="_blank" rel="noopener">${esc(shortUrl)}</a></span></p>` : ""}<div class="f-slug-block"><label class="f-label" for="form-slug">Form address</label><div class="f-inline-field"><span class="f-prefix-input"><span>/f/</span><input id="form-slug" class="f-input" value="${esc(slug)}" maxlength="50" pattern="[a-z0-9-]+" aria-label="Form link slug"></span><button type="button" class="f-btn secondary" data-action="save-slug">Save</button></div></div>` : `<div class="f-notice">This form has not been published yet.</div><button type="button" class="f-btn" data-action="publish">${icon("send", 15)}Publish form</button>`}<p class="f-muted f-fine">Keep editing any time. New responses use the latest published version.</p></section>${url ? `<section class="f-card f-qr-section"><h3>${icon("forms", 16)}QR code</h3><div id="share-qr" class="f-qr"></div><div class="f-qr-actions"><a id="qr-png" class="f-btn secondary small" download="urlx-form-qr.png" aria-disabled="true">${icon("download", 15)}Download PNG</a><a id="qr-svg" class="f-btn secondary small" download="urlx-form-qr.svg" aria-disabled="true">${icon("download", 15)}Download SVG</a><button type="button" class="f-btn secondary small" data-action="print">${icon("print", 15)}Print A4 / Save PDF</button></div></section>` : ""}</div>`;
+			panel.innerHTML = `<div class="f-share-card"><section class="f-card f-share-main"><div class="f-panel-head"><span class="f-panel-icon">${icon("link", 20)}</span><div><h2>Share your form</h2><p class="f-muted">Publish it to create a link respondents can open on any device.</p></div>${url ? `<p class="f-status live">Published</p>` : ""}</div>${url ? `<label class="f-label" for="share-url">Form link</label><div class="f-inline-field"><input class="f-input" id="share-url" readonly value="${esc(url)}"><button type="button" class="f-btn secondary" data-action="copy-link">${icon("copy", 16)}Copy link</button><a class="f-btn secondary" target="_blank" rel="noopener" href="${esc(url)}">${icon("external", 16)}Open form</a></div>${shortUrl ? `<p class="f-short-link">${icon("link", 15)}<span>Short link: <a href="${esc(shortUrl)}" target="_blank" rel="noopener">${esc(shortUrl)}</a></span></p>` : ""}<div class="f-slug-block"><label class="f-label" for="form-slug">Form address</label><div class="f-inline-field"><span class="f-prefix-input"><span>/f/</span><input id="form-slug" class="f-input" value="${esc(slug)}" maxlength="50" pattern="[a-z0-9-]+" aria-label="Form link slug"></span><button type="button" class="f-btn secondary" data-action="save-slug">Save</button></div></div><div class="f-access-summary"><span>Who can respond</span><strong>${accessLabel}</strong><p>${accessHelp}</p><button type="button" class="f-btn secondary small" data-action="publish">Change access</button></div>` : `<div class="f-notice">This form has not been published yet. Choose who can respond when you publish.</div><button type="button" class="f-btn" data-action="publish">${icon("send", 15)}Publish form</button>`}<p class="f-muted f-fine">Keep editing any time. New responses use the latest published version.</p></section>${url ? `<section class="f-card f-qr-section"><h3>${icon("forms", 16)}QR code</h3><div id="share-qr" class="f-qr"></div><div class="f-qr-actions"><a id="qr-png" class="f-btn secondary small" download="urlx-form-qr.png" aria-disabled="true">${icon("download", 15)}Download PNG</a><a id="qr-svg" class="f-btn secondary small" download="urlx-form-qr.svg" aria-disabled="true">${icon("download", 15)}Download SVG</a><button type="button" class="f-btn secondary small" data-action="print">${icon("print", 15)}Print A4 / Save PDF</button></div></section>` : ""}</div>`;
 			if (!url) return;
 			try {
 				const png = await renderQrPngDataUrl(url, { width:512, margin:2, color:{ dark:"#1d1d1f", light:"#ffffff" } });
@@ -336,7 +340,7 @@ const title = "Edit form | URLX Forms";
 			}).join("");
 			const versionNote = multiVersion ? `<p class="f-muted f-table-note">${icon("clock", 14)}Rows marked with a version were submitted before your latest publish. Their answers are kept as they were.</p>` : "";
 			const more = responseTotal > responses.length ? `<p class="f-muted f-table-note">Showing the latest ${responses.length} of ${responseTotal}. Export CSV for everything.</p>` : "";
-			return `<section class="f-card f-table-card"><div class="f-table-scroll"><table class="f-response-table"><thead><tr><th scope="col">Received</th>${heads}<th><span class="f-sr">Actions</span></th></tr></thead><tbody>${body}</tbody></table></div>${versionNote}${more}</section>`;
+			return `<section class="f-card f-table-card"><p class="f-table-scroll-hint">Scroll horizontally to see all fields.</p><div class="f-table-scroll" tabindex="0" aria-label="Response table. Scroll horizontally to see all columns."><table class="f-response-table"><thead><tr><th scope="col">Received</th>${heads}<th><span class="f-sr">Actions</span></th></tr></thead><tbody>${body}</tbody></table></div>${versionNote}${more}</section>`;
 		}
 		function renderResponses() {
 			const panel = $("#responses-panel");
@@ -359,11 +363,15 @@ const title = "Edit form | URLX Forms";
 		async function publish() {
 			const button = app.querySelector('[data-action="publish"]'); if (button) button.disabled = true;
 			try {
+				const currentAccess = pendingRespondentAccess || currentForm?.publishedVersion?.respondentAccess;
+				const respondentAccess = await chooseRespondentAccess(currentAccess);
+				if (!respondentAccess) return;
+				pendingRespondentAccess = respondentAccess;
 				if (!(await flushDraft())) {
 					showToast(pendingConflict ? "Resolve the draft conflict before publishing." : "Could not save your latest changes. Try publishing again when the save succeeds.", { tone:"error" });
 					return;
 				}
-				const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({}) }); renderShare(result); setTab("share"); showToast("Your form is published", { tone:"success" });
+				const result = await formsRequest<{ form?: FormRecord; version?: unknown; url?: string; slug?: string }>(`/${encodeURIComponent(formId)}/publish`, { method:"POST", body:JSON.stringify({ respondentAccess }) }); pendingRespondentAccess = null; renderShare(result); setTab("share"); showToast("Your form is published", { tone:"success" });
 			}
 			catch (error) { showToast(errorMessage(error, "Could not publish this form."), { tone:"error" }); }
 			finally { if (button) button.disabled = false; }

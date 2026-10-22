@@ -22,11 +22,14 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 			"Cache-Control": "no-store",
 		});
 
+	const isSignInRequired = found.version.respondentAccess === "verified_email";
 	const publicHeaders = {
 		"Content-Type": "image/png",
-		"Cache-Control":
-			"public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
-		ETag: `"${found.version.id}"`,
+		// This URL is shared by a form across access-mode changes. Keep the HTTP
+		// response out of browser/CDN caches so an old public image cannot expose
+		// labels after the owner requires sign-in.
+		"Cache-Control": "no-store",
+		ETag: `"${found.version.id}-${found.version.respondentAccess}"`,
 		"X-Content-Type-Options": "nosniff",
 	};
 	const workerGlobals = globalThis as unknown as {
@@ -34,7 +37,7 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 	};
 	const cache = workerGlobals.caches?.default;
 	const cacheKey = new Request(
-		`${new URL(c.req.url).origin}/__forms-og-cache/${encodeURIComponent(found.form.id)}/${encodeURIComponent(found.version.id)}.png`,
+		`${new URL(c.req.url).origin}/__forms-og-cache/${encodeURIComponent(found.form.id)}/${encodeURIComponent(found.version.id)}/${found.version.respondentAccess}.png`,
 	);
 	if (cache) {
 		try {
@@ -56,7 +59,7 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 				description: found.version.description,
 				accent: found.version.accent,
 			},
-			found.version.fields,
+			isSignInRequired ? [] : found.version.fields,
 		);
 		const response = new Response(png, { status: 200, headers: publicHeaders });
 		if (cache) {
@@ -67,7 +70,9 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 						status: 200,
 						headers: {
 							...publicHeaders,
-							"Cache-Control": "public, max-age=31536000, immutable",
+							...(isSignInRequired
+								? {}
+								: { "Cache-Control": "public, max-age=31536000, immutable" }),
 						},
 					}),
 				);

@@ -22,6 +22,68 @@ export type ConfirmOptions = {
 	danger?: boolean;
 };
 
+export type RespondentAccessChoice = "public" | "verified_email";
+
+/** Makes the respondent access decision part of every publish confirmation. */
+export function chooseRespondentAccess(
+	current?: RespondentAccessChoice | null,
+): Promise<RespondentAccessChoice | null> {
+	const dialog = document.createElement("dialog");
+	dialog.className = "f-confirm f-publish-dialog";
+	dialog.setAttribute("aria-labelledby", "f-publish-title");
+	dialog.setAttribute(
+		"aria-describedby",
+		"f-publish-description f-publish-choice-hint",
+	);
+	dialog.innerHTML = `<div class="f-confirm-body"><h2 id="f-publish-title">Who can respond?</h2><p id="f-publish-description">Choose who can open this form after you publish.</p><fieldset class="f-access-options" aria-describedby="f-publish-choice-hint"><legend>Respondent access <span aria-hidden="true">*</span></legend><label class="f-access-option"><input type="radio" name="respondent-access" value="public" required ${current === "public" ? "checked" : ""}><span><strong>Anyone with the link</strong><small>No sign-in required.</small></span></label><label class="f-access-option"><input type="radio" name="respondent-access" value="verified_email" required ${current === "verified_email" ? "checked" : ""}><span><strong>Verified email required</strong><small>Respondents sign in with a one-time email link.</small></span></label></fieldset><p id="f-publish-choice-hint" class="f-access-note">${current ? "Current setting selected. You can change it here." : "Choose an option to continue."}</p><div class="f-confirm-actions"><button type="button" class="f-btn secondary" data-publish="cancel">Cancel</button><button type="button" class="f-btn" data-publish="confirm" ${current ? "" : "disabled"}>Publish form</button></div></div>`;
+	host().appendChild(dialog);
+	return new Promise((resolve) => {
+		let settled = false;
+		const finish = (value: RespondentAccessChoice | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(value);
+			dialog.close();
+			dialog.remove();
+		};
+		const confirm = dialog.querySelector<HTMLButtonElement>(
+			'[data-publish="confirm"]',
+		);
+		dialog.addEventListener("change", (event) => {
+			if ((event.target as HTMLInputElement).name === "respondent-access")
+				if (confirm) confirm.disabled = false;
+		});
+		dialog.addEventListener("click", (event) => {
+			if (event.target === dialog) return finish(null);
+			const action = (event.target as Element)
+				.closest("[data-publish]")
+				?.getAttribute("data-publish");
+			if (action === "cancel") return finish(null);
+			if (action === "confirm") {
+				const selected = dialog.querySelector<HTMLInputElement>(
+					'input[name="respondent-access"]:checked',
+				);
+				if (
+					selected?.value === "public" ||
+					selected?.value === "verified_email"
+				)
+					finish(selected.value);
+			}
+		});
+		dialog.addEventListener("cancel", (event) => {
+			event.preventDefault();
+			finish(null);
+		});
+		dialog.showModal();
+		(
+			dialog.querySelector<HTMLInputElement>(
+				`input[name="respondent-access"]:checked`,
+			) ??
+			dialog.querySelector<HTMLInputElement>('input[name="respondent-access"]')
+		)?.focus();
+	});
+}
+
 export function confirmAction({
 	title,
 	message = "",

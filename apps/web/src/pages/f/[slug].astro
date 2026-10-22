@@ -19,6 +19,7 @@ type PublicForm = {
 	version?: Record<string, any>;
 	submissionToken?: string;
 	idempotencyKey?: string;
+	requiresSignIn?: boolean;
 };
 let result: PublicForm | null = null;
 let unavailable = false;
@@ -56,6 +57,7 @@ const confirmationMessage =
 	versionData?.confirmationMessage ||
 	"Your response has been recorded.";
 const submitted = Astro.url.searchParams.get("submitted") === "1";
+const requiresSignIn = result?.requiresSignIn === true;
 // Only allowlisted accent ids reach the page; `theme` is a light/dark mode, not a colour.
 const accentValue =
 	(accentColors as Record<string, string>)[
@@ -92,8 +94,9 @@ const minutes = Math.max(1, Math.ceil((fields.length * 20) / 60));
 					<header class="f-public-head">
 						<h1>{title}</h1>
 						{description && <p>{description}</p>}
-						<p class="f-public-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{fields.length} question{fields.length === 1 ? "" : "s"}</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min</span>{hasRequired && <span class="f-required-note"><span class="f-req">*</span> Required</span>}</p>
+						{!requiresSignIn && <p class="f-public-meta"><Fragment set:html={formsIcon("forms", 15)} /><span>{fields.length} question{fields.length === 1 ? "" : "s"}</span><Fragment set:html={formsIcon("clock", 15)} /><span>About {minutes} min</span>{hasRequired && <span class="f-required-note"><span class="f-req">*</span> Required</span>}</p>}
 					</header>
+					{requiresSignIn ? <section class="f-response-gate" aria-labelledby="response-gate-title"><span class="f-response-gate-icon" aria-hidden="true"><Fragment set:html={formsIcon("email", 20)} /></span><h2 id="response-gate-title">Verify your email to respond</h2><p>Sign in with a one-time email link to continue to this form.</p><form class="f-response-signin"><label class="f-label" for="response-signin-email">Email address</label><input class="f-input" id="response-signin-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com"><p class="f-response-signin-status" role="status" aria-live="polite"></p><button class="f-btn" type="submit">Send sign-in link</button></form></section> : (
 					<form method="post" action={`/f/${encodeURIComponent(slug)}/submit`} class="f-public-form">
 						<input type="hidden" name="versionId" value={submitVersion} />
 						<input type="hidden" name="submissionToken" value={submitToken} />
@@ -106,6 +109,7 @@ const minutes = Math.max(1, Math.ceil((fields.length * 20) / 60));
 							<p class="f-public-safety">Never share passwords or payment details in a form.</p>
 						</div>
 					</form>
+					)}
 					</>}
 				</main>
 				<footer class="f-made">
@@ -120,6 +124,23 @@ const minutes = Math.max(1, Math.ceil((fields.length * 20) / 60));
 	</div>
 	<script>
 		// @ts-nocheck
+		import { requestFormsSignIn } from "../../lib/forms-api";
+		const signInForm = document.querySelector(".f-response-signin");
+		signInForm?.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const form = event.currentTarget;
+			const button = form.querySelector('button[type="submit"]');
+			const status = form.querySelector(".f-response-signin-status");
+			button.disabled = true;
+			status.textContent = "Sending sign-in link…";
+			try {
+				await requestFormsSignIn(form.elements.email.value, location.href);
+				status.textContent = "Check your inbox for a one-time sign-in link. This form will be ready when you return.";
+			} catch (error) {
+				status.textContent = error instanceof Error ? error.message : "Could not send the sign-in link.";
+				button.disabled = false;
+			}
+		});
 		// Progress bar is an enhancement: the form submits fine without it.
 		const form = document.querySelector(".f-public-form");
 		const bar = document.querySelector(".f-progress");

@@ -161,6 +161,7 @@ export const formVersions = sqliteTable(
 		description: text("description"),
 		confirmationMessage: text("confirmation_message"),
 		accent: text("accent").notNull().default("blue"),
+		respondentAccess: text("respondent_access").notNull().default("public"),
 		createdAt: integer("created_at").notNull(),
 		publishedAt: integer("published_at"),
 	},

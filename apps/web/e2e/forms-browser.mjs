@@ -28,6 +28,7 @@ const migrationNames = [
 	"0000_faulty_iron_patriot.sql",
 	"0001_handy_shocker.sql",
 	"0002_forms_auth.sql",
+	"0003_respondent_access.sql",
 ];
 const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 const email = `browser-${runId}@example.invalid`;
@@ -925,6 +926,13 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		{ timeout: 10_000 },
 	);
 	await page.getByRole("button", { name: "Publish" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Who can respond?" }),
+	).toBeVisible();
+	const publishConfirm = page.getByRole("button", { name: "Publish form" });
+	await expect(publishConfirm).toBeDisabled();
+	await page.getByRole("radio", { name: /Anyone with the link/ }).check();
+	await publishConfirm.click();
 	const publishResponse = await publishResponsePromise;
 	page.off("request", recordSavePublishRequest);
 	const publishBody = await publishResponse.text();
@@ -1137,6 +1145,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	};
 	page.on("request", watchConflictedPublish);
 	await page.getByRole("button", { name: "Publish" }).click();
+	await page.getByRole("button", { name: "Publish form" }).click();
 	await expect(
 		page.getByRole("button", { name: "Keep my changes and overwrite" }),
 	).toBeVisible();
@@ -1166,6 +1175,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 			new URL(response.url()).pathname.endsWith("/publish"),
 	);
 	await page.getByRole("button", { name: "Publish" }).click();
+	await page.getByRole("button", { name: "Publish form" }).click();
 	const resolvedPublish = await resolvedPublishPromise;
 	expect(resolvedPublish.status()).toBe(200);
 	await expect(page.getByLabel("Form link slug")).toBeVisible();
