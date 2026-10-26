@@ -631,6 +631,20 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	const warmedReloadCount = viteFullReloads;
 	await page.waitForTimeout(1_000);
 	expect(viteFullReloads).toBe(warmedReloadCount);
+	for (let index = 0; index < 50; index += 1) {
+		const created = await page.request.post(`${astroOrigin}/api/forms`, {
+			data: { template: "blank", title: `Pagination draft ${index + 1}` },
+		});
+		expect(created.status()).toBe(201);
+	}
+	await page.goto(`${astroOrigin}/forms`);
+	await expect(page.locator(".f-list-row")).toHaveCount(50);
+	await expect(page.locator("#forms-usage")).toContainText("51 forms");
+	const loadMoreForms = page.getByRole("button", { name: "Load more forms" });
+	await expect(loadMoreForms).toBeVisible();
+	await loadMoreForms.click();
+	await expect(page.locator(".f-list-row")).toHaveCount(51);
+	await expect(loadMoreForms).toBeHidden();
 	await page.goto(`${astroOrigin}/tools/forms`);
 	await expect(registrationCard.locator(".f-template-preview")).toBeVisible();
 	await page.getByRole("button", { name: "Start a blank form" }).click();
@@ -908,6 +922,17 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		path: resolve(screenshots, "forms-builder-preview-mobile-390.png"),
 	});
 	await page.getByRole("button", { name: "Close preview" }).click();
+	await page
+		.locator('#field-types [data-action="add"][data-type="singlechoice"]')
+		.click();
+	const choiceQuestion = page.locator(".f-question").last();
+	await choiceQuestion
+		.locator(".q-label")
+		.fill("How did you hear about this workshop?");
+	await expect(page.locator("#form-save-state")).toHaveAttribute(
+		"data-state",
+		"saved",
+	);
 	const publishTitle = "Workshop registration";
 	const publishRequestOrder = [];
 	const recordSavePublishRequest = (request) => {
@@ -942,6 +967,15 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	).toBe(200);
 	const firstPublish = JSON.parse(publishBody);
 	const firstPublishedVersionId = firstPublish.version;
+	const publishedFieldsJson = await d1
+		.prepare("SELECT fields_json FROM form_versions WHERE id = ?")
+		.bind(firstPublishedVersionId)
+		.first("fields_json");
+	const publishedFields = JSON.parse(publishedFieldsJson);
+	const choiceField = publishedFields.find(
+		(field) => field.label === "How did you hear about this workshop?",
+	);
+	expect(choiceField).toBeTruthy();
 	expect(publishRequestOrder).toEqual(["draft", "publish"]);
 	const firstPublishedTitle = await d1
 		.prepare("SELECT title FROM form_versions WHERE id = ?")
@@ -1048,6 +1082,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	await publicPage
 		.getByLabel("Email")
 		.fill("attendee@example.invalid", { timeout: 10_000 });
+	await publicPage.getByLabel("Option 1").check();
 	await publicPage
 		.getByRole("button", { name: "Submit" })
 		.click({ timeout: 15_000 });
@@ -1063,13 +1098,43 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		.bind(formId)
 		.first("version_id");
 	expect(submittedVersionId).toBe(firstPublishedVersionId);
+	const bulkResponses = Array.from({ length: 501 }, (_, index) =>
+		d1
+			.prepare(
+				"INSERT INTO form_responses (id, form_id, version_id, idempotency_key, answers_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+			)
+			.bind(
+				crypto.randomUUID(),
+				formId,
+				firstPublishedVersionId,
+				`e2e-bulk-${runId}-${index}`,
+				JSON.stringify({ [choiceField.id]: "Option 1" }),
+				Date.now() - 60_000,
+			),
+	);
+	for (let offset = 0; offset < bulkResponses.length; offset += 100)
+		await d1.batch(bulkResponses.slice(offset, offset + 100));
 
 	await page.setViewportSize({ width: 1440, height: 1100 });
 	await page.getByRole("tab", { name: "Build" }).click();
 	await page.getByRole("tab", { name: /Responses/ }).click();
 	await expect(page.locator(".f-response-stats .f-stat").first()).toContainText(
-		"1",
+		"502",
 	);
+	await expect(page.locator(".f-response-stats .f-stat").nth(1)).toContainText(
+		"502",
+	);
+	const choiceSummary = page.locator(".f-sum").filter({
+		has: page.getByRole("heading", {
+			name: "How did you hear about this workshop?",
+		}),
+	});
+	await expect(choiceSummary).toContainText("502 of 502 answered");
+	await page.getByRole("button", { name: "Table" }).click();
+	await expect(page.locator(".f-table-note").last()).toContainText(
+		"Showing the latest 500 of 502",
+	);
+	await page.getByRole("button", { name: "Summary" }).click();
 	await expect(page.locator(".f-toast")).toBeHidden();
 	await page.screenshot({
 		path: resolve(screenshots, "forms-responses-desktop-1440.png"),
@@ -1169,6 +1234,10 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		)
 		.toBe(localConflictTitle);
 	page.off("request", watchConflictedPublish);
+	await page.getByRole("tab", { name: /Responses/ }).click();
+	await page.getByRole("button", { name: "Table" }).click();
+	await expect(page.locator(".f-version-chip")).toHaveCount(0);
+	await page.getByRole("tab", { name: "Build" }).click();
 	const resolvedPublishPromise = page.waitForResponse(
 		(response) =>
 			response.request().method() === "POST" &&
@@ -1196,6 +1265,7 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 	expect(Number(versionCount)).toBe(Number(versionsBeforeRepublish) + 1);
 
 	await page.getByRole("tab", { name: /Responses/ }).click();
+	await page.getByRole("button", { name: "Summary" }).click();
 	await expect(
 		page.getByRole("heading", { name: "Name for registration" }),
 		"Summary view lists each question under its latest label",
@@ -1205,9 +1275,11 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		page.getByRole("cell", { name: "Sample attendee" }),
 	).toBeVisible();
 	await expect(
-		page.locator(".f-version-chip", {
-			hasText: `v${firstPublishedVersionNumber}`,
-		}),
+		page
+			.locator(".f-version-chip", {
+				hasText: `v${firstPublishedVersionNumber}`,
+			})
+			.first(),
 	).toBeVisible();
 	const exportDownloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export CSV" }).click();

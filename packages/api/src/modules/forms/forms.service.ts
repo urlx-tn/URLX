@@ -8,7 +8,21 @@ import {
 	forms,
 	formVersions,
 } from "@urlx/db";
-import { and, asc, count, desc, eq, isNull, lte, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { LinkService } from "../links/link.service";
 import {
 	type FormDefinitionDto,
@@ -25,6 +39,31 @@ export type FormDefinition = FormDefinitionDto;
 export const maxFormFields = 50;
 export const maxResponsesPerMonth = 1000;
 export const maxRetainedResponses = 10000;
+// Keeps a 10k-response stats read below D1's 50-read Free invocation limit,
+// including this service's fixed reads, while bounding answer memory per page.
+const responseStatsChunkSize = 250;
+const exportPageSize = 250;
+
+export type FormExportRow = {
+	id: string;
+	versionId: string;
+	version: number | null;
+	createdAt: number;
+	fields: FormField[];
+	answers: Record<string, unknown>;
+};
+
+export type FormsListOptions = {
+	limit?: number;
+	cursor?: string;
+	search?: string;
+};
+
+type FormsListCursor = {
+	updatedAt: number;
+	id: string;
+	search: string;
+};
 
 export class FormsService {
 	constructor(
@@ -32,12 +71,61 @@ export class FormsService {
 		private readonly now = () => Date.now(),
 	) {}
 
-	async list(ownerId: string) {
-		const rows = await this.db
+	async list(ownerId: string, options: FormsListOptions = {}) {
+		const search = options.search?.trim().toLowerCase() ?? "";
+		const requestedLimit = Number.isInteger(options.limit)
+			? (options.limit as number)
+			: 50;
+		const limit = Math.max(1, Math.min(requestedLimit, 100));
+		const cursor = options.cursor
+			? decodeFormsListCursor(options.cursor)
+			: null;
+		if (cursor && cursor.search !== search)
+			throw new FormsError("INVALID_CURSOR", 400);
+		const baseConditions = [
+			eq(forms.ownerId, ownerId),
+			isNull(forms.disabledAt),
+		];
+		if (search)
+			baseConditions.push(
+				or(
+					sql`instr(lower(${forms.title}), ${search}) > 0`,
+					sql`instr(lower(coalesce(${forms.slug}, '')), ${search}) > 0`,
+				)!,
+			);
+		const conditions = [...baseConditions];
+		if (cursor)
+			conditions.push(
+				or(
+					lt(forms.updatedAt, cursor.updatedAt),
+					and(eq(forms.updatedAt, cursor.updatedAt), lt(forms.id, cursor.id)),
+				)!,
+			);
+		const page = await this.db
 			.select()
 			.from(forms)
-			.where(and(eq(forms.ownerId, ownerId), isNull(forms.disabledAt)))
-			.orderBy(desc(forms.updatedAt));
+			.where(and(...conditions))
+			.orderBy(desc(forms.updatedAt), desc(forms.id))
+			.limit(limit + 1);
+		const hasMore = page.length > limit;
+		const rows = page.slice(0, limit);
+		const nextCursor = hasMore
+			? encodeFormsListCursor({
+					updatedAt: rows.at(-1)!.updatedAt,
+					id: rows.at(-1)!.id,
+					search,
+				})
+			: null;
+		const [matchingCount] = await this.db
+			.select({ total: count() })
+			.from(forms)
+			.where(and(...baseConditions));
+		const [allFormsCount] = search
+			? await this.db
+					.select({ total: count() })
+					.from(forms)
+					.where(and(eq(forms.ownerId, ownerId), isNull(forms.disabledAt)))
+			: [matchingCount];
 		const month = new Date(this.now()).toISOString().slice(0, 7);
 		const [usage] = await this.db
 			.select()
@@ -50,27 +138,45 @@ export class FormsService {
 			)
 			.limit(1);
 		const limits = await this.getLimits();
+		const responseCounts = rows.length
+			? await this.db
+					.select({ formId: formResponses.formId, total: count() })
+					.from(formResponses)
+					.where(
+						inArray(
+							formResponses.formId,
+							rows.map((form) => form.id),
+						),
+					)
+					.groupBy(formResponses.formId)
+			: [];
+		const responseCountsByForm = new Map(
+			responseCounts.map((response) => [
+				response.formId,
+				Number(response.total),
+			]),
+		);
+		const publishedVersions = rows.length
+			? await this.getLatestPublishedVersionsForForms(
+					rows.map((form) => form.id),
+				)
+			: new Map();
 		return {
-			forms: await Promise.all(
-				rows.map(async (form) => {
-					const [responses] = await this.db
-						.select({ total: count() })
-						.from(formResponses)
-						.where(eq(formResponses.formId, form.id));
-					return {
-						...form,
-						publishedVersion: await this.getPublishedVersion(form.id),
-						responseCount: Number(responses?.total ?? 0),
-					};
-				}),
-			),
+			forms: rows.map((form) => ({
+				...form,
+				publishedVersion: publishedVersions.get(form.id) ?? null,
+				responseCount: responseCountsByForm.get(form.id) ?? 0,
+			})),
 			usage: {
 				month,
 				responses: usage?.responseCount ?? 0,
+				forms: Number(allFormsCount?.total ?? 0),
 				monthlyLimit: limits.maxMonthlyResponses,
 				publishedLimit: limits.maxPublished,
 				retainedLimit: limits.maxRetainedResponses,
 			},
+			totalForms: Number(matchingCount?.total ?? 0),
+			nextCursor,
 		};
 	}
 
@@ -105,8 +211,9 @@ export class FormsService {
 			)
 			.limit(1);
 		const limits = await this.getLimits();
+		const publishedVersion = await this.getPublishedVersion(id);
 		return {
-			form: { ...form, publishedVersion: await this.getPublishedVersion(id) },
+			form: { ...form, publishedVersion },
 			draft: draftVersion
 				? {
 						title: draftVersion.title,
@@ -117,7 +224,7 @@ export class FormsService {
 					}
 				: null,
 			revision: draftVersion?.version ?? 0,
-			publishedVersion: await this.getPublishedVersion(id),
+			publishedVersion,
 			usage: {
 				month,
 				responses: usage?.responseCount ?? 0,
@@ -171,7 +278,7 @@ export class FormsService {
 		revision?: number,
 	) {
 		const clean = validateDefinition(definition);
-		const current = await this.get(ownerId, id);
+		const current = await this.getDraftState(ownerId, id);
 		if (!current || !current.draft) return null;
 		if (revision !== undefined && revision !== current.revision)
 			throw new FormsError(
@@ -216,7 +323,7 @@ export class FormsService {
 				}),
 			]);
 		} catch (error) {
-			const latest = await this.get(ownerId, id);
+			const latest = await this.getDraftState(ownerId, id);
 			if (latest && latest.revision !== current.revision)
 				throw new FormsError(
 					"REVISION_CONFLICT",
@@ -225,7 +332,16 @@ export class FormsService {
 				);
 			throw error;
 		}
-		return this.get(ownerId, id);
+		return {
+			draft: {
+				title: clean.title,
+				description: clean.description ?? "",
+				accent: clean.accent,
+				confirmationMessage: clean.confirmationMessage ?? "",
+				fields: clean.fields,
+			},
+			revision: nextVersion,
+		};
 	}
 
 	async publish(
@@ -387,7 +503,7 @@ export class FormsService {
 		const slug = rawSlug.trim().toLowerCase();
 		if (!/^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/.test(slug))
 			throw new FormsError("INVALID_SLUG", 400);
-		const current = await this.get(ownerId, id);
+		const current = await this.getOwnedFormId(ownerId, id);
 		if (!current) return null;
 		const [alias] = await this.db
 			.select()
@@ -440,11 +556,15 @@ export class FormsService {
 	}
 
 	async delete(ownerId: string, id: string) {
-		const current = await this.get(ownerId, id);
-		if (!current) return false;
 		const deleted = await this.db
 			.delete(forms)
-			.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
+			.where(
+				and(
+					eq(forms.id, id),
+					eq(forms.ownerId, ownerId),
+					isNull(forms.disabledAt),
+				),
+			);
 		return deleted.meta.changes > 0;
 	}
 
@@ -554,7 +674,7 @@ export class FormsService {
 	}
 
 	async responses(ownerId: string, id: string, limit = 100, offset = 0) {
-		if (!(await this.get(ownerId, id))) return null;
+		if (!(await this.getOwnedFormId(ownerId, id))) return null;
 		const rows = await this.db
 			.select()
 			.from(formResponses)
@@ -563,9 +683,31 @@ export class FormsService {
 			.limit(limit)
 			.offset(offset);
 		const versions = await this.db
-			.select()
+			.select({
+				id: formVersions.id,
+				version: formVersions.version,
+				fieldsJson: formVersions.fieldsJson,
+			})
 			.from(formVersions)
-			.where(eq(formVersions.formId, id));
+			.leftJoin(
+				formResponses,
+				and(
+					eq(formResponses.versionId, formVersions.id),
+					eq(formResponses.formId, id),
+				),
+			)
+			.where(eq(formVersions.formId, id))
+			.groupBy(formVersions.id)
+			.having(
+				or(
+					gt(count(formResponses.id), 0),
+					isNull(formVersions.publishedAt),
+					eq(
+						formVersions.version,
+						sql`(select max("latest"."version") from "form_versions" as "latest" where "latest"."form_id" = ${formVersions.formId} and "latest"."published_at" is not null)`,
+					),
+				)!,
+			);
 		const versionsById = new Map(
 			versions.map((version) => [version.id, version]),
 		);
@@ -576,8 +718,14 @@ export class FormsService {
 			createdAt: row.createdAt,
 			version: versionsById.get(row.versionId)?.version ?? null,
 		}));
-		const [total] = await this.db
-			.select({ total: count() })
+		const [totals] = await this.db
+			.select({
+				total: count(),
+				last7Days:
+					sql<number>`coalesce(sum(case when ${formResponses.createdAt} >= ${this.now() - 7 * 24 * 60 * 60 * 1000} then 1 else 0 end), 0)`.mapWith(
+						Number,
+					),
+			})
 			.from(formResponses)
 			.where(eq(formResponses.formId, id));
 		const [usage] = await this.db
@@ -594,10 +742,15 @@ export class FormsService {
 			)
 			.limit(1);
 		const limits = await this.getLimits();
-		const stats = await this.responseStats(id, versions);
+		const stats = await this.responseStats(
+			id,
+			versions,
+			Number(totals?.total ?? 0),
+		);
 		return {
 			responses,
-			total: Number(total?.total ?? 0),
+			total: Number(totals?.total ?? 0),
+			last7Days: Number(totals?.last7Days ?? 0),
 			offset,
 			limit,
 			usage: usage?.responseCount ?? 0,
@@ -607,7 +760,7 @@ export class FormsService {
 	}
 
 	async deleteResponse(ownerId: string, id: string, responseId?: string) {
-		if (!(await this.get(ownerId, id))) return null;
+		if (!(await this.getOwnedFormId(ownerId, id))) return null;
 		const deleted = responseId
 			? await this.db
 					.delete(formResponses)
@@ -618,99 +771,230 @@ export class FormsService {
 		return { success: true, deleted: deleted.meta.changes };
 	}
 
-	async exportRows(ownerId: string, id: string) {
-		if (!(await this.get(ownerId, id))) return null;
-		const rows = await this.db
-			.select()
+	/** Pages through the initial high-water tuple; concurrent deletes and same-millisecond inserts are best-effort, not a snapshot. */
+	async exportRowsInPages(
+		ownerId: string,
+		id: string,
+		pageSize = exportPageSize,
+	): Promise<AsyncIterable<FormExportRow[]> | null> {
+		if (!(await this.getOwnedFormId(ownerId, id))) return null;
+		const [latestResponse] = await this.db
+			.select({
+				createdAt: formResponses.createdAt,
+				id: formResponses.id,
+			})
 			.from(formResponses)
 			.where(eq(formResponses.formId, id))
-			.orderBy(asc(formResponses.createdAt));
-		const versions = await this.db
-			.select()
-			.from(formVersions)
-			.where(eq(formVersions.formId, id));
-		const versionsById = new Map(
-			versions.map((version) => [version.id, version]),
+			.orderBy(desc(formResponses.createdAt), desc(formResponses.id))
+			.limit(1);
+		const highWater = latestResponse ?? null;
+		const limit = Math.max(
+			1,
+			Math.min(Math.trunc(pageSize) || exportPageSize, exportPageSize),
 		);
-		return rows.map((row) => ({
-			...row,
-			version: versionsById.get(row.versionId)?.version ?? null,
-			fields: parseFields(versionsById.get(row.versionId)?.fieldsJson ?? "[]"),
-			answers: JSON.parse(row.answersJson) as Record<string, unknown>,
-		}));
+		if (!highWater) return (async function* () {})();
+		const db = this.db;
+		return (async function* () {
+			let cursor: { createdAt: number; id: string } | undefined;
+			for (;;) {
+				const conditions = [eq(formResponses.formId, id)];
+				conditions.push(
+					or(
+						lt(formResponses.createdAt, highWater.createdAt),
+						and(
+							eq(formResponses.createdAt, highWater.createdAt),
+							lte(formResponses.id, highWater.id),
+						),
+					)!,
+				);
+				if (cursor) {
+					conditions.push(
+						or(
+							gt(formResponses.createdAt, cursor.createdAt),
+							and(
+								eq(formResponses.createdAt, cursor.createdAt),
+								gt(formResponses.id, cursor.id),
+							),
+						)!,
+					);
+				}
+				const rows = await db
+					.select({
+						id: formResponses.id,
+						versionId: formResponses.versionId,
+						createdAt: formResponses.createdAt,
+						answersJson: formResponses.answersJson,
+						version: formVersions.version,
+						fieldsJson: formVersions.fieldsJson,
+					})
+					.from(formResponses)
+					.innerJoin(
+						formVersions,
+						and(
+							eq(formVersions.id, formResponses.versionId),
+							eq(formVersions.formId, formResponses.formId),
+						),
+					)
+					.where(and(...conditions))
+					.orderBy(asc(formResponses.createdAt), asc(formResponses.id))
+					.limit(limit);
+				if (!rows.length) return;
+				const last = rows.at(-1)!;
+				cursor = { createdAt: last.createdAt, id: last.id };
+				const fieldsByVersion = new Map<string, FormField[]>();
+				yield rows.map((row) => {
+					let fields = fieldsByVersion.get(row.versionId);
+					if (!fields) {
+						fields = parseFields(row.fieldsJson);
+						fieldsByVersion.set(row.versionId, fields);
+					}
+					return {
+						id: row.id,
+						versionId: row.versionId,
+						version: row.version,
+						createdAt: row.createdAt,
+						fields,
+						answers: JSON.parse(row.answersJson) as Record<string, unknown>,
+					};
+				});
+				if (rows.length < limit) return;
+			}
+		})();
 	}
 
 	private async responseStats(
 		formId: string,
-		versions: Array<typeof formVersions.$inferSelect>,
+		versions: Array<
+			Pick<typeof formVersions.$inferSelect, "id" | "version" | "fieldsJson">
+		>,
+		totalRows: number,
 	) {
-		const results = [];
-		for (const version of versions.sort((a, b) => a.version - b.version)) {
-			const rows = await this.db
-				.select({ answersJson: formResponses.answersJson })
-				.from(formResponses)
-				.where(
-					and(
-						eq(formResponses.formId, formId),
-						eq(formResponses.versionId, version.id),
-					),
-				);
+		type QuestionAccumulator = {
+			field: FormField;
+			answered: number;
+			distribution: Record<string, number>;
+			ratingSum: number;
+			ratingCount: number;
+		};
+		const sortedVersions = [...versions].sort((a, b) => a.version - b.version);
+		const versionStats = new Map<
+			string,
+			{
+				version: (typeof versions)[number];
+				fields: FormField[];
+				questions: Map<string, QuestionAccumulator>;
+				responseCount: number;
+			}
+		>();
+		for (const version of sortedVersions) {
 			const fields = parseFields(version.fieldsJson);
-			const questions = fields.map((field) => {
-				const values = rows
-					.map(
-						(row) =>
-							(JSON.parse(row.answersJson) as Record<string, unknown>)[
-								field.id
-							],
+			versionStats.set(version.id, {
+				version,
+				fields,
+				questions: new Map(
+					fields.map((field) => [
+						field.id,
+						{
+							field,
+							answered: 0,
+							distribution: {},
+							ratingSum: 0,
+							ratingCount: 0,
+						},
+					]),
+				),
+				responseCount: 0,
+			});
+		}
+
+		let offset = 0;
+		while (offset < totalRows) {
+			const rows = await this.db
+				.select({
+					versionId: formResponses.versionId,
+					answersJson: formResponses.answersJson,
+				})
+				.from(formResponses)
+				.where(eq(formResponses.formId, formId))
+				.orderBy(asc(formResponses.createdAt), asc(formResponses.id))
+				.limit(responseStatsChunkSize)
+				.offset(offset);
+			if (!rows.length) break;
+			offset += rows.length;
+			for (const row of rows) {
+				const stats = versionStats.get(row.versionId);
+				if (!stats) continue;
+				stats.responseCount += 1;
+				const answers = JSON.parse(row.answersJson) as Record<string, unknown>;
+				for (const field of stats.fields) {
+					const value = answers[field.id];
+					if (
+						value === undefined ||
+						value === "" ||
+						(Array.isArray(value) && value.length === 0)
 					)
-					.filter((value) => value !== undefined && value !== "");
-				if (field.type === "singlechoice" || field.type === "multichoice") {
-					const distribution: Record<string, number> = {};
-					for (const value of values)
-						for (const choice of (Array.isArray(value) ? value : [value]).map(
-							String,
+						continue;
+					const question = stats.questions.get(field.id)!;
+					if (field.type === "singlechoice" || field.type === "multichoice") {
+						question.answered += 1;
+						for (const choice of new Set(
+							(Array.isArray(value) ? value : [value]).map(String),
 						))
-							distribution[choice] = (distribution[choice] ?? 0) + 1;
-					return {
-						fieldId: field.id,
-						label: field.label,
-						type: field.type,
-						distribution,
-					};
+							question.distribution[choice] =
+								(question.distribution[choice] ?? 0) + 1;
+					} else if (field.type === "rating") {
+						const rating = Number(value);
+						if (Number.isFinite(rating)) {
+							question.ratingCount += 1;
+							question.ratingSum += rating;
+							question.distribution[String(rating)] =
+								(question.distribution[String(rating)] ?? 0) + 1;
+						}
+					} else {
+						question.answered += 1;
+					}
 				}
-				if (field.type === "rating") {
-					const ratings = values.map(Number).filter(Number.isFinite);
-					const distribution: Record<string, number> = {};
-					for (const value of ratings)
-						distribution[String(value)] =
-							(distribution[String(value)] ?? 0) + 1;
+			}
+			if (rows.length < responseStatsChunkSize) break;
+		}
+
+		return sortedVersions.map((version) => {
+			const stats = versionStats.get(version.id)!;
+			const questions = stats.fields.map((field) => {
+				const question = stats.questions.get(field.id)!;
+				if (field.type === "singlechoice" || field.type === "multichoice")
 					return {
 						fieldId: field.id,
 						label: field.label,
 						type: field.type,
-						distribution,
-						average: ratings.length
-							? ratings.reduce((sum, value) => sum + value, 0) / ratings.length
+						answered: question.answered,
+						distribution: question.distribution,
+					};
+				if (field.type === "rating")
+					return {
+						fieldId: field.id,
+						label: field.label,
+						type: field.type,
+						distribution: question.distribution,
+						average: question.ratingCount
+							? question.ratingSum / question.ratingCount
 							: null,
 					};
-				}
 				return {
 					fieldId: field.id,
 					label: field.label,
 					type: field.type,
-					answered: values.length,
+					answered: question.answered,
 				};
 			});
-			results.push({
+			return {
 				versionId: version.id,
 				version: version.version,
-				fields,
-				responseCount: rows.length,
+				fields: stats.fields,
+				responseCount: stats.responseCount,
 				questions,
-			});
-		}
-		return results;
+			};
+		});
 	}
 
 	private async getPublishedVersion(id: string) {
@@ -720,24 +1004,82 @@ export class FormsService {
 			.where(
 				and(
 					eq(formVersions.formId, id),
-					sql`${formVersions.publishedAt} is not null`,
+					isNotNull(formVersions.publishedAt),
+					eq(
+						formVersions.version,
+						sql`(select max("latest"."version") from "form_versions" as "latest" where "latest"."form_id" = ${formVersions.formId} and "latest"."published_at" is not null)`,
+					),
 				),
 			)
+			.limit(1);
+		return version ? publishedVersionDto(version) : null;
+	}
+
+	private async getLatestPublishedVersionsForForms(formIds: string[]) {
+		const versions = await this.db
+			.select({
+				formId: formVersions.formId,
+				id: formVersions.id,
+				version: formVersions.version,
+				title: formVersions.title,
+				description: formVersions.description,
+				confirmationMessage: formVersions.confirmationMessage,
+				fieldsJson: formVersions.fieldsJson,
+				accent: formVersions.accent,
+				respondentAccess: formVersions.respondentAccess,
+				publishedAt: formVersions.publishedAt,
+			})
+			.from(formVersions)
+			.where(
+				and(
+					inArray(formVersions.formId, formIds),
+					isNotNull(formVersions.publishedAt),
+					eq(
+						formVersions.version,
+						sql`(select max("latest"."version") from "form_versions" as "latest" where "latest"."form_id" = ${formVersions.formId} and "latest"."published_at" is not null)`,
+					),
+				),
+			);
+		return new Map(
+			versions.map((version) => [version.formId, publishedVersionDto(version)]),
+		);
+	}
+
+	private async getDraftState(ownerId: string, id: string) {
+		if (!(await this.getOwnedFormId(ownerId, id))) return null;
+		const [draftVersion] = await this.db
+			.select()
+			.from(formVersions)
+			.where(eq(formVersions.formId, id))
 			.orderBy(desc(formVersions.version))
 			.limit(1);
-		return version
-			? {
-					id: version.id,
-					version: version.version,
-					title: version.title,
-					description: version.description ?? "",
-					confirmationMessage: version.confirmationMessage ?? "",
-					fields: parseFields(version.fieldsJson),
-					accent: version.accent,
-					respondentAccess: version.respondentAccess as RespondentAccessMode,
-					publishedAt: version.publishedAt,
-				}
-			: null;
+		return {
+			draft: draftVersion
+				? {
+						title: draftVersion.title,
+						description: draftVersion.description ?? "",
+						accent: draftVersion.accent,
+						confirmationMessage: draftVersion.confirmationMessage ?? "",
+						fields: parseFields(draftVersion.fieldsJson),
+					}
+				: null,
+			revision: draftVersion?.version ?? 0,
+		};
+	}
+
+	private async getOwnedFormId(ownerId: string, id: string) {
+		const [form] = await this.db
+			.select({ id: forms.id })
+			.from(forms)
+			.where(
+				and(
+					eq(forms.id, id),
+					eq(forms.ownerId, ownerId),
+					isNull(forms.disabledAt),
+				),
+			)
+			.limit(1);
+		return form?.id ?? null;
 	}
 
 	private async getLimits() {
@@ -822,6 +1164,63 @@ function parseFields(json: string): FormField[] {
 		return JSON.parse(json) as FormField[];
 	} catch {
 		return [];
+	}
+}
+
+function publishedVersionDto(version: {
+	id: string;
+	version: number;
+	title: string;
+	description: string | null;
+	confirmationMessage: string | null;
+	fieldsJson: string;
+	accent: string;
+	respondentAccess: string;
+	publishedAt: number | null;
+}) {
+	return {
+		id: version.id,
+		version: version.version,
+		title: version.title,
+		description: version.description ?? "",
+		confirmationMessage: version.confirmationMessage ?? "",
+		fields: parseFields(version.fieldsJson),
+		accent: version.accent,
+		respondentAccess: version.respondentAccess as RespondentAccessMode,
+		publishedAt: version.publishedAt,
+	};
+}
+
+function encodeFormsListCursor(cursor: FormsListCursor): string {
+	const bytes = new TextEncoder().encode(JSON.stringify(cursor));
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary)
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/g, "");
+}
+
+function decodeFormsListCursor(value: string): FormsListCursor {
+	try {
+		const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+		const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
+		const bytes = Uint8Array.from(binary, (character) =>
+			character.charCodeAt(0),
+		);
+		const cursor = JSON.parse(
+			new TextDecoder().decode(bytes),
+		) as Partial<FormsListCursor>;
+		if (
+			!Number.isSafeInteger(cursor.updatedAt) ||
+			typeof cursor.id !== "string" ||
+			!cursor.id ||
+			typeof cursor.search !== "string"
+		)
+			throw new Error("Malformed forms list cursor");
+		return cursor as FormsListCursor;
+	} catch {
+		throw new FormsError("INVALID_CURSOR", 400);
 	}
 }
 

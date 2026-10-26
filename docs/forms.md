@@ -107,3 +107,12 @@ the live form; owners publish explicitly to change it. Historical submissions
 remain grouped by the version that accepted them. The current and historical
 form URLs resolve through the saved aliases, and the first short URL and QR
 destination remain stable.
+
+CSV exports use one row per response field with fixed columns for the response,
+version number and ID, submission time, field ID and label, and answer. Keeping
+the version and label on each row preserves the meaning of answers when a field
+changes between published versions without creating a wide matrix of mostly
+empty columns. Multi-select answers are joined with semicolons in the answer
+cell. Exports are paged with a start-of-export high-water mark, but concurrent
+submissions or deletions can affect later pages; treat them as best-effort, not
+as strict point-in-time snapshots.

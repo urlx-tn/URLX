@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { createDb } from "@urlx/db";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FormsService } from "../src/modules/forms/forms.service";
+import {
+	type FormExportRow,
+	FormsService,
+} from "../src/modules/forms/forms.service";
 
 const owner = "synthetic-owner";
 // Publishing requires at least one question; most lifecycle tests only need a placeholder.
@@ -14,6 +17,43 @@ const sampleFields = [
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 let mf: Miniflare;
 let service: FormsService;
+type TestD1 = NonNullable<Parameters<typeof createDb>[0]>;
+
+function createCountedService(d1: TestD1, now = () => Date.now()) {
+	let preparedQueries = 0;
+	const countedD1 = new Proxy(d1, {
+		get(target, property) {
+			const value = Reflect.get(target, property, target);
+			if (property === "prepare") {
+				return (...args: Parameters<typeof target.prepare>) => {
+					preparedQueries += 1;
+					return target.prepare(...args);
+				};
+			}
+			return typeof value === "function" ? value.bind(target) : value;
+		},
+	});
+	return {
+		service: new FormsService(createDb(countedD1), now),
+		get preparedQueries() {
+			return preparedQueries;
+		},
+		reset() {
+			preparedQueries = 0;
+		},
+	};
+}
+
+async function addTestOwner(id: string, email: string) {
+	const d1 = await mf.getD1Database("DB");
+	await d1
+		.prepare(
+			"INSERT INTO `user` (id,name,email,email_verified,created_at,updated_at) VALUES (?, 'Synthetic', ?, 1, 1, 1)",
+		)
+		.bind(id, email)
+		.run();
+	return d1;
+}
 
 beforeAll(async () => {
 	mf = new Miniflare({
@@ -55,6 +95,523 @@ afterAll(async () => {
 });
 
 describe("forms isolated D1 lifecycle", () => {
+	it("lists multiple forms with a bounded number of prepared queries", async () => {
+		const ownerId = "synthetic-batched-list-owner";
+		const d1 = await addTestOwner(ownerId, "batched-list@example.invalid");
+		const setup = new FormsService(createDb(d1), () => Date.UTC(2026, 9, 16));
+		const live = await setup.create(ownerId, {
+			title: "Live form",
+			accent: "blue",
+			fields: sampleFields,
+		});
+		const published = await setup.publish(
+			ownerId,
+			live!.form!.id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+		await setup.acceptResponse(live!.form!.id, published!.version, "list-one", {
+			q: "Answer",
+		});
+		for (const title of ["Draft two", "Draft three", "Draft four"]) {
+			await setup.create(ownerId, {
+				title,
+				accent: "teal",
+				fields: sampleFields,
+			});
+		}
+
+		const counted = createCountedService(d1);
+		const listed = await counted.service.list(ownerId);
+
+		expect(counted.preparedQueries).toBe(6);
+		expect(listed.forms).toHaveLength(4);
+		expect(listed.totalForms).toBe(4);
+		expect(listed.usage.forms).toBe(4);
+		expect(
+			listed.forms.find((form) => form.id === live!.form!.id),
+		).toMatchObject({
+			responseCount: 1,
+			publishedVersion: {
+				id: published!.version,
+				title: "Live form",
+				fields: sampleFields,
+			},
+		});
+		expect(
+			listed.forms
+				.filter((form) => form.id !== live!.form!.id)
+				.every(
+					(form) => form.responseCount === 0 && form.publishedVersion === null,
+				),
+		).toBe(true);
+
+		const firstPage = await counted.service.list(ownerId, { limit: 2 });
+		const secondPage = await counted.service.list(ownerId, {
+			limit: 2,
+			cursor: firstPage.nextCursor ?? undefined,
+		});
+		expect(firstPage.forms).toHaveLength(2);
+		expect(firstPage.nextCursor).toBeTruthy();
+		expect(secondPage.forms).toHaveLength(2);
+		expect(secondPage.nextCursor).toBeNull();
+		expect(
+			[...firstPage.forms, ...secondPage.forms].map((form) => form.id),
+		).toEqual(
+			listed.forms
+				.slice()
+				.sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id))
+				.map((form) => form.id),
+		);
+		const searched = await counted.service.list(ownerId, {
+			search: "LIVE FORM",
+		});
+		expect(searched.forms.map((form) => form.id)).toEqual([live!.form!.id]);
+		expect(searched.totalForms).toBe(1);
+		expect(searched.usage.forms).toBe(4);
+		await expect(
+			counted.service.list(ownerId, {
+				search: "different search",
+				cursor: searched.nextCursor ?? "invalid",
+			}),
+		).rejects.toMatchObject({ code: "INVALID_CURSOR" });
+	});
+
+	it("encodes Unicode search terms in paged list cursors", async () => {
+		const ownerId = "synthetic-unicode-list-owner";
+		const d1 = await addTestOwner(ownerId, "unicode-list@example.invalid");
+		const setup = new FormsService(createDb(d1));
+		await setup.create(ownerId, {
+			title: "東京の登録",
+			accent: "blue",
+			fields: sampleFields,
+		});
+		await setup.create(ownerId, {
+			title: "東京の申込み",
+			accent: "teal",
+			fields: sampleFields,
+		});
+
+		const first = await setup.list(ownerId, { limit: 1, search: "東京" });
+		const second = await setup.list(ownerId, {
+			limit: 1,
+			search: "東京",
+			cursor: first.nextCursor ?? undefined,
+		});
+
+		expect(first.forms).toHaveLength(1);
+		expect(first.nextCursor).toBeTruthy();
+		expect(second.forms).toHaveLength(1);
+		expect(second.nextCursor).toBeNull();
+	});
+
+	it("batches list details with a full 100-form page", async () => {
+		const ownerId = "synthetic-hundred-form-owner";
+		const d1 = await addTestOwner(ownerId, "hundred-form@example.invalid");
+		const createdAt = Date.UTC(2026, 9, 16);
+		const statements = [];
+		for (let index = 0; index < 100; index++) {
+			const id = `synthetic-list-form-${String(index).padStart(3, "0")}`;
+			statements.push(
+				d1
+					.prepare(
+						"INSERT INTO forms (id,owner_id,title,theme,accent,created_at,updated_at) VALUES (?,?,?,'light','blue',?,?)",
+					)
+					.bind(id, ownerId, `Form ${index}`, createdAt, createdAt),
+				d1
+					.prepare(
+						"INSERT INTO form_versions (id,form_id,version,fields_json,title,accent,created_at) VALUES (?,?,1,'[]',?,'blue',?)",
+					)
+					.bind(
+						`synthetic-list-version-${index}`,
+						id,
+						`Form ${index}`,
+						createdAt,
+					),
+			);
+		}
+		for (let start = 0; start < statements.length; start += 50)
+			await d1.batch(statements.slice(start, start + 50));
+
+		const counted = createCountedService(d1);
+		const result = await counted.service.list(ownerId, { limit: 100 });
+
+		expect(counted.preparedQueries).toBe(6);
+		expect(result.forms).toHaveLength(100);
+		expect(result.totalForms).toBe(100);
+		expect(result.usage.forms).toBe(100);
+		expect(result.nextCursor).toBeNull();
+	});
+
+	it("computes response stats with one answer read across published versions", async () => {
+		const ownerId = "synthetic-batched-stats-owner";
+		const d1 = await addTestOwner(ownerId, "batched-stats@example.invalid");
+		await d1
+			.prepare(
+				"UPDATE form_limits SET max_published=25, max_monthly_responses=1000, max_retained_responses=10000 WHERE id=1",
+			)
+			.run();
+		const setup = new FormsService(createDb(d1), () => Date.UTC(2026, 9, 16));
+		const form = await setup.create(ownerId, {
+			title: "Versioned stats",
+			accent: "blue",
+			fields: [
+				{
+					id: "choice",
+					type: "singlechoice",
+					label: "Choice",
+					required: false,
+					options: ["A", "B"],
+				},
+			],
+		});
+		const id = form!.form!.id;
+		const publish = (respondentAccess: "public" = "public") =>
+			setup.publish(
+				ownerId,
+				id,
+				undefined,
+				"https://forms.example.invalid",
+				"https://s.example.invalid",
+				respondentAccess,
+			);
+		const v1 = await publish();
+		await setup.acceptResponse(id, v1!.version, "stats-v1", { choice: "A" });
+
+		const secondDraft = await setup.save(
+			ownerId,
+			id,
+			{
+				title: "Versioned stats",
+				accent: "blue",
+				fields: [
+					{ id: "rating", type: "rating", label: "Rating", required: false },
+				],
+			},
+			v1!.revision,
+		);
+		const v2 = await publish();
+		await setup.acceptResponse(id, v2!.version, "stats-v2", { rating: 4 });
+
+		const thirdDraft = await setup.save(
+			ownerId,
+			id,
+			{
+				title: "Versioned stats",
+				accent: "blue",
+				fields: [
+					{ id: "empty", type: "short", label: "No response", required: false },
+				],
+			},
+			secondDraft!.revision,
+		);
+		await publish();
+
+		await setup.save(
+			ownerId,
+			id,
+			{
+				title: "Versioned stats",
+				accent: "blue",
+				fields: [
+					{
+						id: "multi",
+						type: "multichoice",
+						label: "Multi",
+						required: false,
+						options: ["Red", "Blue"],
+					},
+				],
+			},
+			thirdDraft!.revision,
+		);
+		const v4 = await publish();
+		await setup.acceptResponse(id, v4!.version, "stats-v4", {
+			multi: ["Blue", "Red", "Blue"],
+		});
+		let latestPublished = v4;
+		for (let attempt = 0; attempt < 5; attempt++)
+			latestPublished = await publish();
+		const currentDraft = await setup.save(
+			ownerId,
+			id,
+			{
+				title: "Versioned stats",
+				accent: "blue",
+				fields: [
+					{
+						id: "draft",
+						type: "short",
+						label: "Current draft",
+						required: false,
+					},
+				],
+			},
+			latestPublished!.revision,
+		);
+
+		const counted = createCountedService(d1);
+		const result = await counted.service.responses(ownerId, id);
+
+		expect(counted.preparedQueries).toBe(7);
+		expect(result?.stats).toHaveLength(5);
+		expect(result?.stats.map((stat) => stat.version)).toEqual([
+			1,
+			2,
+			4,
+			latestPublished!.revision,
+			currentDraft!.revision,
+		]);
+		expect(result?.stats.map((stat) => stat.responseCount)).toEqual([
+			1, 1, 1, 0, 0,
+		]);
+		expect(result?.stats[0]?.questions[0]).toMatchObject({
+			fieldId: "choice",
+			answered: 1,
+			distribution: { A: 1 },
+		});
+		expect(result?.stats[1]?.questions[0]).toMatchObject({
+			fieldId: "rating",
+			distribution: { "4": 1 },
+			average: 4,
+		});
+		expect(result?.stats[2]?.questions[0]).toMatchObject({
+			fieldId: "multi",
+			answered: 1,
+			distribution: { Blue: 1, Red: 1 },
+		});
+		expect(result?.stats[3]?.questions[0]).toMatchObject({
+			fieldId: "multi",
+			answered: 0,
+			distribution: {},
+		});
+		expect(result?.stats[4]?.questions[0]).toMatchObject({
+			fieldId: "draft",
+			answered: 0,
+		});
+	});
+
+	it("reports choice answer counts across more responses than the page size", async () => {
+		const ownerId = "synthetic-stats-page-owner";
+		const d1 = await addTestOwner(ownerId, "stats-page@example.invalid");
+		await d1
+			.prepare(
+				"UPDATE form_limits SET max_published=25, max_monthly_responses=1000, max_retained_responses=10000 WHERE id=1",
+			)
+			.run();
+		const setup = new FormsService(createDb(d1), () => Date.UTC(2026, 9, 16));
+		const form = await setup.create(ownerId, {
+			title: "Large response page",
+			accent: "blue",
+			fields: [
+				{
+					id: "choice",
+					type: "singlechoice",
+					label: "Choice",
+					required: false,
+					options: ["A", "B"],
+				},
+			],
+		});
+		const published = await setup.publish(
+			ownerId,
+			form!.form!.id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+		const formId = form!.form!.id;
+		const weekAgo = Date.UTC(2026, 9, 16) - 7 * 24 * 60 * 60 * 1000;
+		const inserts = Array.from({ length: 501 }, (_, index) =>
+			d1
+				.prepare(
+					"INSERT INTO form_responses (id,form_id,version_id,idempotency_key,answers_json,created_at) VALUES (?,?,?,?,?,?)",
+				)
+				.bind(
+					`synthetic-page-response-${index}`,
+					formId,
+					published!.version,
+					`synthetic-page-key-${index}`,
+					JSON.stringify({ choice: index % 2 === 0 ? "A" : "B" }),
+					index === 0 ? weekAgo - 1 : weekAgo + index - 1,
+				),
+		);
+		for (let start = 0; start < inserts.length; start += 50)
+			await d1.batch(inserts.slice(start, start + 50));
+
+		const counted = createCountedService(d1, () => Date.UTC(2026, 9, 16));
+		const result = await counted.service.responses(ownerId, formId, 500, 0);
+
+		expect(counted.preparedQueries).toBe(9);
+		expect(result?.responses).toHaveLength(500);
+		expect(result?.total).toBe(501);
+		expect(result?.last7Days).toBe(500);
+		expect(result?.stats[0]?.responseCount).toBe(501);
+		expect(result?.stats[0]?.questions[0]).toMatchObject({
+			fieldId: "choice",
+			answered: 501,
+			distribution: { A: 251, B: 250 },
+		});
+	});
+
+	it("pages tied response timestamps and excludes later rows beyond the high-water tuple", async () => {
+		const ownerId = "synthetic-export-pages-owner";
+		const d1 = await addTestOwner(ownerId, "export-pages@example.invalid");
+		await d1
+			.prepare(
+				"UPDATE form_limits SET max_published=25, max_monthly_responses=1000, max_retained_responses=10000 WHERE id=1",
+			)
+			.run();
+		const setup = new FormsService(createDb(d1), () => Date.UTC(2026, 9, 16));
+		const exportFields = Array.from({ length: 50 }, (_, index) => ({
+			id: `q${index}`,
+			type: "short" as const,
+			label: `Question ${index}`,
+			required: false,
+		}));
+		const form = await setup.create(ownerId, {
+			title: "Paged export",
+			accent: "blue",
+			fields: exportFields,
+		});
+		const published = await setup.publish(
+			ownerId,
+			form!.form!.id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+		const formId = form!.form!.id;
+		const createdAt = Date.UTC(2026, 9, 16);
+		await d1.batch([
+			d1
+				.prepare(
+					"INSERT INTO form_responses (id,form_id,version_id,idempotency_key,answers_json,created_at) VALUES (?,?,?,?,?,?)",
+				)
+				.bind("export-a", formId, published!.version, "key-a", "{}", createdAt),
+			d1
+				.prepare(
+					"INSERT INTO form_responses (id,form_id,version_id,idempotency_key,answers_json,created_at) VALUES (?,?,?,?,?,?)",
+				)
+				.bind(
+					"export-b",
+					formId,
+					published!.version,
+					"key-b",
+					JSON.stringify({ q0: "" }),
+					createdAt,
+				),
+			d1
+				.prepare(
+					"INSERT INTO form_responses (id,form_id,version_id,idempotency_key,answers_json,created_at) VALUES (?,?,?,?,?,?)",
+				)
+				.bind(
+					"export-c",
+					formId,
+					published!.version,
+					"key-c",
+					JSON.stringify({ q0: "Last" }),
+					createdAt,
+				),
+		]);
+
+		const counted = createCountedService(d1);
+		const pages = await counted.service.exportRowsInPages(ownerId, formId, 2);
+		expect(pages).not.toBeNull();
+		const pageSizes: number[] = [];
+		const exported: FormExportRow[] = [];
+		const pageIterator = pages![Symbol.asyncIterator]();
+		const firstPage = await pageIterator.next();
+		expect(firstPage.done).toBe(false);
+		if (!firstPage.done) {
+			pageSizes.push(firstPage.value.length);
+			exported.push(...firstPage.value);
+		}
+		await d1
+			.prepare(
+				"INSERT INTO form_responses (id,form_id,version_id,idempotency_key,answers_json,created_at) VALUES (?,?,?,?,?,?)",
+			)
+			.bind(
+				"export-newer",
+				formId,
+				published!.version,
+				"key-newer",
+				JSON.stringify({ q0: "Newer" }),
+				createdAt + 1,
+			)
+			.run();
+		for await (const page of {
+			[Symbol.asyncIterator]: () => pageIterator,
+		}) {
+			pageSizes.push(page.length);
+			exported.push(...page);
+		}
+
+		expect(counted.preparedQueries).toBe(4);
+		expect(pageSizes).toEqual([2, 1]);
+		expect(exported.map((row) => row.id)).toEqual([
+			"export-a",
+			"export-b",
+			"export-c",
+		]);
+		expect(exported.every((row) => row.version === 1)).toBe(true);
+		expect(exported.every((row) => row.fields.length === 50)).toBe(true);
+		expect(exported.every((row) => row.fields[0]?.label === "Question 0")).toBe(
+			true,
+		);
+		expect(exported.map((row) => row.answers)).toEqual([
+			{},
+			{ q0: "" },
+			{ q0: "Last" },
+		]);
+	});
+
+	it("does not extend an empty export when responses arrive after it starts", async () => {
+		const ownerId = "synthetic-empty-export-owner";
+		const d1 = await addTestOwner(ownerId, "empty-export@example.invalid");
+		await d1
+			.prepare(
+				"UPDATE form_limits SET max_published=25, max_monthly_responses=1000, max_retained_responses=10000 WHERE id=1",
+			)
+			.run();
+		const setup = new FormsService(createDb(d1), () => Date.UTC(2026, 9, 16));
+		const form = await setup.create(ownerId, {
+			title: "Empty export",
+			accent: "blue",
+			fields: sampleFields,
+		});
+		const published = await setup.publish(
+			ownerId,
+			form!.form!.id,
+			undefined,
+			"https://forms.example.invalid",
+			"https://s.example.invalid",
+			"public",
+		);
+
+		const counted = createCountedService(d1);
+		const pages = await counted.service.exportRowsInPages(
+			ownerId,
+			form!.form!.id,
+		);
+		expect(pages).not.toBeNull();
+		await setup.acceptResponse(
+			form!.form!.id,
+			published!.version,
+			"arrived-after-export-start",
+			{ q: "New response" },
+		);
+
+		const exported: FormExportRow[] = [];
+		for await (const page of pages!) exported.push(...page);
+		expect(counted.preparedQueries).toBe(2);
+		expect(exported).toEqual([]);
+	});
+
 	it("saves a truly blank draft but refuses to publish it", async () => {
 		const blank = await service.create(owner, {
 			title: "Untitled form",

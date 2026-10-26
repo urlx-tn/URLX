@@ -56,11 +56,26 @@ formsApp.all("/api/auth/*", async (c) => {
 formsApp.get("/api/forms", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const result = await new FormsService(createDb(c.env.DB)).list(owner.id);
-	return c.json({
-		...result,
-		usage: { ...result.usage, forms: result.forms.length },
-	});
+	const rawLimit = c.req.query("limit");
+	const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+	if (
+		rawLimit !== undefined &&
+		(!/^\d+$/.test(rawLimit) ||
+			!Number.isSafeInteger(limit) ||
+			limit < 1 ||
+			limit > 100)
+	)
+		return c.json({ error: "INVALID_LIMIT" }, 400);
+	try {
+		const result = await new FormsService(createDb(c.env.DB)).list(owner.id, {
+			limit,
+			cursor: c.req.query("cursor"),
+			search: c.req.query("search"),
+		});
+		return c.json(result);
+	} catch (error) {
+		return errorResponse(c, error);
+	}
 });
 
 formsApp.post("/api/forms", async (c) => {
@@ -197,45 +212,82 @@ formsApp.delete("/api/forms/:id/responses", async (c) => {
 formsApp.get("/api/forms/:id/export.csv", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const rows = await new FormsService(createDb(c.env.DB)).exportRows(
+	const pages = await new FormsService(createDb(c.env.DB)).exportRowsInPages(
 		owner.id,
 		c.req.param("id"),
 	);
-	if (!rows) return c.json({ error: "FORM_NOT_FOUND" }, 404);
-	const columns = new Map<
-		string,
-		{ versionId: string; fieldId: string; heading: string }
-	>();
-	for (const row of rows)
-		for (const field of row.fields)
-			columns.set(`${row.versionId}:${field.id}`, {
-				versionId: row.versionId,
-				fieldId: field.id,
-				heading: `v${row.version} · ${field.label}`,
-			});
+	if (!pages) return c.json({ error: "FORM_NOT_FOUND" }, 404);
+	const pageIterator = pages[Symbol.asyncIterator]();
+	let page = await pageIterator.next();
 	const headers = [
 		"response_id",
 		"version",
+		"version_id",
 		"submitted_at",
-		...columns.values().map((column) => column.heading),
+		"field_id",
+		"field_label",
+		"answer",
 	];
-	const csv = [
-		headers.map(csvCell).join(","),
-		...rows.map((row) =>
-			[
-				row.id,
-				String(row.version ?? ""),
-				new Date(row.createdAt).toISOString(),
-				...[...columns.values()].map((column) =>
-					column.versionId === row.versionId
-						? answerText(row.answers[column.fieldId])
-						: "",
-				),
-			]
-				.map(csvCell)
-				.join(","),
-		),
-	].join("\r\n");
+	const encoder = new TextEncoder();
+	let responseIndex = 0;
+	let fieldIndex = 0;
+	const csv = new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(encoder.encode(headers.map(csvCell).join(",")));
+		},
+		async pull(controller) {
+			const lines: string[] = [];
+			while (lines.length < 64) {
+				if (page.done) break;
+				if (responseIndex >= page.value.length) {
+					page = await pageIterator.next();
+					responseIndex = 0;
+					fieldIndex = 0;
+					continue;
+				}
+				const row = page.value[responseIndex];
+				if (!row) break;
+				const metadata = [
+					row.id,
+					String(row.version ?? ""),
+					row.versionId,
+					new Date(row.createdAt).toISOString(),
+				];
+				if (row.fields.length === 0) {
+					lines.push([...metadata, "", "", ""].map(csvCell).join(","));
+					responseIndex += 1;
+					continue;
+				}
+				const field = row.fields[fieldIndex];
+				if (!field) {
+					responseIndex += 1;
+					fieldIndex = 0;
+					continue;
+				}
+				lines.push(
+					[
+						...metadata,
+						field.id,
+						field.label,
+						answerText(row.answers[field.id]),
+					]
+						.map(csvCell)
+						.join(","),
+				);
+				fieldIndex += 1;
+				if (fieldIndex >= row.fields.length) {
+					responseIndex += 1;
+					fieldIndex = 0;
+				}
+			}
+			if (lines.length)
+				controller.enqueue(encoder.encode(`\r\n${lines.join("\r\n")}`));
+			if (page.done) controller.close();
+		},
+		async cancel() {
+			await pageIterator.return?.();
+		},
+	});
 	return new Response(csv, {
 		headers: {
 			"Content-Type": "text/csv; charset=utf-8",
@@ -336,11 +388,6 @@ formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 		const service = new FormsService(createDb(c.env.DB));
 		found = await service.getPublic(slug);
 		if (!found) throw new FormsError("FORM_NOT_FOUND", 404);
-		if (
-			found.version.respondentAccess === "verified_email" &&
-			!(await getVerifiedRespondent(c))
-		)
-			throw new FormsError("SIGN_IN_REQUIRED", 401);
 		body = await readSubmissionBody(c.req.raw);
 		const token = await verifySubmissionToken(
 			c.env,
@@ -349,18 +396,29 @@ formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 		if (
 			!token ||
 			token.slug !== slug ||
-			token.expiresAt < Date.now() ||
+			token.expiresAt <= Date.now() ||
 			!body.versionId ||
 			body.versionId !== token.versionId
-		)
+		) {
+			if (
+				found.version.respondentAccess === "verified_email" &&
+				!(await getVerifiedRespondent(c))
+			)
+				throw new FormsError("SIGN_IN_REQUIRED", 401);
 			throw new FormsError("INVALID_SUBMISSION_TOKEN", 403);
-		if (body.honeypot)
-			return successResponse(c, slug, { responseId: "", duplicate: false });
+		}
 		if (found.form.id !== token.formId)
 			throw new FormsError("FORM_NOT_FOUND", 404);
 		const version = await service.getVersion(found.form.id, token.versionId);
 		if (!version) throw new FormsError("FORM_VERSION_CLOSED", 409);
 		tokenVersionForError = version;
+		if (
+			version.respondentAccess === "verified_email" &&
+			!(await getVerifiedRespondent(c))
+		)
+			throw new FormsError("SIGN_IN_REQUIRED", 401);
+		if (body.honeypot)
+			return successResponse(c, slug, { responseId: "", duplicate: false });
 		const values = validateAnswers(version.fields, body.answers);
 		const key = (
 			body.idempotencyKey ??
@@ -535,9 +593,13 @@ function validateAnswers(
 	for (const field of fields) {
 		const raw = answers[field.id];
 		if (field.type === "multichoice") {
-			const values = (
-				Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]
-			).map(String);
+			const values = Array.from(
+				new Set(
+					(Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).map(
+						String,
+					),
+				),
+			);
 			if (field.required && !values.length)
 				throw new FormsError(
 					"FIELD_REQUIRED",

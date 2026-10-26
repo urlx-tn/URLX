@@ -79,6 +79,7 @@ const title = "Edit form | URLX Forms";
 		let responses = [];
 		let stats = {};
 		let responseTotal = 0;
+		let responseLast7Days = 0;
 		let responsesView = "summary";
 		let selected = "";
 		let activeTab = "build";
@@ -270,8 +271,27 @@ const title = "Edit form | URLX Forms";
 			} catch { $("#share-qr").textContent = "QR code could not be generated."; }
 		}
 		async function loadResponses() {
-			try { const result = await formsRequest<{ responses?: unknown[]; stats?: unknown; total?: number }>(`/${encodeURIComponent(formId)}/responses`); responses = Array.isArray(result.responses) ? result.responses : []; stats = result.stats || {}; responseTotal = result.total ?? responses.length; renderResponses(); }
-			catch (error) { $("#responses-panel").innerHTML = `<div class="f-card f-empty"><h2>Responses are unavailable</h2><p>${esc(error instanceof Error ? error.message : "Try again in a moment.")}</p><button class="f-btn secondary" data-action="responses-retry">Try again</button></div>`; }
+			try {
+				const result = await formsRequest<{
+					responses?: unknown[];
+					stats?: unknown;
+					total?: number;
+					last7Days?: number;
+				}>(`/${encodeURIComponent(formId)}/responses`);
+				responses = Array.isArray(result.responses) ? result.responses : [];
+				stats = result.stats || {};
+				responseTotal = result.total ?? responses.length;
+				responseLast7Days = Number.isFinite(result.last7Days)
+					? result.last7Days
+					: responses.filter(
+							(response) =>
+								new Date(response?.createdAt).getTime() >=
+								Date.now() - 7 * 86400000,
+							).length;
+				renderResponses();
+			} catch (error) {
+				$("#responses-panel").innerHTML = `<div class="f-card f-empty"><h2>Responses are unavailable</h2><p>${esc(error instanceof Error ? error.message : "Try again in a moment.")}</p><button class="f-btn secondary" data-action="responses-retry">Try again</button></div>`;
+			}
 		}
 		const relativeTime = (value) => {
 			const time = new Date(value).getTime();
@@ -300,7 +320,6 @@ const title = "Edit form | URLX Forms";
 				}
 			}
 			for (const entry of byId.values()) {
-				if (isChoice(entry.field.type)) entry.answered = responses.filter((response) => { const value = response?.answers?.[entry.field.id]; return Array.isArray(value) ? value.length : value !== undefined && value !== ""; }).length;
 				if (entry.field.type === "rating") entry.answered = entry.ratingCount;
 			}
 			return [...byId.values()];
@@ -327,8 +346,8 @@ const title = "Edit form | URLX Forms";
 		function responsesTable(entries) {
 			const fields = entries.map((entry) => entry.field);
 			const heads = fields.map((field) => `<th scope="col">${esc(field.label || field.id)}</th>`).join("");
-			const versionNumbers = (Array.isArray(stats) ? stats : []).map((version) => Number(version.version)).filter(Number.isFinite);
-			const latestVersion = versionNumbers.length ? Math.max(...versionNumbers) : null;
+			const publishedVersion = Number(currentForm?.publishedVersion?.version);
+			const latestVersion = Number.isFinite(publishedVersion) ? publishedVersion : null;
 			const isOlder = (response) => latestVersion != null && response?.version != null && Number(response.version) < latestVersion;
 			const multiVersion = responses.some(isOlder);
 			const body = responses.map((response) => {
@@ -345,8 +364,7 @@ const title = "Edit form | URLX Forms";
 		function renderResponses() {
 			const panel = $("#responses-panel");
 			$("#response-count").textContent = String(responseTotal ?? 0);
-			const weekAgo = Date.now() - 7 * 86400000;
-			const thisWeek = responses.filter((response) => new Date(response?.createdAt).getTime() >= weekAgo).length;
+			const thisWeek = responseLast7Days;
 			const latest = responses[0]?.createdAt;
 			const kpis = `<div class="f-response-stats"><div class="f-card f-stat"><span class="f-stat-icon">${icon("inbox", 18)}</span><div><small>Responses</small><strong>${esc(responseTotal)}</strong></div></div><div class="f-card f-stat"><span class="f-stat-icon">${icon("date", 18)}</span><div><small>Last 7 days</small><strong>${esc(thisWeek)}</strong></div></div><div class="f-card f-stat"><span class="f-stat-icon">${icon("clock", 18)}</span><div><small>Latest</small><strong class="small">${esc(latest ? relativeTime(latest) : "—")}</strong></div></div></div>`;
 			if (!responses.length) { panel.innerHTML = `${kpis}<div class="f-card f-empty"><span class="f-empty-icon">${icon("inbox", 26)}</span><h2>No responses yet</h2><p>Share your form and answers will show up here as charts and a table.</p><div class="f-empty-actions"><button type="button" class="f-btn" data-tab="share">${icon("link", 15)}Share form</button><button type="button" class="f-btn secondary" data-action="export" disabled>${icon("download", 15)}Export CSV</button></div></div>`; return; }
