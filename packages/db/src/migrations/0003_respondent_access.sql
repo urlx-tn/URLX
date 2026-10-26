@@ -1,0 +1,1 @@
+ALTER TABLE `form_versions` ADD `respondent_access` text DEFAULT 'public' NOT NULL;

@@ -20,14 +20,17 @@
 		"@orpc/zod": "catalog:",
 		"@urlx/db": "workspace:*",
 		"@urlx/env": "workspace:*",
+		"better-auth": "^1.7.10",
 		"dotenv": "catalog:",
 		"drizzle-orm": "^0.45.2",
 		"htmlparser2": "^12.0.0",
+		"resend": "^6.34.1",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@urlx/config": "workspace:*",
 		"hono": "catalog:",
+		"miniflare": "4.20260424.0",
 		"typescript": "catalog:",
 		"vitest": "^4.1.11"
 	}

@@ -1,0 +1,115 @@
+---
+import FormsHeader from "../../components/forms/FormsHeader.astro";
+import Layout from "../../layouts/Layout.astro";
+import "../../styles/forms.css";
+import { env } from "cloudflare:workers";
+import {
+	formTemplateCategories,
+	formTemplates,
+} from "@urlx/api/modules/forms/forms.templates";
+import { formsReady } from "../../lib/forms-ready";
+import { formsIcon, templatePreviewMarkup } from "../../lib/forms-ui";
+
+const formsEnabled = formsReady(
+	env as typeof env & Parameters<typeof formsReady>[0],
+);
+const title = "Free Online Form Builder | URLX Forms";
+const description =
+	"Create, share and manage forms with URLX Forms. Start from a template or build a form of your own.";
+const features = [
+	{
+		icon: "send",
+		title: "Publish in a click",
+		text: "One link that works on any device.",
+	},
+	{
+		icon: "link",
+		title: "Short link & QR code",
+		text: "Print it, post it or text it.",
+	},
+	{
+		icon: "inbox",
+		title: "Responses in one place",
+		text: "Charts, a table and CSV export.",
+	},
+] as const;
+// "Blank" leads the gallery, the way most template libraries start.
+const ordered = [
+	...formTemplates.filter((template) => template.id === "blank"),
+	...formTemplates.filter((template) => template.id !== "blank"),
+];
+const templates = ordered.map((template) => ({
+	...template,
+	preview: templatePreviewMarkup(template.draft),
+}));
+const filters = [
+	{ id: "all", label: "All", count: templates.length },
+	...formTemplateCategories.map((category) => ({
+		id: category,
+		label: category,
+		count: templates.filter((template) => template.category === category)
+			.length,
+	})),
+];
+---
+<Layout title={title} description={description} canonicalPath="/tools/forms" chrome={false} clientRouter={false}>
+	<div class="forms-app" data-enabled={String(formsEnabled)}>
+		<FormsHeader current="home" />
+		{!formsEnabled ? <main class="forms-main" style="padding-top:100px;text-align:center"><div class="f-card f-empty"><h1>URLX Forms is not enabled</h1><p>This feature has not been configured for this deployment.</p></div></main> : <>
+		<main class="forms-main">
+			<section class="forms-hero">
+				<span class="f-eyebrow"><Fragment set:html={formsIcon("forms", 15)} />URLX Forms</span>
+				<h1>A form for <span>whatever comes next.</span></h1>
+				<p>Registrations, feedback, contact forms and more. Build it in minutes, then share one simple link.</p>
+				<div class="forms-hero-actions"><a class="f-btn large" href="#forms-start-heading">Browse templates <span aria-hidden="true">→</span></a><a class="f-btn secondary large" href="/forms">My forms</a></div>
+				<ul class="f-features">
+					{features.map((feature) => <li><span class="f-feature-icon" set:html={formsIcon(feature.icon, 18)} /><span><strong>{feature.title}</strong><small>{feature.text}</small></span></li>)}
+				</ul>
+			</section>
+			<section aria-labelledby="forms-start-heading" class="f-templates-section">
+				<div class="f-section-head">
+					<div><h2 id="forms-start-heading">Start with a template</h2><p class="f-muted">Every question, colour and setting can be changed in the editor.</p></div>
+					<div class="f-filters" role="group" aria-label="Filter templates">
+						{filters.map((filter) => <button type="button" data-filter={filter.id} aria-pressed={filter.id === "all" ? "true" : "false"}>{filter.label}<span>{filter.count}</span></button>)}
+					</div>
+				</div>
+				<div class="f-grid" id="form-templates">
+					{templates.map((template) => (
+						<article class:list={["f-template", { blank: template.id === "blank" }]} data-category={template.category}>
+							<div class="f-template-head"><span class="f-template-kicker">{template.category === "Start" ? "From scratch" : template.category}</span></div>
+							{template.id === "blank" ? (
+								<p class="f-template-empty">No questions yet. Add exactly the ones you need.</p>
+							) : (
+								<Fragment set:html={template.preview} />
+							)}
+							<h3 class="f-template-name">{template.name}</h3>
+							<p class="f-template-summary">{template.summary}</p>
+							<div class="f-template-actions">
+								<button type="button" class="f-btn small" data-template={template.id} aria-label={template.id === "blank" ? "Start a blank form" : `Use ${template.name} template`}>{template.id === "blank" ? "Start blank" : "Use template"}</button>
+								{template.id !== "blank" && <a class="f-btn secondary small" href={`/tools/forms/templates/${template.id}`} aria-label={`Preview ${template.name}`}>Preview</a>}
+							</div>
+						</article>
+					))}
+				</div>
+			</section>
+		</main>
+		</>}
+	</div>
+	<script>
+		// @ts-nocheck
+		import { startFromTemplate } from "../../lib/forms-start";
+		const app = document.querySelector(".forms-app");
+		if (app?.dataset.enabled === "true") {
+		app.addEventListener("click", (event) => {
+			const filter = event.target.closest("[data-filter]");
+			if (filter) {
+				app.querySelectorAll("[data-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button === filter)));
+				app.querySelectorAll(".f-template").forEach((card) => { card.hidden = filter.dataset.filter !== "all" && card.dataset.category !== filter.dataset.filter && card.dataset.category !== "Start"; });
+				return;
+			}
+			const use = event.target.closest("[data-template]");
+			if (use) startFromTemplate(use.dataset.template, use);
+		});
+		}
+	</script>
+</Layout>

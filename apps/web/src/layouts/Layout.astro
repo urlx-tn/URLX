@@ -13,6 +13,8 @@ interface Props {
 	canonicalPath?: string;
 	robots?: string;
 	chrome?: boolean;
+	/** Client-side routing. App pages whose scripts bind once per load opt out. */
+	clientRouter?: boolean;
 }
 
 const {
@@ -23,6 +25,7 @@ const {
 	canonicalPath,
 	robots,
 	chrome = true,
+	clientRouter = true,
 } = Astro.props;
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
@@ -105,7 +108,7 @@ const organizationSchema = {
 
 		<script is:inline type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
 		<script is:inline type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
-		<ClientRouter />
+		{clientRouter && <ClientRouter />}
 		<LoadingIndicator
 			color="var(--color-accent)"
 			height="3px"

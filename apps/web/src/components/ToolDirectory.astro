@@ -1,4 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
+import { formsReady } from "../lib/forms-ready";
+import FormsIcon from "./icons/FormsIcon.astro";
 import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
 import QRCodeGeneratorIcon from "./icons/QRCodeGeneratorIcon.astro";
 import UrlCleanerIcon from "./icons/UrlCleanerIcon.astro";
@@ -8,6 +11,18 @@ import UrlToHtmlIcon from "./icons/UrlToHtmlIcon.astro";
 import UrlToMarkdownIcon from "./icons/UrlToMarkdownIcon.astro";
 
 const tools = [
+	...(formsReady(env as typeof env & Parameters<typeof formsReady>[0])
+		? [
+				{
+					slug: "forms",
+					title: "Forms",
+					description: "Create forms and review responses in one place.",
+					href: "/tools/forms",
+					Icon: FormsIcon,
+					isDiscoverable: true,
+				},
+			]
+		: []),
 	{
 		slug: "url-shortener",
 		title: "URL Shortener",

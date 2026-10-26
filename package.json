@@ -61,6 +61,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.11",
 		"@cloudflare/workers-types": "catalog:",
+		"@playwright/test": "^1.64.1",
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
 		"turbo": "^2.10.12",

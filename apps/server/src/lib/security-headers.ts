@@ -19,7 +19,7 @@ export const securityHeaders = createMiddleware<ServerHonoEnv>(
 				"connect-src 'self'",
 				"frame-ancestors 'none'",
 				"base-uri 'none'",
-				"form-action 'none'",
+				"form-action 'self'",
 			].join("; "),
 		);
 		c.res.headers.set(

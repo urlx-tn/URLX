@@ -13,6 +13,11 @@ export type ServerBindings = {
 	METADATA_VISITOR_RATE_LIMIT: RateLimit;
 	SHORT_URL_BASE?: string;
 	VISITOR_TOKEN_KEY: CryptoKey;
+	FORMS_ENABLED?: boolean | string;
+	BETTER_AUTH_SECRET?: string;
+	BETTER_AUTH_URL?: string;
+	RESEND_API_KEY?: string;
+	AUTH_EMAIL_FROM?: string;
 };
 
 type HonoEnv = {
