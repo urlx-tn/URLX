@@ -3,6 +3,23 @@ import { spawnSync } from "node:child_process";
 const projectPattern =
 	/^urlx-(?:container-validation|e2e-[a-z0-9][a-z0-9_-]{0,32})$/;
 
+export function wrapRemoteCommand(
+	command,
+	sudoValue = process.env.URLX_FORMS_E2E_SSH_SUDO,
+) {
+	if (sudoValue === undefined || sudoValue === "false") return command;
+	if (sudoValue !== "true") {
+		throw new Error(
+			'URLX_FORMS_E2E_SSH_SUDO must be exactly "true" or "false".',
+		);
+	}
+	return `sudo -n sh -c ${shellQuote(command)}`;
+}
+
+function shellQuote(value) {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export function requireComposeTestTarget() {
 	const project = process.env.URLX_COMPOSE_PROJECT ?? "";
 	const rawBaseUrl = process.env.URLX_FORMS_E2E_BASE_URL ?? "";
@@ -184,7 +201,9 @@ function runComposeApi(project, repoRoot, source, input = "") {
 			);
 		}
 		const encodedSource = Buffer.from(source, "utf8").toString("base64");
-		const remoteCommand = `cd ${remoteRoot} && docker compose --project-name ${project} --file compose.yaml exec -T api bun -e "$(printf '%s' '${encodedSource}' | base64 -d)"`;
+		const remoteCommand = wrapRemoteCommand(
+			`cd ${remoteRoot} && docker compose --project-name ${project} --file compose.yaml exec -T api bun -e "$(printf '%s' '${encodedSource}' | base64 -d)"`,
+		);
 		executable = "ssh";
 		args = ["-T", sshTarget, remoteCommand];
 	}
@@ -261,7 +280,9 @@ function runComposePostgresCleanup(project, repoRoot, sql) {
 				"Set URLX_FORMS_E2E_SSH_TARGET and an absolute safe URLX_FORMS_E2E_REMOTE_REPO path.",
 			);
 		}
-		const remoteCommand = `cd ${remoteRoot} && docker compose --project-name ${project} --file compose.yaml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -h 127.0.0.1 -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`;
+		const remoteCommand = wrapRemoteCommand(
+			`cd ${remoteRoot} && docker compose --project-name ${project} --file compose.yaml exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -h 127.0.0.1 -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`,
+		);
 		executable = "ssh";
 		executableArgs = ["-T", sshTarget, remoteCommand];
 	}

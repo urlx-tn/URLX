@@ -65,6 +65,15 @@ export URLX_FORMS_E2E_REMOTE_REPO=/srv/urlx/URLX-bun-container-deployment
 pnpm exec playwright test --config apps/web/e2e/playwright.compose.config.mjs
 ```
 
+If the SSH account has access to the repository but needs non-interactive sudo
+for Docker, set `URLX_FORMS_E2E_SSH_SUDO=true` in the Playwright runner
+environment. The helper then runs the complete remote command, including the
+repository `cd`, through `sudo -n sh -c`; the default is `false`, and any value
+other than exactly `true` or `false` is rejected. This requires existing
+non-interactive sudo authorization on the test host. It does not change SSH
+keys, group membership, or host permissions. The flag applies only to the SSH
+path; local Docker execution is unchanged.
+
 The Compose browser check exercises Astro against the running Bun web and API
 services, with PostgreSQL and Valkey from the isolated Compose project. It
 creates a fresh synthetic account through a captured magic link, edits and
