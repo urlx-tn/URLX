@@ -1,44 +1,42 @@
 # URLX Backend API
 
 URLX v1 exposes shortening, link resolution, link-in-bio, and metadata
-inspection through oRPC. URL-to-Markdown and URL-to-HTML are served by a
-separate conversion Worker. Short-link redirects are served by the web app at
+inspection through oRPC on the Hono API service. URL-to-Markdown and URL-to-HTML
+are served by the separate conversion service. Short-link redirects are served by the web app at
 `<<web-origin>>/u/:shortCode`.
 
 ## Local Configuration
 
-The server Worker expects these bindings:
+The API service requires these runtime settings:
 
 ```text
-DB
+DATABASE_URL
+VALKEY_URL
 CORS_ORIGIN
-METADATA_IP_RATE_LIMIT
-METADATA_VISITOR_RATE_LIMIT
 SHORT_URL_BASE
-VISITOR_TOKEN_KEY
+VISITOR_TOKEN_KEY_BASE64
+EGRESS_PROXY_URL
 ```
 
-The conversion Worker expects:
+The conversion service requires:
 
 ```text
-BROWSER
-CONVERSION_IP_RATE_LIMIT
-CONVERSION_VISITOR_RATE_LIMIT
+VALKEY_URL
+EGRESS_PROXY_URL
+BROWSER_RENDERER_URL
 CORS_ORIGIN
-VISITOR_TOKEN_KEY
+VISITOR_TOKEN_KEY_BASE64
 ```
 
-`BROWSER` is the Cloudflare Browser Run binding provisioned by Alchemy; it does
-not require a separate application API token. The rate-limit bindings implement
-the layered limits described below. `VISITOR_TOKEN_KEY` is the same HMAC
-`CryptoKey` in both Workers and is provisioned from the required
-`VISITOR_TOKEN_KEY_BASE64` secret. Generate a 32-byte key with
-`openssl rand -base64 32` and keep it only in an ignored stage environment file
-or deployment secret. Alchemy requires `ALCHEMY_PASSWORD` to encrypt secret
-values in its state; never commit either value. Configuration fails before
-deployment if the visitor-token key is absent or invalid.
+`BROWSER_RENDERER_URL` points to the private conversion-renderer service. The
+API and conversion services use Valkey for shared rate limits. The metadata and
+renderer fetch paths require the configured egress proxy. Generate
+`VISITOR_TOKEN_KEY_BASE64` as canonical base64 encoding of 32 random bytes, for
+example with `openssl rand -base64 32`, and keep it in the ignored deployment
+environment. Runtime startup fails if the key or proxy configuration is
+invalid.
 
-Alchemy defaults `SHORT_URL_BASE` to:
+`SHORT_URL_BASE` should be the public web origin, for example:
 
 ```text
 http://localhost:4321
@@ -105,9 +103,8 @@ visitor bucket or the stricter fallback-IP bucket:
 
 Conversion and metadata use separate counters. A local limit failure retains
 the `RATE_LIMITED` code and HTTP `429` status and includes `Retry-After: 60`.
-Cloudflare Browser Run HTTP `429` responses are reported as
-`BROWSER_UNAVAILABLE` with HTTP `503`, because provider throttling is not a URLX
-visitor-limit failure.
+Renderer or proxy failures are reported as `BROWSER_UNAVAILABLE` with HTTP
+`503`, because service unavailability is not a URLX visitor-limit failure.
 
 ## oRPC Endpoint
 
@@ -169,11 +166,11 @@ Unknown, malformed, or disabled short codes return a `SHORT_CODE_NOT_FOUND` erro
 ## Markdown Conversion Endpoint
 
 ```text
-POST <<conversion-worker-origin>>/markdown
+POST <<public-origin>>/convert/markdown
 ```
 
-Fetches a public webpage through Cloudflare Browser Run and returns its readable
-content as Markdown.
+Fetches a public webpage through the isolated Playwright renderer and returns
+its readable content as Markdown.
 
 Request:
 
@@ -192,20 +189,20 @@ Success response:
 }
 ```
 
-The URL is validated before Browser Run is called. Localhost, private-network
+The URL is validated before the renderer is called. Localhost, private-network
 addresses, unsupported schemes, and malformed public domains are rejected.
 Images, media, fonts, and stylesheets are not loaded during conversion to reduce
-page requests. Browser Run responses may be cached for five minutes. Generated
+page requests. Generated
 Markdown is not stored by URLX and responses larger than 1,000,000 characters
 are rejected.
 
 ## HTML Conversion Endpoint
 
 ```text
-POST <<conversion-worker-origin>>/html
+POST <<public-origin>>/convert/html
 ```
 
-Fetches a public webpage through Cloudflare Browser Run and returns the fully
+Fetches a public webpage through the isolated Playwright renderer and returns the fully
 rendered HTML, including the document head, after JavaScript execution.
 
 Request:
@@ -226,15 +223,15 @@ Success response:
 ```
 
 HTML conversion retains scripts and stylesheets during rendering, while images,
-media, and fonts are blocked to reduce page requests. Browser Run waits for
-`networkidle2`, uses a 30-second navigation timeout, and may cache matching
-requests for five minutes. URLX returns HTML only as data; the web interface
+media, and fonts are blocked to reduce page requests. The renderer waits for
+`networkidle2` with a 30-second navigation timeout. URLX returns HTML only as data; the web interface
 places it in a readonly textarea and never executes it. Results larger than
 2,000,000 characters are rejected.
 
-In local development, Alchemy supplies the remote development Worker URL to the
-Astro app as `PUBLIC_CONVERSION_SERVER_URL`. Production deployments provision
-and bind the corresponding deployed Worker URL automatically.
+The public conversion URL is supplied to the web build as
+`PUBLIC_CONVERSION_SERVER_URL`, normally the public origin with `/convert`
+appended. The conversion service and renderer communicate on a private Compose
+network; the browser renderer is not publicly exposed.
 
 ## Additional oRPC Procedures
 
@@ -242,7 +239,7 @@ and bind the corresponding deployed Worker URL automatically.
 
 Fetches the initial server-rendered HTML for a public URL and returns link
 preview metadata, diagnostics, and a computed preview object. It uses the main
-API Worker and does not use Browser Run or the conversion Worker.
+API service and does not use the browser renderer.
 
 Request:
 

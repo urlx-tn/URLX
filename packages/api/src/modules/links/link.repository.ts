@@ -1,10 +1,7 @@
-import type { createDb } from "@urlx/db";
-import { links } from "@urlx/db";
+import { links, type UrlxDb } from "@urlx/db";
 import { eq } from "drizzle-orm";
 
 import type { NewLink } from "./link.types";
-
-export type UrlxDb = ReturnType<typeof createDb>;
 
 export class LinkRepository {
 	constructor(private readonly db: UrlxDb) {}

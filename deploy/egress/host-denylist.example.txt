@@ -1,0 +1,2 @@
+# Generated on the VPS from current host interface addresses by `pnpm egress:prepare`.
+# Do not copy this placeholder to host-denylist.txt. Proxy startup fails closed without real addresses.

@@ -1,10 +1,84 @@
 # URLX Forms browser check
 
-This browser check exercises the Astro pages against the real server Forms Hono app and oRPC router, loaded through the same Vite TypeScript transform used by the server test setup, with a disposable Miniflare D1 database. The browser creates a fresh synthetic account through a captured local magic link, edits and publishes a form twice to check schema history, downloads the generated QR assets, follows the local short URL, submits the public form with JavaScript disabled, and exports responses as CSV. It checks the template gallery, template detail, builder, and respondent page at desktop and mobile widths, and saves screenshots under the ignored `apps/web/e2e/artifacts/screenshots/` directory.
+The `playwright.config.mjs` entry below is the historical PR48/Cloudflare
+Worker test: it provisions Miniflare D1 and does not test the Bun + PostgreSQL
+Compose runtime. The Compose configuration runs the same UI assertions against
+the active migration runtime using its PostgreSQL-backed fixture adapter.
 
-The harness copies the source into a temporary workspace with `.env*`, `.git`, `.alchemy`, `.wrangler`, build output, and installed modules excluded. It links only the already-installed local dependency directories. Both HTTP servers bind to `127.0.0.1`; the API blocks all non-loopback fetches except a captured fake Resend request. D1 is created in-process, receives only the repository migrations, and is disposed after the run. No real email is sent.
+## Bun + PostgreSQL browser verification
 
-Run after installing the repository's development dependencies and Chromium:
+The migration branch reuses the same gallery, builder, pagination, versioning,
+public response, CSV, keyboard, and responsive assertions against the running
+Bun/Astro and PostgreSQL Compose stack. Run it only against a disposable test
+project with Forms enabled, an isolated PostgreSQL volume, and the optional
+loopback ingress reachable from this machine (for a remote VPS, use a private
+SSH tunnel). The target is restricted to loopback or a `.test` hostname. The
+test stack must be built with the same test origin in its public build/runtime
+settings. For the loopback example below, set `PUBLIC_ORIGIN` and
+`PUBLIC_SERVER_URL` to `http://127.0.0.1:8080`,
+`PUBLIC_CONVERSION_SERVER_URL` to `http://127.0.0.1:8080/convert`, and enable
+Forms. Use a disposable test Compose configuration; do not edit production
+origins or reuse production images/configuration. The runner checks the API
+CORS origin before opening the browser.
+
+The test creates a unique synthetic account, captures its magic-link email inside
+a one-off API-container auth instance, verifies the link through the real API,
+and deletes that account and its forms when the run ends. Teardown sends a
+transaction-scoped cleanup script to the already-running PostgreSQL container
+over stdin, guarded to the synthetic E2E email pattern. It does not send email
+or print credentials, links, or expanded Compose configuration.
+
+With the repository dependencies and local Chromium installed, set the exact
+test Compose project and base origin before running:
+
+```bash
+export URLX_COMPOSE_PROJECT=urlx-container-validation
+export URLX_FORMS_E2E_BASE_URL=http://127.0.0.1:8080
+pnpm exec playwright test --config apps/web/e2e/playwright.compose.config.mjs
+```
+
+Set `URLX_FORMS_E2E_BASE_URL` to the loopback origin exposed through the SSH
+tunnel. The project must already be started with the matching
+`URLX_COMPOSE_PROJECT` and egress policy. Compose must be using the Docker
+context that owns that test project. Do not point this suite at production.
+
+The browser runner can run on a separate machine from Docker. Start a tunnel
+from the runner to the test host's loopback ingress, then set
+`URLX_FORMS_E2E_SSH_TARGET` to an SSH alias or `user@host` and
+`URLX_FORMS_E2E_REMOTE_REPO` to the absolute repository path on that host. The
+helper sends only its one-off test source over SSH and runs it with
+`docker compose exec` in the `api` container; it does not need Node, Bun, or
+Playwright installed on the Docker host. Keep the repository path and Compose
+project matched to the isolated test stack.
+
+Example, in separate shells on the machine running Playwright:
+
+```bash
+ssh -N -L 8080:127.0.0.1:8080 "$URLX_FORMS_E2E_SSH_TARGET"
+```
+
+```bash
+export URLX_COMPOSE_PROJECT=urlx-container-validation
+export URLX_FORMS_E2E_BASE_URL=http://127.0.0.1:8080
+export URLX_FORMS_E2E_SSH_TARGET=user@test-host
+export URLX_FORMS_E2E_REMOTE_REPO=/srv/urlx/URLX-bun-container-deployment
+pnpm exec playwright test --config apps/web/e2e/playwright.compose.config.mjs
+```
+
+The Compose browser check exercises Astro against the running Bun web and API
+services, with PostgreSQL and Valkey from the isolated Compose project. It
+creates a fresh synthetic account through a captured magic link, edits and
+publishes a form twice to check schema history, downloads QR assets, follows
+the local short URL, submits the public form with JavaScript disabled, and
+exports responses as CSV. It checks the template gallery, template detail,
+builder, and respondent page at desktop and mobile widths. No real email is
+sent.
+
+The older Miniflare/D1 harness below is retained only for PR48/Cloudflare
+reference. It is not the E2E path for the Bun + PostgreSQL deployment.
+
+To run the historical Worker harness, install the repository's development
+dependencies and Chromium, then run:
 
 ```powershell
 pnpm exec playwright test --config apps/web/e2e/playwright.config.mjs

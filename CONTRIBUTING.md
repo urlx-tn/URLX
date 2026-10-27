@@ -1,18 +1,15 @@
 # Contributing to URLX
 
-Thanks for your interest in improving URLX, a free and open-source collection
-of URL tools. Contributions of all sizes are welcome: bug reports, fixes,
-documentation, and new tools.
+Thanks for your interest in improving URLX. Contributions include bug reports,
+fixes, documentation, and new tools.
 
-## Maintainers
+## Requirements
 
-- **Youssef Dhibi** - https://youssef.tn
-- **Chames Eddine Dhibi** - https://v1.chames.dhibi.tn
-
-## Prerequisites
-
-- **Node.js** 22 or newer
-- **pnpm** 10.22 or newer (this repo pins `pnpm@10.22.0` via `packageManager`)
+- Node.js 24
+- Bun 1.4.4 for Bun runtime development
+- pnpm 10.22.0 (pinned in `packageManager`)
+- Docker Compose and Linux nftables only when validating the full container
+  network policy
 
 ```bash
 corepack enable
@@ -21,91 +18,63 @@ pnpm install
 
 ## Project layout
 
-This is a pnpm + Turborepo monorepo.
-
 ```text
 apps/
-  web/        Astro frontend and browser-based URL tools
-  server/     Hono/oRPC API worker
+  web/                  Astro frontend and browser tools
+  server/               Hono API and conversion services
+  conversion-renderer/  isolated Playwright renderer
 packages/
-  api/        oRPC routers, URL/link-page/metadata/conversion domain logic, schemas
-  db/         Drizzle schema and migrations
-  env/        Typed environment access
-  config/     Shared TypeScript config
-  infra/      Alchemy / Cloudflare deployment
+  api/                  oRPC routers and business logic
+  db/                   Drizzle schema and migrations
+  env/                  runtime validation
+  config/               shared TypeScript configuration
+  infra/                historical Cloudflare infrastructure reference
 ```
 
 ## Development
 
-Run the Cloudflare-compatible stack through Alchemy from the repo root:
-
-```bash
-pnpm run dev            # web, API, D1 binding, and local Workers runtime
-pnpm run dev:web        # frontend only, without Alchemy-managed bindings
-pnpm run dev:server     # API Worker only, through Alchemy
-```
-
-URL-to-Markdown and URL-to-HTML use Cloudflare Browser Run Quick Actions. The
-binding is remote and cannot be fully exercised by deterministic unit tests;
-verify real conversion flows against a Cloudflare development deployment.
-
-To work on just the frontend without the full pipeline:
-
-```bash
-pnpm --filter web dev:bare   # http://127.0.0.1:4321
-```
+`pnpm dev` starts Astro for frontend-only work. `pnpm dev:api` and
+`pnpm dev:conversion` start the Bun services individually. Server-backed
+features need PostgreSQL and Valkey. Full conversion testing also needs the
+isolated renderer and the verified host egress setup described in
+[Docker Compose deployment](./docs/deployment/docker-compose.md).
 
 ## Quality gates
-
-Please make sure these pass before opening a pull request:
 
 ```bash
 pnpm run check          # Biome lint and format checks
 pnpm run check-types    # TypeScript and Astro checks
-pnpm run test           # automated unit tests
-pnpm run build          # build packages and apps
+pnpm run test           # automated unit and integration tests
+pnpm run build          # workspace build
 ```
 
-GitHub Actions runs these gates on pull requests targeting `main` and pushes to
-`main`. The pull request cannot be considered ready while the `Quality` check is
-failing.
+When changing container files, validate Compose interpolation and build the
+affected runtime image. Host firewall and egress behavior must be tested on the
+Linux deployment test host; Docker image compilation alone does not prove the
+network policy.
 
 ## Tests
 
-- Add or update unit tests when behavior changes.
-- Keep tests deterministic and independent of deployed Cloudflare resources.
-- Verify D1-backed and Worker-specific behavior against `pnpm run dev` when it
-  cannot be covered by a unit test.
+- Add or update tests when behavior changes.
+- Keep tests independent of deployed production resources.
+- PostgreSQL integration tests must use explicit test-only URLs and isolated
+  databases; do not point fixtures at a production or shared database.
+- Conversion security changes need tests for redirect destinations, IP ranges,
+  proxy bypass, and browser network isolation.
 
 ## Code style
 
-- Formatting and linting are handled by **Biome** - run `pnpm run check`; do not
-  hand-format against it.
-- Use `pnpm run check:write` when you want Biome to apply safe fixes.
-- Keep changes focused. Match the conventions of the surrounding code.
-- Prefer small, self-explanatory code over inline comments.
+Biome handles formatting and linting. Run `pnpm run check` before submitting.
+Use `pnpm run check:write` for safe formatter fixes, and keep changes focused.
 
 ## Pull requests
 
-1. Fork the repository and create a branch from `main`
-   (e.g. `fix/qr-export`, `feat/custom-alias`).
-2. Make your change, with the quality gates passing.
-3. Write a clear PR description: what changed, why, and how you verified it.
-4. Link any related issue.
-
-GitHub automatically fills new pull requests with the repository template.
-Complete the applicable verification and checklist items; remove sections that
-do not apply.
-
-## Reporting issues
-
-Open an issue with:
-
-- What you expected to happen and what actually happened.
-- Steps to reproduce (a URL or input that triggers it helps).
-- Your browser/OS, and any console errors.
+1. Create a branch from the intended base.
+2. Make a focused change and describe why it is needed.
+3. Include the checks you ran and any environment limitation.
+4. Link related issues and update relevant deployment documentation.
 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](./LICENSE) that covers this project.
+[MIT License](./LICENSE).

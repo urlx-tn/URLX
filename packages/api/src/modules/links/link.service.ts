@@ -1,9 +1,10 @@
+import type { UrlxDb } from "@urlx/db";
 import { generateShortCode } from "../../lib/generate-code";
 import { hashUrl } from "../../lib/hash-url";
 import { normalizeUrl } from "../../lib/normalize-url";
 import { validateDestinationUrl } from "../../lib/validate-url";
 import { LinkError } from "./link.errors";
-import type { LinkRepository, UrlxDb } from "./link.repository";
+import type { LinkRepository } from "./link.repository";
 import { LinkRepository as Repository } from "./link.repository";
 import type { GetLinkOutput } from "./link.schema";
 import type { Link } from "./link.types";
@@ -64,7 +65,10 @@ export class LinkService {
 					}
 				}
 
-				if (isShortCodeConflict(error)) {
+				if (
+					isShortCodeConflict(error) ||
+					isPgConstraint(error, "links_short_code_unique")
+				) {
 					continue;
 				}
 
@@ -98,15 +102,46 @@ function normalizeShortUrlBase(shortUrlBase: string) {
 }
 
 function isUrlHashConflict(error: unknown) {
-	return getErrorMessage(error).includes("url_hash");
+	return (
+		getErrorMessage(error).includes("url_hash") ||
+		isPgConstraint(error, "links_url_hash_unique")
+	);
 }
 
 function isShortCodeConflict(error: unknown) {
 	return getErrorMessage(error).includes("short_code");
 }
 
+function isPgConstraint(error: unknown, expected: string) {
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current === "object" && "constraint" in current) {
+			const constraint = (current as { constraint?: unknown }).constraint;
+			const code =
+				"code" in current ? (current as { code?: unknown }).code : undefined;
+			if (code === "23505" && constraint === expected) return true;
+		}
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return false;
+}
+
 function getErrorMessage(error: unknown) {
-	return error instanceof Error
-		? error.message.toLowerCase()
-		: String(error).toLowerCase();
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	let message = "";
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		message += ` ${current instanceof Error ? current.message : String(current)}`;
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return message.toLowerCase();
 }

@@ -3,6 +3,10 @@ import { LinkError } from "../modules/links/link.errors";
 export const maxUrlLength = 2048;
 
 export function validateDestinationUrl(rawUrl: string) {
+	if (rawUrl.includes("\0")) {
+		throw new LinkError("INVALID_URL");
+	}
+
 	const trimmedUrl = rawUrl.trim();
 
 	if (!trimmedUrl) {

@@ -1,4 +1,7 @@
+import { EGRESS_PROXY_URL } from "astro:env/server";
 import type { APIRoute } from "astro";
+
+type ProxyRequestInit = RequestInit & { proxy: string };
 
 const maxHostLength = 253;
 
@@ -20,6 +23,8 @@ export const GET: APIRoute = async ({ url }) => {
 };
 
 async function fetchGoogleFavicon(host: string) {
+	const proxy = getEgressProxyUrl(EGRESS_PROXY_URL);
+	if (!proxy) return null;
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 2500);
 
@@ -27,9 +32,9 @@ async function fetchGoogleFavicon(host: string) {
 		const response = await fetch(
 			`https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(`https://${host}`)}&size=64`,
 			{
-				cf: { cacheTtl: 86400, cacheEverything: true },
 				signal: controller.signal,
-			},
+				proxy,
+			} as ProxyRequestInit,
 		);
 
 		if (!response.ok) {
@@ -57,6 +62,28 @@ async function fetchGoogleFavicon(host: string) {
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+function getEgressProxyUrl(value: string | undefined) {
+	if (!value) return null;
+	try {
+		const proxy = new URL(value);
+		if (
+			proxy.protocol === "http:" &&
+			proxy.hostname === "egress-proxy" &&
+			proxy.port === "3128" &&
+			!proxy.username &&
+			!proxy.password &&
+			(proxy.pathname === "/" || proxy.pathname === "") &&
+			!proxy.search &&
+			!proxy.hash
+		) {
+			return proxy.origin;
+		}
+	} catch {
+		return null;
+	}
+	return null;
 }
 
 function normalizeHost(value: string) {

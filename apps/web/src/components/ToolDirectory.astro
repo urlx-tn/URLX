@@ -1,5 +1,5 @@
 ---
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import { formsReady } from "../lib/forms-ready";
 import FormsIcon from "./icons/FormsIcon.astro";
 import LinkInBioIcon from "./icons/LinkInBioIcon.astro";
@@ -11,7 +11,7 @@ import UrlToHtmlIcon from "./icons/UrlToHtmlIcon.astro";
 import UrlToMarkdownIcon from "./icons/UrlToMarkdownIcon.astro";
 
 const tools = [
-	...(formsReady(env as typeof env & Parameters<typeof formsReady>[0])
+	...(formsReady(FORMS_ENABLED)
 		? [
 				{
 					slug: "forms",

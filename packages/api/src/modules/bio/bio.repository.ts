@@ -1,10 +1,8 @@
-import type { createDb } from "@urlx/db";
+import type { UrlxDb } from "@urlx/db";
 import { bioLinks, bioPages } from "@urlx/db";
 import { and, asc, count, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import type { NewBioLink, NewBioPage } from "./bio.types";
-
-export type UrlxDb = ReturnType<typeof createDb>;
 
 export class BioRepository {
 	constructor(private readonly db: UrlxDb) {}
@@ -20,10 +18,10 @@ export class BioRepository {
 	}
 
 	async createPageWithLinks(page: NewBioPage, links: NewBioLink[]) {
-		await this.db.batch([
-			this.db.insert(bioPages).values(page),
-			...links.map((link) => this.db.insert(bioLinks).values(link)),
-		]);
+		await this.db.transaction(async (tx) => {
+			await tx.insert(bioPages).values(page);
+			if (links.length) await tx.insert(bioLinks).values(links);
+		});
 
 		return page;
 	}

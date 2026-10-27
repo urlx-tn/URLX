@@ -2,6 +2,7 @@ import { Parser } from "htmlparser2";
 
 import {
 	checkLayeredRateLimit,
+	type RateLimiter,
 	type RateLimitIdentity,
 } from "../../lib/layered-rate-limit";
 import { normalizeUrl } from "../../lib/normalize-url";
@@ -9,8 +10,11 @@ import { validateDestinationUrl } from "../../lib/validate-url";
 import { MetadataError } from "./metadata.errors";
 import type { InspectMetadataOutput, MetadataWarning } from "./metadata.schema";
 
-type MetadataRateLimiter = Pick<RateLimit, "limit">;
-type MetadataFetcher = typeof fetch;
+type MetadataRateLimiter = RateLimiter;
+export type MetadataFetcher = (
+	input: string | URL,
+	init?: RequestInit,
+) => Promise<Response>;
 type MetadataClock = () => Date;
 
 type HtmlReadResult = {

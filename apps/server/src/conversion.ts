@@ -2,7 +2,9 @@ import {
 	type AnonymousVisitorVerification,
 	verifyAnonymousVisitorToken,
 } from "@urlx/api/lib/anonymous-visitor";
+import { getTrustedClientIp } from "@urlx/api/lib/client-ip";
 import type { RateLimitIdentity } from "@urlx/api/lib/layered-rate-limit";
+import { maxUrlLength } from "@urlx/api/lib/validate-url";
 import {
 	ConversionError,
 	toConversionError,
@@ -13,17 +15,10 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-
-type ConversionBindings = {
-	BROWSER: BrowserRun;
-	CONVERSION_IP_RATE_LIMIT: RateLimit;
-	CONVERSION_VISITOR_RATE_LIMIT: RateLimit;
-	CORS_ORIGIN: string;
-	VISITOR_TOKEN_KEY: CryptoKey;
-};
+import type { ConversionAppBindings } from "./runtime/bindings";
 
 type ConversionEnv = {
-	Bindings: ConversionBindings;
+	Bindings: ConversionAppBindings;
 	Variables: {
 		rateLimitIdentity: RateLimitIdentity;
 		visitorTokenVerification: AnonymousVisitorVerification;
@@ -33,6 +28,8 @@ type ConversionEnv = {
 type ErrorStatus = 400 | 413 | 422 | 429 | 500 | 503;
 
 const app = new Hono<ConversionEnv>();
+export const conversionApp = app;
+const maxConversionRequestBytes = 16 * 1024;
 
 app.use(logger());
 app.use(
@@ -73,23 +70,7 @@ app.use("/*", async (c, next) => {
 
 app.post("/markdown", async (c) => {
 	try {
-		const input = convertUrlInputSchema.safeParse(await c.req.json());
-		if (!input.success) {
-			throw new ConversionError("INVALID_URL");
-		}
-
-		const service = new ConversionService({
-			browser: c.env.BROWSER,
-			clientIp: getClientIp(c.req.header()),
-			ipRateLimiter: c.env.CONVERSION_IP_RATE_LIMIT,
-			rateLimitIdentity: c.get("rateLimitIdentity"),
-			visitorRateLimiter: c.env.CONVERSION_VISITOR_RATE_LIMIT,
-		});
-		const converted = await service.convert(input.data.url, "markdown");
-		return c.json({
-			sourceUrl: converted.sourceUrl,
-			markdown: converted.result,
-		});
+		return await handleConversion(c, "markdown");
 	} catch (error) {
 		return conversionErrorResponse(c, error);
 	}
@@ -97,27 +78,90 @@ app.post("/markdown", async (c) => {
 
 app.post("/html", async (c) => {
 	try {
-		const input = convertUrlInputSchema.safeParse(await c.req.json());
-		if (!input.success) {
-			throw new ConversionError("INVALID_URL");
-		}
-
-		const service = new ConversionService({
-			browser: c.env.BROWSER,
-			clientIp: getClientIp(c.req.header()),
-			ipRateLimiter: c.env.CONVERSION_IP_RATE_LIMIT,
-			rateLimitIdentity: c.get("rateLimitIdentity"),
-			visitorRateLimiter: c.env.CONVERSION_VISITOR_RATE_LIMIT,
-		});
-		const converted = await service.convert(input.data.url, "html");
-		return c.json({
-			sourceUrl: converted.sourceUrl,
-			html: converted.result,
-		});
+		return await handleConversion(c, "html");
 	} catch (error) {
 		return conversionErrorResponse(c, error);
 	}
 });
+
+async function handleConversion(
+	c: Context<ConversionEnv>,
+	format: "html" | "markdown",
+) {
+	const body = await readBoundedJson(c.req.raw);
+	if (!body.ok) {
+		if (body.error === "PAYLOAD_TOO_LARGE") {
+			return c.json(
+				{ code: body.error, message: "Request body exceeds 16 KiB." },
+				413,
+			);
+		}
+		throw new ConversionError("INVALID_URL");
+	}
+	const input = convertUrlInputSchema.safeParse(body.value);
+	if (!input.success) throw new ConversionError("INVALID_URL");
+	if (input.data.url.trim().length > maxUrlLength)
+		throw new ConversionError("URL_TOO_LONG");
+
+	const service = new ConversionService({
+		renderer: c.env.BROWSER_RENDERER,
+		clientIp: getTrustedClientIp(c.req.header()),
+		ipRateLimiter: c.env.CONVERSION_IP_RATE_LIMIT,
+		rateLimitIdentity: c.get("rateLimitIdentity"),
+		visitorRateLimiter: c.env.CONVERSION_VISITOR_RATE_LIMIT,
+	});
+	const converted = await service.convert(input.data.url, format);
+	return format === "markdown"
+		? c.json({ sourceUrl: converted.sourceUrl, markdown: converted.result })
+		: c.json({ sourceUrl: converted.sourceUrl, html: converted.result });
+}
+
+async function readBoundedJson(
+	request: Request,
+): Promise<
+	| { ok: true; value: unknown }
+	| { ok: false; error: "PAYLOAD_TOO_LARGE" | "INVALID_JSON" }
+> {
+	const contentLength = Number(request.headers.get("content-length"));
+	if (
+		Number.isFinite(contentLength) &&
+		contentLength > maxConversionRequestBytes
+	)
+		return { ok: false, error: "PAYLOAD_TOO_LARGE" };
+	const body = request.body;
+	if (!body) return { ok: false, error: "INVALID_JSON" };
+	const reader = body.getReader();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			size += value.byteLength;
+			if (size > maxConversionRequestBytes) {
+				await reader.cancel().catch(() => undefined);
+				return { ok: false, error: "PAYLOAD_TOO_LARGE" };
+			}
+			chunks.push(value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	try {
+		return {
+			ok: true,
+			value: JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+		};
+	} catch {
+		return { ok: false, error: "INVALID_JSON" };
+	}
+}
 
 function conversionErrorResponse(c: Context<ConversionEnv>, error: unknown) {
 	const conversionError = toConversionError(error);
@@ -134,13 +178,6 @@ function conversionErrorResponse(c: Context<ConversionEnv>, error: unknown) {
 }
 
 app.get("/", (c) => c.text("OK"));
-
-function getClientIp(headers: Record<string, string>) {
-	return (
-		headers["cf-connecting-ip"] ??
-		headers["x-forwarded-for"]?.split(",")[0]?.trim() ??
-		"unknown"
-	);
-}
+app.get("/healthz", (c) => c.text("OK", 200, { "Cache-Control": "no-store" }));
 
 export default app;

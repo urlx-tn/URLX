@@ -1,8 +1,7 @@
-import type { ServerBindings } from "@urlx/api/context";
 import { createMiddleware } from "hono/factory";
 
 type ServerHonoEnv = {
-	Bindings: ServerBindings;
+	Bindings: { VISITOR_TOKEN_KEY: CryptoKey };
 };
 
 export const securityHeaders = createMiddleware<ServerHonoEnv>(

@@ -15,6 +15,12 @@ import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, expect, test } from "@playwright/test";
+import {
+	cleanupComposeAccount,
+	composeMagicLink,
+	createComposePgTestDb,
+	requireComposeTestTarget,
+} from "./compose-test-support.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
@@ -32,6 +38,7 @@ const migrationNames = [
 ];
 const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 const email = `browser-${runId}@example.invalid`;
+const composeMode = process.env.URLX_FORMS_E2E_MODE === "compose";
 const listenHost = "127.0.0.1";
 let syntheticPublicOrigin;
 const forbiddenHostnames = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -48,6 +55,7 @@ let apiOrigin;
 let capturedEmailHtml = "";
 let originalFetch;
 let astroOutput = "";
+let composeProject;
 
 test.describe.configure({ mode: "serial" });
 test.setTimeout(90_000);
@@ -80,9 +88,12 @@ async function routeSyntheticPublicRequest(route) {
 			`${requested.pathname}${requested.search}${requested.hash}`,
 			astroOrigin,
 		);
-		if (!forbiddenHostnames.has(localTarget.hostname))
+		if (
+			(!composeMode && !forbiddenHostnames.has(localTarget.hostname)) ||
+			(composeMode && localTarget.origin !== syntheticPublicOrigin)
+		)
 			throw new Error(
-				`Refusing non-loopback route target: ${localTarget.hostname}`,
+				`Refusing route outside the selected E2E origin: ${localTarget.origin}`,
 			);
 		const requestHeaders = {
 			...route.request().headers(),
@@ -104,6 +115,7 @@ async function routeSyntheticPublicRequest(route) {
 		return;
 	}
 	if (
+		!composeMode &&
 		requested.protocol === "http:" &&
 		forbiddenHostnames.has(requested.hostname)
 	) {
@@ -294,10 +306,55 @@ async function startApi() {
 }
 
 test.beforeAll(async () => {
-	if (resolve(root) !== root || basename(root) !== "URLX")
+	const rootMetadata = JSON.parse(
+		await readFile(resolve(root, "package.json"), "utf8"),
+	);
+	let validRoot = rootMetadata.name === "urlx";
+	if (composeMode) {
+		const [composeSource, dockerSource, rendererPackage] = await Promise.all([
+			readFile(resolve(root, "compose.yaml"), "utf8").catch(() => ""),
+			readFile(resolve(root, "Dockerfile"), "utf8").catch(() => ""),
+			readFile(resolve(root, "apps/conversion-renderer/package.json"), "utf8")
+				.then((source) => JSON.parse(source))
+				.catch(() => null),
+		]);
+		validRoot &&=
+			composeSource.includes("services:") &&
+			dockerSource.includes("AS conversion-renderer") &&
+			rendererPackage?.name === "@urlx/conversion-renderer";
+	} else {
+		validRoot &&= basename(root) === "URLX";
+	}
+	if (!validRoot)
 		throw new Error(
 			"Unexpected repository root; refusing to start the isolated browser harness.",
 		);
+	if (composeMode) {
+		const target = requireComposeTestTarget();
+		composeProject = target.project;
+		d1 = createComposePgTestDb(composeProject, root);
+		astroOrigin = target.origin;
+		apiOrigin = target.origin;
+		syntheticPublicOrigin = target.origin;
+		const apiProbe = await fetch(`${apiOrigin}/api/forms`, {
+			redirect: "manual",
+		});
+		if (apiProbe.status !== 401)
+			throw new Error(
+				`The isolated Bun/PostgreSQL Forms API probe returned ${apiProbe.status}; expected unauthenticated 401.`,
+			);
+		const corsProbe = await fetch(`${apiOrigin}/visitor-token`, {
+			headers: { origin: target.origin },
+		});
+		const allowedOrigin = corsProbe.headers.get("access-control-allow-origin");
+		await corsProbe.body?.cancel();
+		if (corsProbe.status !== 200 || allowedOrigin !== target.origin)
+			throw new Error(
+				"The test stack origin does not match the API CORS configuration.",
+			);
+		browser = await chromium.launch({ headless: true });
+		return;
+	}
 	const apiPort = await availablePort();
 	let webPort = await availablePort();
 	while (webPort === apiPort) webPort = await availablePort();
@@ -406,6 +463,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
 	await browser?.close();
+	if (composeMode) {
+		if (composeProject) cleanupComposeAccount(email, composeProject, root);
+		return;
+	}
 	if (astroProcess && astroProcess.exitCode === null) {
 		astroProcess.kill("SIGTERM");
 		await new Promise((resolveExit) => {
@@ -585,17 +646,37 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		page.getByRole("heading", { name: "Sign in to manage your forms" }),
 	).toBeVisible();
 	await page.getByLabel("Email address").fill(email);
+	if (composeMode) {
+		await page.route("**/api/auth/sign-in/magic-link", (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({ status: true }),
+			}),
+		);
+	}
 	await page.getByRole("button", { name: "Send sign-in link" }).click();
 	await expect(
 		page.getByRole("status").filter({ hasText: "Check your inbox" }),
 	).toBeVisible();
-	await expect.poll(() => capturedEmailHtml).toContain("href=");
+	if (composeMode) {
+		capturedEmailHtml = composeMagicLink(email, composeProject, root).html;
+	}
+	expect(capturedEmailHtml.includes("href=")).toBe(true);
 	const link = /href="([^"]+)"/
 		.exec(capturedEmailHtml)?.[1]
 		?.replaceAll("&amp;", "&");
 	expect(link).toBeTruthy();
 	const authUrl = new URL(link);
-	expect(forbiddenHostnames.has(authUrl.hostname)).toBe(true);
+	if (composeMode) {
+		// Auth is configured with the test deployment origin, while the runner
+		// reaches that deployment through a private loopback tunnel.
+		authUrl.protocol = new URL(syntheticPublicOrigin).protocol;
+		authUrl.host = new URL(syntheticPublicOrigin).host;
+		expect(authUrl.origin).toBe(syntheticPublicOrigin);
+	} else {
+		expect(forbiddenHostnames.has(authUrl.hostname)).toBe(true);
+	}
 	let failResumedCreate = true;
 	await page.route("**/api/forms", async (route) => {
 		if (route.request().method() === "POST" && failResumedCreate) {
@@ -609,7 +690,11 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		}
 		await route.continue();
 	});
-	await page.goto(authUrl.toString());
+	try {
+		await page.goto(authUrl.toString());
+	} catch {
+		throw new Error("The isolated magic-link navigation failed");
+	}
 	await expect(page.locator("#resume-template")).toBeEnabled();
 	expect(new URL(page.url()).searchParams.has("template")).toBe(false);
 	await page.locator("#resume-template").click();

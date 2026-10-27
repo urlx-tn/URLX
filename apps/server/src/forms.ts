@@ -1,3 +1,4 @@
+import { getTrustedClientIp } from "@urlx/api/lib/client-ip";
 import {
 	createFormsAuth,
 	type FormsAuthEnv,
@@ -9,17 +10,13 @@ import {
 } from "@urlx/api/modules/forms/forms.service";
 import { formTemplateDraft } from "@urlx/api/modules/forms/forms.templates";
 import type { FormFieldDto } from "@urlx/api/modules/forms/forms.types";
-import { createDb } from "@urlx/db";
 import { Hono, type Context as HonoContext } from "hono";
+import type { ApiAppBindings } from "./runtime/bindings";
 
-type FormsBindings = FormsAuthEnv & {
-	CORS_ORIGIN?: string;
-	SHORT_URL_BASE?: string;
-};
+type FormsBindings = ApiAppBindings;
 export const formsApp = new Hono<{ Bindings: FormsBindings }>();
 type FormsContext = HonoContext<{ Bindings: FormsBindings }>;
 const maxFormsBodyBytes = 64 * 1024;
-const localRateCounters = new Map<string, { minute: number; count: number }>();
 
 formsApp.use("/api/*", async (c, next) => {
 	const length = Number(c.req.header("content-length"));
@@ -48,7 +45,7 @@ formsApp.use("/api/*", async (c, next) => {
 });
 
 formsApp.all("/api/auth/*", async (c) => {
-	const auth = tryCreateAuth(c.env);
+	const auth = tryCreateAuth(c.env, c.env.DB, c.env.AUTH_SECONDARY_STORAGE);
 	if (!auth) return c.json({ error: "FORMS_UNAVAILABLE" }, 503);
 	return auth.handler(c.req.raw);
 });
@@ -67,7 +64,7 @@ formsApp.get("/api/forms", async (c) => {
 	)
 		return c.json({ error: "INVALID_LIMIT" }, 400);
 	try {
-		const result = await new FormsService(createDb(c.env.DB)).list(owner.id, {
+		const result = await new FormsService(c.env.DB).list(owner.id, {
 			limit,
 			cursor: c.req.query("cursor"),
 			search: c.req.query("search"),
@@ -83,7 +80,7 @@ formsApp.post("/api/forms", async (c) => {
 	if (owner instanceof Response) return owner;
 	try {
 		const body = await c.req.json<{ template?: string; title?: string }>();
-		const form = await new FormsService(createDb(c.env.DB)).create(
+		const form = await new FormsService(c.env.DB).create(
 			owner.id,
 			formTemplateDraft(body.template ?? "blank", body.title),
 		);
@@ -99,7 +96,7 @@ formsApp.post("/api/forms", async (c) => {
 formsApp.get("/api/forms/:id", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const result = await new FormsService(createDb(c.env.DB)).get(
+	const result = await new FormsService(c.env.DB).get(
 		owner.id,
 		c.req.param("id"),
 	);
@@ -114,7 +111,7 @@ async function saveDraft(c: FormsContext) {
 			draft?: Record<string, unknown>;
 			revision?: number;
 		}>();
-		const saved = await new FormsService(createDb(c.env.DB)).save(
+		const saved = await new FormsService(c.env.DB).save(
 			owner.id,
 			c.req.param("id") ?? "",
 			(body.draft ?? body) as never,
@@ -136,7 +133,7 @@ formsApp.post("/api/forms/:id/publish", async (c) => {
 		const body = await c.req
 			.json<{ slug?: string; respondentAccess?: string }>()
 			.catch(() => ({}) as { slug?: string; respondentAccess?: string });
-		const service = new FormsService(createDb(c.env.DB));
+		const service = new FormsService(c.env.DB);
 		const result = await service.publish(
 			owner.id,
 			c.req.param("id"),
@@ -163,7 +160,7 @@ formsApp.post("/api/forms/:id/slug", async (c) => {
 	if (owner instanceof Response) return owner;
 	try {
 		const body = await c.req.json<{ slug?: string }>();
-		const result = await new FormsService(createDb(c.env.DB)).setSlug(
+		const result = await new FormsService(c.env.DB).setSlug(
 			owner.id,
 			c.req.param("id"),
 			body.slug ?? "",
@@ -179,7 +176,7 @@ formsApp.post("/api/forms/:id/slug", async (c) => {
 formsApp.get("/api/forms/:id/responses", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const result = await new FormsService(createDb(c.env.DB)).responses(
+	const result = await new FormsService(c.env.DB).responses(
 		owner.id,
 		c.req.param("id"),
 		boundedInt(c.req.query("limit"), 500, 1, 1000),
@@ -191,7 +188,7 @@ formsApp.get("/api/forms/:id/responses", async (c) => {
 formsApp.delete("/api/forms/:id/responses/:responseId", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const result = await new FormsService(createDb(c.env.DB)).deleteResponse(
+	const result = await new FormsService(c.env.DB).deleteResponse(
 		owner.id,
 		c.req.param("id"),
 		c.req.param("responseId"),
@@ -202,7 +199,7 @@ formsApp.delete("/api/forms/:id/responses/:responseId", async (c) => {
 formsApp.delete("/api/forms/:id/responses", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const result = await new FormsService(createDb(c.env.DB)).deleteResponse(
+	const result = await new FormsService(c.env.DB).deleteResponse(
 		owner.id,
 		c.req.param("id"),
 	);
@@ -212,7 +209,7 @@ formsApp.delete("/api/forms/:id/responses", async (c) => {
 formsApp.get("/api/forms/:id/export.csv", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const pages = await new FormsService(createDb(c.env.DB)).exportRowsInPages(
+	const pages = await new FormsService(c.env.DB).exportRowsInPages(
 		owner.id,
 		c.req.param("id"),
 	);
@@ -300,7 +297,7 @@ formsApp.get("/api/forms/:id/export.csv", async (c) => {
 formsApp.delete("/api/forms/:id", async (c) => {
 	const owner = await getOwner(c);
 	if (owner instanceof Response) return owner;
-	const deleted = await new FormsService(createDb(c.env.DB)).delete(
+	const deleted = await new FormsService(c.env.DB).delete(
 		owner.id,
 		c.req.param("id"),
 	);
@@ -312,10 +309,11 @@ formsApp.delete("/api/forms/:id", async (c) => {
 formsApp.get("/api/forms/public/:slug", async (c) => {
 	if (!formsAreEnabled(c.env))
 		return c.json({ error: "FORMS_UNAVAILABLE" }, 503);
-	if (!(await allowFormRequest(c.env, requestIp(c), "render")))
-		return rateLimited(c);
+	const limit = await allowFormRequest(c.env, requestIp(c), "render");
+	if (limit === null) return limiterUnavailable(c);
+	if (!limit) return rateLimited(c);
 	const slug = c.req.param("slug").toLowerCase();
-	const found = await new FormsService(createDb(c.env.DB)).getPublic(slug);
+	const found = await new FormsService(c.env.DB).getPublic(slug);
 	if (!found)
 		return c.json({ error: "FORM_NOT_FOUND" }, 404, {
 			"Cache-Control": "no-store",
@@ -377,15 +375,16 @@ formsApp.get("/api/forms/public/:slug", async (c) => {
 formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 	if (!formsAreEnabled(c.env))
 		return c.json({ error: "FORMS_UNAVAILABLE" }, 503);
-	if (!(await allowFormRequest(c.env, requestIp(c), "submit")))
-		return rateLimited(c);
+	const limit = await allowFormRequest(c.env, requestIp(c), "submit");
+	if (limit === null) return limiterUnavailable(c);
+	if (!limit) return rateLimited(c);
 	let found: Awaited<ReturnType<FormsService["getPublic"]>> = null;
 	let tokenVersionForError: Awaited<ReturnType<FormsService["getVersion"]>> =
 		null;
 	let body: SubmissionBody = { answers: {} };
 	try {
 		const slug = c.req.param("slug").toLowerCase();
-		const service = new FormsService(createDb(c.env.DB));
+		const service = new FormsService(c.env.DB);
 		found = await service.getPublic(slug);
 		if (!found) throw new FormsError("FORM_NOT_FOUND", 404);
 		body = await readSubmissionBody(c.req.raw);
@@ -456,26 +455,30 @@ formsApp.post("/api/forms/public/:slug/submit", async (c) => {
 				error.status as 400,
 				{ "Cache-Control": "no-store" },
 			);
-		return c.json({ error: "SUBMISSION_FAILED" }, 500);
+		return internalFailure(c, "SUBMISSION_FAILED", error);
 	}
 });
 
 async function getOwner(c: FormsContext) {
-	const auth = tryCreateAuth(c.env);
+	const auth = tryCreateAuth(c.env, c.env.DB, c.env.AUTH_SECONDARY_STORAGE);
 	if (!auth) return c.json({ error: "FORMS_UNAVAILABLE" }, 503);
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
 	if (!session) return c.json({ error: "UNAUTHORIZED" }, 401);
 	return session.user;
 }
-function tryCreateAuth(env: FormsAuthEnv) {
+function tryCreateAuth(
+	env: FormsAuthEnv,
+	db: ApiAppBindings["DB"],
+	secondaryStorage: ApiAppBindings["AUTH_SECONDARY_STORAGE"],
+) {
 	try {
-		return createFormsAuth(env);
+		return createFormsAuth(env, db, secondaryStorage);
 	} catch {
 		return null;
 	}
 }
 async function getVerifiedRespondent(c: FormsContext) {
-	const auth = tryCreateAuth(c.env);
+	const auth = tryCreateAuth(c.env, c.env.DB, c.env.AUTH_SECONDARY_STORAGE);
 	if (!auth) return null;
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
 	return session?.user.emailVerified ? session.user : null;
@@ -492,7 +495,22 @@ function errorResponse(c: FormsContext, error: unknown) {
 			error.status as 400,
 		);
 	}
-	return c.json({ error: "REQUEST_FAILED" }, 500);
+	return internalFailure(c, "REQUEST_FAILED", error);
+}
+
+function internalFailure(c: FormsContext, code: string, error: unknown) {
+	const requestId = c.res.headers.get("X-Request-ID") ?? crypto.randomUUID();
+	console.error("Forms request failed", {
+		requestId,
+		errorType:
+			error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,59}$/.test(error.name)
+				? error.name
+				: "Error",
+	});
+	return c.json({ error: code, requestId }, 500, {
+		"X-Request-ID": requestId,
+		"Cache-Control": "no-store",
+	});
 }
 
 type TokenPayload = {
@@ -800,11 +818,7 @@ function rateLimited(c: FormsContext) {
 	});
 }
 function requestIp(c: FormsContext) {
-	const cloudflareIp = c.req.header("cf-connecting-ip");
-	if (cloudflareIp) return cloudflareIp;
-	if (c.env.FORMS_RENDER_RATE_LIMIT || c.env.FORMS_SUBMIT_RATE_LIMIT)
-		return "unknown-edge-client";
-	return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+	return getTrustedClientIp(c.req.header());
 }
 async function allowFormRequest(
 	env: FormsBindings,
@@ -816,37 +830,18 @@ async function allowFormRequest(
 			? env.FORMS_RENDER_RATE_LIMIT
 			: env.FORMS_SUBMIT_RATE_LIMIT;
 	const key = `forms:${kind}:${ip.slice(0, 128)}`;
-	if (binding) {
-		try {
-			return (await binding.limit({ key })).success;
-		} catch {
-			return false;
-		}
+	try {
+		return (await binding.limit({ key })).success;
+	} catch {
+		return null;
 	}
-	return localFormRateLimit(key, kind === "render" ? 30 : 10);
 }
-export function localFormRateLimit(
-	key: string,
-	maximum: number,
-	now = Date.now(),
-) {
-	const minute = Math.floor(now / 60_000);
-	for (const [candidate, value] of localRateCounters)
-		if (minute - value.minute > 2) localRateCounters.delete(candidate);
-	if (localRateCounters.size > 4096) {
-		for (const candidate of localRateCounters.keys()) {
-			localRateCounters.delete(candidate);
-			if (localRateCounters.size <= 2048) break;
-		}
-	}
-	const current = localRateCounters.get(key);
-	if (!current || current.minute !== minute) {
-		localRateCounters.set(key, { minute, count: 1 });
-		return true;
-	}
-	if (current.count >= maximum) return false;
-	current.count += 1;
-	return true;
+function limiterUnavailable(c: FormsContext) {
+	const requestId = c.res.headers.get("X-Request-ID") ?? crypto.randomUUID();
+	return c.json({ error: "RATE_LIMIT_UNAVAILABLE", requestId }, 503, {
+		"X-Request-ID": requestId,
+		"Cache-Control": "no-store",
+	});
 }
 function answerText(value: unknown) {
 	return Array.isArray(value) ? value.join("; ") : String(value ?? "");

@@ -1,12 +1,15 @@
 import {
+	bigint,
+	boolean,
 	index,
 	integer,
-	sqliteTable,
+	pgTable,
 	text,
+	timestamp,
 	uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-export const links = sqliteTable(
+export const links = pgTable(
 	"links",
 	{
 		id: text("id").primaryKey(),
@@ -14,9 +17,9 @@ export const links = sqliteTable(
 		originalUrl: text("original_url").notNull(),
 		normalizedUrl: text("normalized_url").notNull(),
 		urlHash: text("url_hash").notNull(),
-		createdAt: integer("created_at").notNull(),
-		updatedAt: integer("updated_at").notNull(),
-		disabledAt: integer("disabled_at"),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
+		updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+		disabledAt: bigint("disabled_at", { mode: "number" }),
 	},
 	(table) => [
 		uniqueIndex("links_short_code_unique").on(table.shortCode),
@@ -25,16 +28,16 @@ export const links = sqliteTable(
 	],
 );
 
-export const bioPages = sqliteTable(
+export const bioPages = pgTable(
 	"bio_pages",
 	{
 		id: text("id").primaryKey(),
 		slug: text("slug").notNull(),
 		title: text("title").notNull(),
 		description: text("description"),
-		createdAt: integer("created_at").notNull(),
-		updatedAt: integer("updated_at").notNull(),
-		disabledAt: integer("disabled_at"),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
+		updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+		disabledAt: bigint("disabled_at", { mode: "number" }),
 	},
 	(table) => [
 		uniqueIndex("bio_pages_slug_unique").on(table.slug),
@@ -42,7 +45,7 @@ export const bioPages = sqliteTable(
 	],
 );
 
-export const bioLinks = sqliteTable(
+export const bioLinks = pgTable(
 	"bio_links",
 	{
 		id: text("id").primaryKey(),
@@ -50,41 +53,61 @@ export const bioLinks = sqliteTable(
 		label: text("label").notNull(),
 		url: text("url").notNull(),
 		position: integer("position").notNull(),
-		createdAt: integer("created_at").notNull(),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
 	},
 	(table) => [index("bio_links_page_id_idx").on(table.pageId)],
 );
 
-export const authUser = sqliteTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: integer("email_verified", { mode: "boolean" })
-		.notNull()
-		.default(false),
-	image: text("image"),
-	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-});
+export const authUser = pgTable(
+	"user",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		email: text("email").notNull(),
+		emailVerified: boolean("email_verified").notNull().default(false),
+		image: text("image"),
+		createdAt: timestamp("created_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		updatedAt: timestamp("updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+	},
+	(table) => [uniqueIndex("user_email_unique").on(table.email)],
+);
 
-export const authSession = sqliteTable(
+export const authSession = pgTable(
 	"session",
 	{
 		id: text("id").primaryKey(),
-		expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-		token: text("token").notNull().unique(),
-		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+		expiresAt: timestamp("expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		token: text("token").notNull(),
+		createdAt: timestamp("created_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		updatedAt: timestamp("updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
 		ipAddress: text("ip_address"),
 		userAgent: text("user_agent"),
 		userId: text("user_id")
 			.notNull()
 			.references(() => authUser.id, { onDelete: "cascade" }),
 	},
-	(table) => [index("session_user_id_idx").on(table.userId)],
+	(table) => [
+		uniqueIndex("session_token_unique").on(table.token),
+		index("session_user_id_idx").on(table.userId),
+	],
 );
 
-export const authAccount = sqliteTable(
+export const authAccount = pgTable(
 	"account",
 	{
 		id: text("id").primaryKey(),
@@ -96,34 +119,45 @@ export const authAccount = sqliteTable(
 		accessToken: text("access_token"),
 		refreshToken: text("refresh_token"),
 		idToken: text("id_token"),
-		accessTokenExpiresAt: integer("access_token_expires_at", {
-			mode: "timestamp_ms",
+		accessTokenExpiresAt: timestamp("access_token_expires_at", {
+			withTimezone: true,
+			mode: "date",
 		}),
-		refreshTokenExpiresAt: integer("refresh_token_expires_at", {
-			mode: "timestamp_ms",
+		refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+			withTimezone: true,
+			mode: "date",
 		}),
 		scope: text("scope"),
 		password: text("password"),
-		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+		createdAt: timestamp("created_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		updatedAt: timestamp("updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
 	},
 	(table) => [index("account_user_id_idx").on(table.userId)],
 );
 
-export const authVerification = sqliteTable(
+export const authVerification = pgTable(
 	"verification",
 	{
 		id: text("id").primaryKey(),
 		identifier: text("identifier").notNull(),
 		value: text("value").notNull(),
-		expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-		createdAt: integer("created_at", { mode: "timestamp_ms" }),
-		updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+		expiresAt: timestamp("expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }),
 	},
 	(table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const forms = sqliteTable(
+export const forms = pgTable(
 	"forms",
 	{
 		id: text("id").primaryKey(),
@@ -137,9 +171,9 @@ export const forms = sqliteTable(
 		confirmationMessage: text("confirmation_message"),
 		slug: text("slug"),
 		shortCode: text("short_code"),
-		createdAt: integer("created_at").notNull(),
-		updatedAt: integer("updated_at").notNull(),
-		disabledAt: integer("disabled_at"),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
+		updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+		disabledAt: bigint("disabled_at", { mode: "number" }),
 	},
 	(table) => [
 		index("forms_owner_updated_idx").on(table.ownerId, table.updatedAt),
@@ -148,7 +182,7 @@ export const forms = sqliteTable(
 	],
 );
 
-export const formVersions = sqliteTable(
+export const formVersions = pgTable(
 	"form_versions",
 	{
 		id: text("id").primaryKey(),
@@ -162,8 +196,8 @@ export const formVersions = sqliteTable(
 		confirmationMessage: text("confirmation_message"),
 		accent: text("accent").notNull().default("blue"),
 		respondentAccess: text("respondent_access").notNull().default("public"),
-		createdAt: integer("created_at").notNull(),
-		publishedAt: integer("published_at"),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
+		publishedAt: bigint("published_at", { mode: "number" }),
 	},
 	(table) => [
 		uniqueIndex("form_versions_form_version_unique").on(
@@ -174,7 +208,7 @@ export const formVersions = sqliteTable(
 	],
 );
 
-export const formLimits = sqliteTable("form_limits", {
+export const formLimits = pgTable("form_limits", {
 	id: integer("id").primaryKey(),
 	maxPublished: integer("max_published").notNull().default(25),
 	maxMonthlyResponses: integer("max_monthly_responses").notNull().default(1000),
@@ -183,24 +217,34 @@ export const formLimits = sqliteTable("form_limits", {
 		.default(10000),
 });
 
-export const formAliases = sqliteTable(
+export const formOwnerLocks = pgTable("form_owner_locks", {
+	ownerId: text("owner_id")
+		.primaryKey()
+		.references(() => authUser.id, { onDelete: "cascade" }),
+});
+
+export const formAliases = pgTable(
 	"form_aliases",
 	{
 		alias: text("alias").primaryKey(),
 		formId: text("form_id")
 			.notNull()
 			.references(() => forms.id, { onDelete: "cascade" }),
-		createdAt: integer("created_at").notNull(),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
 	},
 	(table) => [index("form_aliases_form_id_idx").on(table.formId)],
 );
 
-export const formAliasTombstones = sqliteTable("form_alias_tombstones", {
+export const formAliasLocks = pgTable("form_alias_locks", {
 	alias: text("alias").primaryKey(),
-	createdAt: integer("created_at").notNull(),
 });
 
-export const formResponses = sqliteTable(
+export const formAliasTombstones = pgTable("form_alias_tombstones", {
+	alias: text("alias").primaryKey(),
+	createdAt: bigint("created_at", { mode: "number" }).notNull(),
+});
+
+export const formResponses = pgTable(
 	"form_responses",
 	{
 		id: text("id").primaryKey(),
@@ -212,7 +256,7 @@ export const formResponses = sqliteTable(
 			.references(() => formVersions.id, { onDelete: "cascade" }),
 		idempotencyKey: text("idempotency_key").notNull(),
 		answersJson: text("answers_json").notNull(),
-		createdAt: integer("created_at").notNull(),
+		createdAt: bigint("created_at", { mode: "number" }).notNull(),
 	},
 	(table) => [
 		uniqueIndex("form_responses_idempotency_unique").on(
@@ -223,7 +267,7 @@ export const formResponses = sqliteTable(
 	],
 );
 
-export const formMonthlyUsage = sqliteTable(
+export const formMonthlyUsage = pgTable(
 	"form_monthly_usage",
 	{
 		ownerId: text("owner_id")

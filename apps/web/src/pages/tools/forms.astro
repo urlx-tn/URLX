@@ -2,7 +2,7 @@
 import FormsHeader from "../../components/forms/FormsHeader.astro";
 import Layout from "../../layouts/Layout.astro";
 import "../../styles/forms.css";
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import {
 	formTemplateCategories,
 	formTemplates,
@@ -10,9 +10,7 @@ import {
 import { formsReady } from "../../lib/forms-ready";
 import { formsIcon, templatePreviewMarkup } from "../../lib/forms-ui";
 
-const formsEnabled = formsReady(
-	env as typeof env & Parameters<typeof formsReady>[0],
-);
+const formsEnabled = formsReady(FORMS_ENABLED);
 const title = "Free Online Form Builder | URLX Forms";
 const description =
 	"Create, share and manage forms with URLX Forms. Start from a template or build a form of your own.";

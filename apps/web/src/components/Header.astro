@@ -1,5 +1,5 @@
 ---
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import logo from "../assets/logo.png";
 import { formsReady } from "../lib/forms-ready";
 import {
@@ -26,9 +26,7 @@ const showHeaderSearch = currentPath === "/tools/link-in-bio";
 const visiblePrimaryProducts = primaryProducts.filter(
 	(link) => link.isDiscoverable,
 );
-const formsEnabled = formsReady(
-	env as typeof env & Parameters<typeof formsReady>[0],
-);
+const formsEnabled = formsReady(FORMS_ENABLED);
 const primaryProductsWithForms = formsEnabled
 	? [
 			...visiblePrimaryProducts,

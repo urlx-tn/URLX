@@ -25,6 +25,31 @@ jobs:
       CI: true
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      POSTGRES_DB: urlx_test
+      POSTGRES_BOOTSTRAP_PASSWORD: ci-bootstrap-only
+      URLX_APP_PASSWORD: ci-app-only
+      URLX_MIGRATOR_PASSWORD: ci-migrator-only
+      DATABASE_URL: postgresql://urlx_app:ci-app-only@127.0.0.1:5432/urlx_test
+      MIGRATOR_DATABASE_URL: postgresql://urlx_migrator:ci-migrator-only@127.0.0.1:5432/urlx_test
+      TEST_DATABASE_URL: postgresql://urlx_app:ci-app-only@127.0.0.1:5432/urlx_test
+      TEST_MIGRATOR_DATABASE_URL: postgresql://urlx_migrator:ci-migrator-only@127.0.0.1:5432/urlx_test
+      TEST_IMPORT_DATABASE_URL: postgresql://urlx_migrator:ci-migrator-only@127.0.0.1:5432/urlx_import_test
+      TEST_IMPORT_DATABASE_NAME: urlx_import_test
+
+    services:
+      postgres:
+        image: postgres:18.6-alpine3.24
+        env:
+          POSTGRES_USER: urlx_bootstrap
+          POSTGRES_PASSWORD: ci-bootstrap-only
+          POSTGRES_DB: urlx_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U urlx_bootstrap -d urlx_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - name: Check out repository
@@ -40,6 +65,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
       - name: Restore Turborepo cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -52,6 +82,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      - name: Create restricted PostgreSQL roles
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i \
+            -e URLX_APP_PASSWORD \
+            -e URLX_MIGRATOR_PASSWORD \
+            "$POSTGRES_CONTAINER_ID" \
+            psql -v ON_ERROR_STOP=1 -U urlx_bootstrap -d "$POSTGRES_DB" \
+            < deploy/postgres/roles.sql
+
+      - name: Create isolated empty import-test database
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER_ID" \
+            createdb -U urlx_bootstrap "$TEST_IMPORT_DATABASE_NAME"
+          docker exec -i \
+            -e URLX_APP_PASSWORD \
+            -e URLX_MIGRATOR_PASSWORD \
+            "$POSTGRES_CONTAINER_ID" \
+            psql -v ON_ERROR_STOP=1 -U urlx_bootstrap -d "$TEST_IMPORT_DATABASE_NAME" \
+            < deploy/postgres/roles.sql
+
+      - name: Apply PostgreSQL migrations as the migrator role
+        run: pnpm db:migrate
+
+      - name: Migrate isolated importer target
+        env:
+          MIGRATOR_DATABASE_URL: ${{ env.TEST_IMPORT_DATABASE_URL }}
+        run: pnpm db:migrate
+
       - name: Check formatting and linting
         run: pnpm run check
 
@@ -63,3 +125,65 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+  containers:
+    name: Container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PUBLIC_ORIGIN: https://urlx.example.test
+      PUBLIC_SERVER_URL: https://urlx.example.test
+      PUBLIC_CONVERSION_SERVER_URL: https://urlx.example.test/convert
+      DATABASE_URL: postgresql://urlx_app:ci-only@app-db:5432/urlx
+      MIGRATOR_DATABASE_URL: postgresql://urlx_migrator:ci-only@app-db:5432/urlx
+      POSTGRES_BOOTSTRAP_PASSWORD: ci-only
+      URLX_APP_PASSWORD: ci-only
+      URLX_MIGRATOR_PASSWORD: ci-only
+      VISITOR_TOKEN_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      PG_POOL_MAX: "2"
+      URLX_HOST_MEMORY_BUDGET_BYTES: "3221225472"
+      URLX_HOST_CPU_BUDGET: "2.5"
+      WEB_MEMORY_LIMIT: "268435456"
+      WEB_CPU_LIMIT: "0.25"
+      API_MEMORY_LIMIT: "402653184"
+      API_CPU_LIMIT: "0.35"
+      CONVERSION_MEMORY_LIMIT: "268435456"
+      CONVERSION_CPU_LIMIT: "0.2"
+      CONVERSION_RENDERER_MEMORY_LIMIT: "1073741824"
+      CONVERSION_RENDERER_CPU_LIMIT: "0.5"
+      POSTGRES_MEMORY_LIMIT: "536870912"
+      POSTGRES_CPU_LIMIT: "0.25"
+      MIGRATOR_MEMORY_LIMIT: "268435456"
+      MIGRATOR_CPU_LIMIT: "0.2"
+      EGRESS_PROXY_MEMORY_LIMIT: "134217728"
+      EGRESS_PROXY_CPU_LIMIT: "0.1"
+      CADDY_MEMORY_LIMIT: "67108864"
+      CADDY_CPU_LIMIT: "0.05"
+      VALKEY_MAXMEMORY: "33554432"
+      VALKEY_MEMORY_LIMIT: "67108864"
+      VALKEY_CPU_LIMIT: "0.1"
+      FORMS_ENABLED: "false"
+      RENDERER_CONCURRENCY: "1"
+      RENDERER_MAX_QUEUE: "1"
+      RENDERER_QUEUE_TIMEOUT_MS: "5000"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Validate bounded Valkey memory
+        run: pnpm containers:preflight
+
+      - name: Test deployment policy guards
+        run: |
+          python scripts/test-check-deployment-config.py
+          python scripts/test-prepare-egress-gate.py
+
+      - name: Build container images
+        run: docker compose build --pull web api conversion conversion-renderer migrate egress-proxy

@@ -46,6 +46,11 @@ lerna-debug.log*
 # Better-T-Stack
 .alchemy
 
+# Host-derived egress gate data; generated on the deployment host only.
+/deploy/egress/policy/*
+!/deploy/egress/policy/.gitkeep
+/backups/
+
 # Testing
 coverage
 .nyc_output

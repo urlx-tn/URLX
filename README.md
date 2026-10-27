@@ -12,101 +12,77 @@
 
 <p align="center">
   <a href="https://www.urlx.tn"><strong>Open URLX</strong></a>
-  ·
-  <a href="./API.md">API reference</a>
-  ·
-  <a href="./CONTRIBUTING.md">Contributing</a>
-</p>
-
-<p align="center">
-  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
-  <a href="https://github.com/urlx-tn/URLX/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/urlx-tn/URLX/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178c6.svg?logo=typescript&logoColor=white" />
-  <img alt="Astro" src="https://img.shields.io/badge/Astro-ff5d01.svg?logo=astro&logoColor=white" />
-  <img alt="Hono" src="https://img.shields.io/badge/Hono-e36002.svg?logo=hono&logoColor=white" />
-  <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare_Workers-f38020.svg?logo=cloudflare&logoColor=white" />
+  · <a href="./API.md">API reference</a>
+  · <a href="./CONTRIBUTING.md">Contributing</a>
 </p>
 
 ## What is URLX?
 
-URLX is a no-account URL toolkit built for the web and deployed on Cloudflare.
-It combines focused browser-based utilities with server-backed short links,
-link-in-bio pages, URL metadata inspection, and Cloudflare-powered webpage
-conversion.
-
-The project is MIT licensed and designed to be easy to use, self-host, extend,
-and contribute to.
-
-## Tools
+URLX is a no-account URL toolkit built for the web. This branch packages the
+Astro frontend, Hono API, conversion service, and isolated Playwright renderer
+for Bun containers backed by PostgreSQL and Valkey. It combines focused
+browser-based utilities with server-backed short links, link-in-bio pages,
+metadata inspection, and webpage conversion.
 
 | Tool | What it does | Processing |
 | --- | --- | --- |
-| [URL Shortener](https://www.urlx.tn/tools/url-shortener) | Creates compact redirect links and optional QR codes. | Cloudflare Worker + D1 |
+| [URL Shortener](https://www.urlx.tn/tools/url-shortener) | Creates compact redirect links and optional QR codes. | Hono API + PostgreSQL |
 | [URL Cleaner](https://www.urlx.tn/tools/url-cleaner) | Removes common tracking parameters from a URL. | In the browser |
 | [QR Code Generator](https://www.urlx.tn/tools/qr-code-generator) | Exports a URL as SVG or PNG. | In the browser |
-| [URL Metadata Inspector](https://www.urlx.tn/tools/url-metadata) | Reads link-preview metadata from a public URL. | Cloudflare Worker |
-| [URL to Markdown](https://www.urlx.tn/tools/url-to-markdown) | Converts a public webpage into Markdown. | Cloudflare Worker + Browser Run |
-| [URL to HTML](https://www.urlx.tn/tools/url-to-html) | Captures the fully rendered HTML of a public webpage. | Cloudflare Worker + Browser Run |
-| [Link in Bio](https://www.urlx.tn/tools/link-in-bio) | Publishes one shareable page containing multiple links. | Cloudflare Worker + D1 |
+| [URL Metadata Inspector](https://www.urlx.tn/tools/url-metadata) | Reads link-preview metadata from a public URL. | Hono API + controlled egress proxy |
+| [URL to Markdown](https://www.urlx.tn/tools/url-to-markdown) | Converts a public webpage into Markdown. | Conversion service + isolated Playwright renderer |
+| [URL to HTML](https://www.urlx.tn/tools/url-to-html) | Captures fully rendered HTML from a public webpage. | Conversion service + isolated Playwright renderer |
+| [Link in Bio](https://www.urlx.tn/tools/link-in-bio) | Publishes one shareable page containing multiple links. | Hono API + PostgreSQL |
 
 No user account is required. Optional recent-URL history is stored locally in
 the browser only when the user enables it.
 
 ## Architecture
 
-URLX is a pnpm and Turborepo monorepo:
-
 ```text
 Browser
   |
-  +-- Astro web Worker ---------------- Browser-only URL tools
-  |          |                           |
-  |          +-------------------------- oRPC API client
-  |          |
-  |          +-------------------------- Conversion Worker client
+  +-- Astro on Bun ---------------------- browser UI, SSR, public routes
+  |         +-- private API connection -- Hono API on Bun
+  |         +-- /convert route ---------- Hono conversion service
   |
-  +-- Hono API Worker ----------------- Validation, metadata inspection, and business logic
-  |          |
-  |          +-------------------------- Cloudflare D1
+  +-- Hono API -------------------------- PostgreSQL + Valkey
   |
-  +-- Hono Conversion Worker ---------- URL validation and conversion
-             |
-             +-------------------------- Cloudflare Browser Run
+  +-- conversion service --------------- isolated Playwright renderer
+              +-- controlled HTTP proxy - public page fetches
 ```
 
-- **Web:** Astro, Tailwind CSS, browser-side QR generation
-- **API:** Hono, oRPC, OpenAPI reference
-- **Webpage conversion:** Dedicated Hono Worker with Cloudflare Browser Run
-- **Database:** Cloudflare D1 and Drizzle ORM
-- **Infrastructure:** Alchemy TypeScript IaC
-- **Tooling:** pnpm, Turborepo, TypeScript, Biome
+- **Web:** Astro standalone output served by Bun
+- **API and conversion:** Hono services on Bun
+- **Database:** PostgreSQL with Drizzle migrations
+- **Shared limits:** Valkey
+- **Conversion:** separate Playwright renderer; browser traffic can use only the Squid proxy
+- **Ingress:** existing host ingress or the optional loopback-only Caddy profile
+- **Tooling:** pnpm, Turborepo, TypeScript, Biome, Docker Compose
 
-Alchemy provisions the Astro Worker, API Worker, conversion Worker, D1 database,
-Browser Run and rate-limit bindings, runtime bindings, and database migrations
-from `packages/infra/alchemy.run.ts`.
-
-The conversion Worker uses the stage-aware Alchemy resource name `conversion`,
-so Cloudflare names it consistently with the app and stage instead of retaining
-the earlier Markdown-specific Worker name.
+Cloudflare and D1 files remain as historical reference on this migration branch.
+The Compose stack does not update or remove the existing Cloudflare deployment,
+and it does not automatically copy production D1 data to PostgreSQL.
 
 ## Requirements
 
-- Node.js 22.18 or newer
-- pnpm 10.22.0 or newer
-- A Cloudflare account for deployed environments
+- Node.js 24 for dependency installation and builds
+- Bun 1.4.4 for runtime containers
+- pnpm 10.22.0
+- Docker Engine and Docker Compose on a Linux deployment host
 
 Enable pnpm through Corepack:
 
 ```bash
 corepack enable
+pnpm install
 ```
 
-## Local development
+## Development
 
-Install dependencies and create the local environment file:
+Copy the environment template and fill in the values needed for your setup:
 
 ```bash
-pnpm install
 cp .env.example .env
 ```
 
@@ -116,78 +92,34 @@ On Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Start the full Cloudflare-compatible stack:
+`pnpm dev` starts Astro for frontend-only work. `pnpm dev:api` and
+`pnpm dev:conversion` start the Bun services individually. Server-backed tools
+require PostgreSQL, Valkey, the renderer, and a verified egress policy. Follow
+the [Docker Compose deployment guide](./docs/deployment/docker-compose.md) for
+the complete stack and host setup.
 
-```bash
-pnpm run dev
-```
-
-Default local URLs:
-
-- Web app and short links: `http://localhost:4321`
-- API: `http://localhost:3000`
-- OpenAPI reference: `http://localhost:3000/api-reference`
-
-The full stack is required to test server-backed tools. URL shortening and
-link-in-bio use the local API Worker and D1. URL-to-Markdown and URL-to-HTML call
-a dedicated remote development Worker because Browser Run Quick Actions are not
-emulated locally. Starting the stack may deploy or update that development
-Worker and consume Browser Run quota.
-
-### Run individual apps
-
-```bash
-pnpm run dev:web
-pnpm run dev:server
-```
-
-`dev:web` starts Astro without Alchemy-managed Cloudflare bindings. Browser-only
-tools work in this mode, but server-backed features require the full stack.
-
-Webpage conversion requires an authenticated Alchemy Cloudflare session and
-Browser Run availability on that account. The application does not need a
-separate Browser Run API token. Alchemy provisions the browser and rate-limit
-bindings, and the conversion Worker uses a compatibility date that supports
-Quick Actions.
-
-## Environment variables
-
-The repository uses root environment files because Alchemy loads and distributes
-the stage configuration for both Workers.
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `CORS_ORIGIN` | Yes | Browser origin accepted by the API Worker. |
-| `SHORT_URL_BASE` | No | Public origin used to construct short URLs. |
-| `PUBLIC_SERVER_URL` | Yes | Public oRPC API URL used by the Astro app. |
-| `PUBLIC_CONVERSION_SERVER_URL` | Automatic | Conversion Worker URL supplied by Alchemy; only set manually when running Astro outside the full stack. |
-| `SKIP_ENV_VALIDATION` | No | Optional escape hatch for public environment validation. |
-
-Stage mapping:
-
-- `.env` — local development
-- `.env.development` — deployed `dev` stage
-- `.env.production` — deployed `prod` stage
-
-Keep `CORS_ORIGIN`, `SHORT_URL_BASE`, and `PUBLIC_SERVER_URL` aligned for each
-stage. Never commit secrets or populated environment files.
+Public Astro URLs are embedded in the browser bundle at build time. Rebuild the
+web image after changing `PUBLIC_SERVER_URL` or
+`PUBLIC_CONVERSION_SERVER_URL`.
 
 ## Database
 
-The API Worker accesses D1 through its `DB` runtime binding. Schema definitions
-and SQL migrations live in `packages/db`.
+The active database is PostgreSQL. Compose creates `urlx_app` for restricted
+runtime DML and `urlx_migrator` for schema migrations. The API receives only the
+app role URL; the one-shot migration service receives only the migrator URL.
+PostgreSQL remains on a private Compose network with a persistent named volume.
 
-Generate a migration after changing the schema:
+Generate migrations after schema changes and run them with the migration URL:
 
 ```bash
-pnpm run db:generate
+pnpm db:generate
+pnpm db:migrate
 ```
 
-Alchemy applies migrations during local development and deployment.
+Historical D1 migrations are retained for reference and export. Importing data
+from an existing deployment is a separate cutover task.
 
 ## Quality checks
-
-Run all checks before opening a pull request:
 
 ```bash
 pnpm run check
@@ -196,93 +128,60 @@ pnpm run test
 pnpm run build
 ```
 
-The unit suite covers core URL validation, normalization, slug, short-code, and
-webpage conversion behavior. Changes to Cloudflare-backed features should also
-be verified against a deployed or remote development stack.
-
-GitHub Actions runs the same quality gates for pull requests targeting `main`
-and for pushes to `main`. CI caches the pnpm package store and Turborepo task
-outputs. Maintainers can optionally enable shared Turborepo Remote Cache by
-adding a `TURBO_TOKEN` Actions secret and a `TURBO_TEAM` Actions variable.
+GitHub Actions runs the repository checks for pull requests targeting `main`
+and pushes to `main`.
 
 ## Deployment
 
-Authenticate Alchemy with Cloudflare:
-
-```bash
-pnpm --filter @urlx/infra exec alchemy login cloudflare
-```
-
-Deploy a stage:
-
-```bash
-pnpm run deploy:dev
-pnpm run deploy
-```
-
-`pnpm run deploy` targets the production stage. Destruction commands remove
-Alchemy-managed resources and should only be used intentionally:
-
-```bash
-pnpm run destroy:dev
-pnpm run destroy:prod
-```
+Read [Docker Compose deployment](./docs/deployment/docker-compose.md) for image
+builds, the fail-closed host egress gate, ingress requirements, PostgreSQL
+backup/restore, and deployment limits. The base Compose file publishes no
+ports. Existing production is unchanged until an operator performs and verifies
+a separate migration and cutover.
 
 ## Project structure
 
 ```text
-urlx/
-|-- apps/
-|   |-- web/              # Astro frontend, URL tools, redirects, and public assets
-|   `-- server/           # Hono Worker and API transport
-|-- packages/
-|   |-- api/              # oRPC routers and domain logic
-|   |-- config/           # Shared TypeScript configuration
-|   |-- db/               # Drizzle schema and D1 migrations
-|   |-- env/              # Typed runtime environment helpers
-|   `-- infra/            # Alchemy Cloudflare infrastructure
-|-- API.md                # API behavior and error contracts
-|-- CONTRIBUTING.md       # Contribution workflow
-|-- turbo.json            # Turborepo task graph
-`-- pnpm-workspace.yaml   # Workspace and dependency catalog
+apps/
+  web/                  Astro frontend
+  server/               Hono API and conversion services
+  conversion-renderer/  Isolated Playwright runtime
+packages/
+  api/                  oRPC routers and domain logic
+  db/                   Drizzle schema and PostgreSQL migrations
+  env/                  Runtime validation and environment helpers
+  config/               Shared TypeScript configuration
+  infra/                Historical Cloudflare infrastructure reference
 ```
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `pnpm run dev` | Start the full local Workers stack. |
-| `pnpm run dev:web` | Start only the Astro app. |
-| `pnpm run dev:server` | Start only the API Worker through Alchemy. |
-| `pnpm run build` | Build workspace apps and packages. |
-| `pnpm run check` | Run Biome formatting and lint checks. |
-| `pnpm run check:write` | Apply safe Biome fixes. |
-| `pnpm run check-types` | Run configured TypeScript checks. |
-| `pnpm run test` | Run the automated unit test suite. |
-| `pnpm run db:generate` | Generate Drizzle migrations. |
-| `pnpm run deploy:dev` | Deploy the development stage. |
-| `pnpm run deploy` | Deploy the production stage. |
+| `pnpm dev` | Start Astro for frontend-only work. |
+| `pnpm dev:api` | Start the Bun API service. |
+| `pnpm dev:conversion` | Start the Bun conversion service. |
+| `pnpm build` | Build workspace packages and apps. |
+| `pnpm check` | Run Biome formatting and lint checks. |
+| `pnpm check-types` | Run TypeScript and Astro checks. |
+| `pnpm test` | Run the automated suite. |
+| `pnpm db:generate` | Generate PostgreSQL migrations. |
+| `pnpm db:migrate` | Apply PostgreSQL migrations using `MIGRATOR_DATABASE_URL`. |
+| `pnpm containers:build` | Build runtime, migration, renderer, and egress images. |
+| `pnpm egress:prepare` | Start the gated stack and install URLX-scoped host policy on Linux. |
+| `pnpm containers:up` | Start the Compose stack. |
+| `pnpm containers:down` | Stop the stack without removing named data volumes. |
 
 ## API
 
 See [API.md](./API.md) for endpoint behavior, error contracts, redirect
-semantics, and validation rules.
-
-When the server is running, its generated OpenAPI reference is available at
-`http://localhost:3000/api-reference`.
+semantics, and validation rules. The generated OpenAPI reference is available
+under `/api-reference` when the API is running.
 
 ## Contributing
 
 Issues and pull requests are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md)
-for setup, quality gates, and the expected contribution workflow.
-
-Useful contribution areas include:
-
-- new focused URL utilities;
-- accessibility and browser compatibility;
-- automated tests and CI coverage;
-- abuse prevention and moderation tooling;
-- documentation and translations.
+for setup and quality gates.
 
 ## License
 

@@ -2,13 +2,11 @@
 import FormsHeader from "../../components/forms/FormsHeader.astro";
 import Layout from "../../layouts/Layout.astro";
 import "../../styles/forms.css";
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import { formsReady } from "../../lib/forms-ready";
 import { formsIcon } from "../../lib/forms-ui";
 
-const formsEnabled = formsReady(
-	env as typeof env & Parameters<typeof formsReady>[0],
-);
+const formsEnabled = formsReady(FORMS_ENABLED);
 const title = "My forms | URLX Forms";
 ---
 <Layout title={title} description="Create and manage your URLX Forms." canonicalPath="/forms" chrome={false} clientRouter={false}>
