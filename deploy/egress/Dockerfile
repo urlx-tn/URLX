@@ -1,7 +1,8 @@
-FROM ubuntu/squid:6.6-24.04_beta
-# Keep the Noble proxy package at or above Canonical's fixed security floor.
+FROM ubuntu:24.04
+# Refresh the Noble base and keep Squid at or above Canonical's security floor.
 RUN set -eu; \
 	apt-get update; \
+	DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends; \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends squid; \
 	squid_version="$(dpkg-query -W -f='${Version}' squid)"; \
 	dpkg --compare-versions "$squid_version" ge 6.14-0ubuntu0.24.04.5; \
