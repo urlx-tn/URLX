@@ -66,12 +66,16 @@ describe("web runtime launcher", () => {
 				[process.execPath, launcherPath, process.execPath, "-e", script],
 				{
 					env: { ...process.env, EGRESS_POLICY_READY_FILE: "" },
-					stderr: "ignore",
+					stderr: "pipe",
 					stdout: "ignore",
 				},
 			);
 
+			const stderr = launcher.stderr.text();
 			expect(await launcher.exited).toBe(1);
+			expect(await stderr).toContain(
+				"EGRESS_POLICY_READY_FILE is required before web startup",
+			);
 			expect(await Bun.file(markerPath).exists()).toBe(false);
 		} finally {
 			await rm(testDir, { force: true, recursive: true });
