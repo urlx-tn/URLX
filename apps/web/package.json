@@ -12,23 +12,23 @@
 		"dev:bare": "astro dev"
 	},
 	"dependencies": {
-		"@astrojs/node": "^11.1.3",
-		"@astrojs/sitemap": "^3.7.4",
 		"@orpc/client": "catalog:",
 		"@urlx/api": "workspace:*",
 		"@urlx/env": "workspace:*",
-		"astro": "^7.3.2",
-		"astro-loading-indicator": "^0.9.0",
 		"dotenv": "catalog:",
 		"qrcode": "^1.5.4",
+		"sharp": "^0.35.5",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@astrojs/check": "^0.9.10",
+		"@astrojs/node": "^11.1.3",
+		"@astrojs/sitemap": "^3.7.4",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
-		"sharp": "^0.35.5",
+		"astro": "^7.3.2",
+		"astro-loading-indicator": "^0.9.0",
 		"tailwindcss": "^4.3.3",
 		"typescript": "catalog:"
 	}
