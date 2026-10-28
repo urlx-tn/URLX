@@ -25,12 +25,15 @@ def config(maxmemory: object = 80_000_000, memory_limit: object = 100_000_000) -
 			"valkey",
 			"migrate",
 			"egress-proxy",
-			"caddy",
 		)
 	}
 	services["conversion-renderer"]["mem_limit"] = "536870912"
 	services["conversion-renderer"]["cpus"] = "0.5"
 	services["conversion-renderer"]["environment"] = {"RENDERER_CONCURRENCY": "1"}
+	for name, target in (("web", 8080), ("api", 8787), ("conversion", 8788)):
+		services[name]["ports"] = [
+			{"target": target, "published": str(target), "host_ip": "127.0.0.1", "protocol": "tcp"}
+		]
 	services["valkey"].update(
 		{
 			# This is the resolved `docker compose config --format json` argv shape.
@@ -89,6 +92,36 @@ class DeploymentConfigTests(unittest.TestCase):
 	def test_rejects_missing_compose_service(self) -> None:
 		with self.assertRaisesRegex(ValueError, "missing"):
 			module.validate_config({"services": {}})
+
+	def test_rejects_publicly_bound_service_upstream(self) -> None:
+		bad = config()
+		bad["services"]["api"]["ports"][0]["host_ip"] = "0.0.0.0"
+		with self.assertRaisesRegex(ValueError, "127.0.0.1"):
+			module.validate_config(bad)
+
+	def test_rejects_wrong_upstream_target_or_additional_published_ports(self) -> None:
+		wrong_target = config()
+		wrong_target["services"]["conversion"]["ports"][0]["target"] = 8787
+		with self.assertRaisesRegex(ValueError, "target container port 8788"):
+			module.validate_config(wrong_target)
+		multiple = config()
+		multiple["services"]["web"]["ports"].append(dict(multiple["services"]["web"]["ports"][0]))
+		with self.assertRaisesRegex(ValueError, "exactly one"):
+			module.validate_config(multiple)
+
+	def test_rejects_duplicate_published_upstream_ports(self) -> None:
+		bad = config()
+		bad["services"]["api"]["ports"][0]["published"] = "8080"
+		with self.assertRaisesRegex(ValueError, "must be distinct"):
+			module.validate_config(bad)
+
+	def test_rejects_published_internal_service_port(self) -> None:
+		bad = config()
+		bad["services"]["postgres"]["ports"] = [
+			{"target": 5432, "published": "5432", "host_ip": "127.0.0.1", "protocol": "tcp"}
+		]
+		with self.assertRaisesRegex(ValueError, "postgres must not publish"):
+			module.validate_config(bad)
 
 	def test_rejects_unreviewed_active_compose_service(self) -> None:
 		bad = config()

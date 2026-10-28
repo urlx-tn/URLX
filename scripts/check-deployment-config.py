@@ -53,6 +53,21 @@ def valkey_maxmemory(command: Any) -> int:
 	return byte_count(values[0], "VALKEY_MAXMEMORY")
 
 
+def require_loopback_port(service: dict[str, Any], name: str, target: int) -> int:
+	ports = service.get("ports")
+	if not isinstance(ports, list) or len(ports) != 1 or not isinstance(ports[0], dict):
+		raise ValueError(f"{name} must publish exactly one loopback upstream port")
+	port = ports[0]
+	if port.get("host_ip") != "127.0.0.1" or port.get("target") != target:
+		raise ValueError(f"{name} upstream must bind 127.0.0.1 and target container port {target}")
+	if port.get("protocol", "tcp") != "tcp":
+		raise ValueError(f"{name} upstream must use TCP")
+	published = port.get("published")
+	if isinstance(published, bool) or not str(published).isdecimal() or not 1 <= int(published) <= 65535:
+		raise ValueError(f"{name} published upstream port must be between 1 and 65535")
+	return int(published)
+
+
 def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 	try:
 		all_services = config["services"]
@@ -65,7 +80,6 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 			"valkey",
 			"migrate",
 			"egress-proxy",
-			"caddy",
 		}
 		active_profiles = {
 			profile.strip()
@@ -95,6 +109,14 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 		missing = [name for name in required_services if name not in services]
 		if missing:
 			raise ValueError(f"Compose resource limits are missing services: {', '.join(missing)}")
+		published_ports = []
+		for service_name, target_port in (("web", 8080), ("api", 8787), ("conversion", 8788)):
+			published_ports.append(require_loopback_port(services[service_name], service_name, target_port))
+		if len(set(published_ports)) != len(published_ports):
+			raise ValueError("WEB_HOST_PORT, API_HOST_PORT, and CONVERSION_HOST_PORT must be distinct")
+		for service_name, service in services.items():
+			if service_name not in {"web", "api", "conversion"} and service.get("ports"):
+				raise ValueError(f"{service_name} must not publish host ports")
 		conversion_disabled = (
 			services["conversion"].get("environment", {}).get(
 				"CONVERSION_BROWSER_DISABLED", "false"
@@ -114,8 +136,6 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 			)
 		if renderer_enabled:
 			required_services += ("conversion-renderer",)
-		if "caddy" in services:
-			required_services += ("caddy",)
 		limits = {
 			name: (
 				byte_count(services[name]["mem_limit"], f"{name}.mem_limit"),

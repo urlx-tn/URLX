@@ -10,16 +10,21 @@ the active migration runtime using its PostgreSQL-backed fixture adapter.
 The migration branch reuses the same gallery, builder, pagination, versioning,
 public response, CSV, keyboard, and responsive assertions against the running
 Bun/Astro and PostgreSQL Compose stack. Run it only against a disposable test
-project with Forms enabled, an isolated PostgreSQL volume, and the optional
-loopback ingress reachable from this machine (for a remote VPS, use a private
-SSH tunnel). The target is restricted to loopback or a `.test` hostname. The
-test stack must be built with the same test origin in its public build/runtime
-settings. For the loopback example below, set `PUBLIC_ORIGIN` and
-`PUBLIC_SERVER_URL` to `http://127.0.0.1:8080`,
-`PUBLIC_CONVERSION_SERVER_URL` to `http://127.0.0.1:8080/convert`, and enable
-Forms. Use a disposable test Compose configuration; do not edit production
-origins or reuse production images/configuration. The runner checks the API
-CORS origin before opening the browser.
+project with Forms enabled and an isolated PostgreSQL volume. The Compose stack
+publishes only web/API/conversion upstreams to the host's loopback interface;
+it does not contain an ingress or TLS server. Use the final host's ingress for
+remote browser tests, or a temporary local test gateway that routes to the
+three loopback upstreams. For a remote VPS, keep SSH tunnels to the test host's
+loopback ports private and let the local gateway listen only on client
+loopback. The gateway contract is documented in
+`docs/deployment/docker-compose.md`. The target is restricted to loopback or a
+`.test` hostname. Build the test stack with matching public build/runtime
+settings: `PUBLIC_ORIGIN` is the test frontend origin,
+`PUBLIC_SERVER_URL` is the test API route origin, and
+`PUBLIC_CONVERSION_SERVER_URL` is the public conversion URL ending in
+`/convert`. Enable Forms. Use a disposable test Compose configuration; do not
+edit production origins or reuse production images/configuration. The runner
+checks the API CORS origin before opening the browser.
 
 The test creates a unique synthetic account, captures its magic-link email inside
 a one-off API-container auth instance, verifies the link through the real API,
@@ -42,8 +47,10 @@ tunnel. The project must already be started with the matching
 `URLX_COMPOSE_PROJECT` and egress policy. Compose must be using the Docker
 context that owns that test project. Do not point this suite at production.
 
-The browser runner can run on a separate machine from Docker. Start a tunnel
-from the runner to the test host's loopback ingress, then set
+The browser runner can run on a separate machine from Docker. Start tunnels
+from the runner to the test host's individual loopback upstreams, then start
+the local test gateway that serves `127.0.0.1:8080` and applies the route
+contract. Do not expose API/conversion upstreams on a public interface. Then set
 `URLX_FORMS_E2E_SSH_TARGET` to an SSH alias or `user@host` and
 `URLX_FORMS_E2E_REMOTE_REPO` to the absolute repository path on that host. The
 helper sends only its one-off test source over SSH and runs it with
@@ -54,7 +61,11 @@ project matched to the isolated test stack.
 Example, in separate shells on the machine running Playwright:
 
 ```bash
-ssh -N -L 8080:127.0.0.1:8080 "$URLX_FORMS_E2E_SSH_TARGET"
+ssh -N \
+  -L 18080:127.0.0.1:8080 \
+  -L 18787:127.0.0.1:8787 \
+  -L 18788:127.0.0.1:8788 \
+  "$URLX_FORMS_E2E_SSH_TARGET"
 ```
 
 ```bash

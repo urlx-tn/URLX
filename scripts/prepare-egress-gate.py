@@ -32,7 +32,6 @@ KNOWN_SERVICES = {
 	"postgres",
 	"valkey",
 	"migrate",
-	"caddy",
 }
 REQUIRED_RUNNING_SERVICES = {"web", "api", "conversion", "egress-proxy", "postgres", "valkey"}
 
@@ -312,11 +311,6 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 		("conversion", "egress-proxy", 3128),
 		("conversion-renderer", "egress-proxy", 3128),
 	]
-	if "caddy" in services:
-		allowed_edges.extend(
-			[("caddy", "web", 8080), ("caddy", "api", 8787), ("caddy", "conversion", 8788)]
-		)
-
 	for source_name, target_name, port in allowed_edges:
 		source = services.get(source_name)
 		target = services.get(target_name)

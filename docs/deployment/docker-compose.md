@@ -9,24 +9,43 @@ and cutover task.
 
 | Service | Runtime | Network access |
 | --- | --- | --- |
-| `web` | Astro standalone on Bun | Private API, configured egress proxy |
-| `api` | Hono on Bun | PostgreSQL, Valkey, egress proxy |
-| `conversion` | Hono on Bun | Valkey, renderer, egress proxy |
+| `web` | Astro standalone on Bun | Loopback-published host upstream; private API, configured egress proxy |
+| `api` | Hono on Bun | Loopback-published host upstream; PostgreSQL, Valkey, egress proxy |
+| `conversion` | Hono on Bun | Loopback-published host upstream; Valkey, renderer, egress proxy |
 | `conversion-renderer` | Playwright 1.64.1 on Bun | Conversion control service and egress proxy only |
 | `postgres` | PostgreSQL | Private data network; named persistent volume |
 | `valkey` | Valkey | Private rate-limit network; no persistence |
 | `migrate` | Bun + Drizzle ORM | One-shot schema migration using `urlx_migrator` |
 | `egress-proxy` | Squid | Only service with an external Docker network |
 
-The base Compose file publishes no ports. Use the host's existing ingress and
-keep API, conversion, database, Valkey, renderer, and proxy ports private. The
-ingress must overwrite `X-Urlx-Client-IP` from its actual socket peer. The API
-trusts that header only from the private ingress path; do not expose API or
-conversion ports directly to the Internet.
+Compose publishes only the web, API, and conversion upstreams on host loopback:
+`127.0.0.1:8080` to web `:8080`, `127.0.0.1:8787` to API `:8787`, and
+`127.0.0.1:8788` to conversion `:8788`. Host port numbers can be changed with
+`WEB_HOST_PORT`, `API_HOST_PORT`, and `CONVERSION_HOST_PORT`; Compose keeps the
+bind address fixed at `127.0.0.1`. Preflight rejects non-loopback bindings,
+incorrect targets, or extra published ports. Database, Valkey, renderer, and
+proxy ports remain unpublished.
 
-The optional `ingress` profile provides loopback-only HTTP on port 8080 for
-local testing or a host-level ingress. It does not provision TLS. It must not be
-used to claim a public HTTPS deployment.
+The independently managed host ingress owns routing and public TLS. Configure
+it with this route contract:
+
+| Public path | Upstream | Path rewrite |
+| --- | --- | --- |
+| `/rpc*`, `/visitor-token`, `/api-reference*`, `/api/forms`, `/api/forms/*`, `/api/auth/*` | `127.0.0.1:${API_HOST_PORT:-8787}` | Preserve path |
+| `/convert/*` | `127.0.0.1:${CONVERSION_HOST_PORT:-8788}` | Strip `/convert` (`/convert/markdown` becomes `/markdown`) |
+| All other paths | `127.0.0.1:${WEB_HOST_PORT:-8080}` | Preserve path |
+
+The ingress must overwrite `X-Urlx-Client-IP` with the actual socket peer
+address for every upstream request. Do not trust a client-supplied value or
+append to an existing value: the API uses this header for rate limits and
+form-auth client IPs. Preserve the request `Host` and original HTTPS scheme in
+forwarded headers. Set `PUBLIC_ORIGIN` to the canonical HTTPS frontend origin,
+`PUBLIC_SERVER_URL` to the public API route origin, and
+`PUBLIC_CONVERSION_SERVER_URL` to the public conversion URL ending in `/convert`;
+keep them consistent with ingress routes, CORS, and Better Auth settings. The
+ingress terminates public TLS; Compose upstreams use HTTP on loopback. Never
+publish these service ports on a public interface. Direct API and conversion
+access would bypass the trusted ingress boundary.
 
 ## Required configuration
 
@@ -149,10 +168,9 @@ The PostgreSQL image is derived from the official `postgres:18.6-alpine3.24`
 manifest pinned by digest in its Dockerfile. It upgrades only `brotli-libs` and
 `libcurl` from Alpine v3.24 and checks their fixed-version floors; PostgreSQL
 remains 18.6 and keeps the official entrypoint and `/var/lib/postgresql` volume
-layout. The optional Caddy image is derived from the official
-`caddy:2.11.7-alpine` manifest pinned by digest and applies the equivalent
-package refresh on its Alpine v3.23 branch. Build the default images before
-preparing the host gate, which starts services with `--no-build`:
+layout. Build the application and infrastructure images before preparing the
+host gate, which starts services with `--no-build`. The final host provides its
+own ingress and TLS termination:
 
 ```bash
 pnpm containers:build
@@ -183,7 +201,7 @@ docker compose logs --tail=100 egress-proxy api conversion conversion-renderer w
 ### Browserless VPS application tests
 
 Run browser rendering checks locally. For VPS application checks, use the
-test-only Compose overlay; it leaves the public conversion endpoint mounted but
+test-only Compose overlay; it leaves the loopback conversion upstream published but
 returns the stable `503` / `BROWSER_UNAVAILABLE` response. The overlay disables
 the renderer dependency and places `conversion-renderer` behind the `browser`
 profile, so Compose does not build, pull, or start the Playwright/Chromium image.
@@ -197,7 +215,6 @@ Keep the test overlay selected for every Compose lifecycle command by setting
 export COMPOSE_FILE=compose.yaml:compose.vps-test.yaml
 pnpm containers:preflight
 docker compose build web api conversion migrate egress-proxy postgres
-docker compose --profile ingress build caddy  # only when using the Caddy profile
 sudo env URLX_COMPOSE_PROJECT=urlx-container-validation COMPOSE_FILE="$COMPOSE_FILE" pnpm egress:prepare
 docker compose ps --services
 docker compose logs --tail=100 egress-proxy api conversion web

@@ -57,7 +57,7 @@ Browser
 - **Database:** PostgreSQL with Drizzle migrations
 - **Shared limits:** Valkey
 - **Conversion:** separate Playwright renderer; browser traffic can use only the Squid proxy
-- **Ingress:** existing host ingress or the optional loopback-only Caddy profile
+- **Ingress:** independently managed host ingress and TLS; Compose publishes only fixed-loopback Bun upstream ports
 - **Tooling:** pnpm, Turborepo, TypeScript, Biome, Docker Compose
 
 Cloudflare and D1 files remain as historical reference on this migration branch.
@@ -135,9 +135,10 @@ and pushes to `main`.
 
 Read [Docker Compose deployment](./docs/deployment/docker-compose.md) for image
 builds, the fail-closed host egress gate, ingress requirements, PostgreSQL
-backup/restore, and deployment limits. The base Compose file publishes no
-ports. Existing production is unchanged until an operator performs and verifies
-a separate migration and cutover.
+backup/restore, and deployment limits. Compose publishes web, API, and
+conversion upstreams only on host loopback; the final host ingress provides
+public routing and TLS. Existing production is unchanged until an operator
+performs and verifies a separate migration and cutover.
 
 ## Project structure
 

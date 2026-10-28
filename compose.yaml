@@ -10,6 +10,11 @@ services:
       args:
         PUBLIC_SERVER_URL: ${PUBLIC_SERVER_URL:?Set PUBLIC_SERVER_URL to the public origin}
         PUBLIC_CONVERSION_SERVER_URL: ${PUBLIC_CONVERSION_SERVER_URL:?Set the public /convert URL}
+    ports:
+      - target: 8080
+        published: ${WEB_HOST_PORT:-8080}
+        host_ip: 127.0.0.1
+        protocol: tcp
     restart: unless-stopped
     mem_limit: ${WEB_MEMORY_LIMIT:?Set WEB_MEMORY_LIMIT in bytes}
     cpus: ${WEB_CPU_LIMIT:?Set WEB_CPU_LIMIT for this host}
@@ -52,6 +57,11 @@ services:
       context: .
       target: server
     command: [bun, src/main-api.ts]
+    ports:
+      - target: 8787
+        published: ${API_HOST_PORT:-8787}
+        host_ip: 127.0.0.1
+        protocol: tcp
     restart: unless-stopped
     mem_limit: ${API_MEMORY_LIMIT:?Set API_MEMORY_LIMIT in bytes}
     cpus: ${API_CPU_LIMIT:?Set API_CPU_LIMIT for this host}
@@ -107,6 +117,11 @@ services:
       context: .
       target: server
     command: [bun, src/main-conversion.ts]
+    ports:
+      - target: 8788
+        published: ${CONVERSION_HOST_PORT:-8788}
+        host_ip: 127.0.0.1
+        protocol: tcp
     restart: unless-stopped
     mem_limit: ${CONVERSION_MEMORY_LIMIT:?Set CONVERSION_MEMORY_LIMIT in bytes}
     cpus: ${CONVERSION_CPU_LIMIT:?Set CONVERSION_CPU_LIMIT for this host}
@@ -282,36 +297,11 @@ services:
       retries: 3
       start_period: 10s
 
-  # Optional local HTTP ingress. For production TLS, use the VPS's existing
-  # ingress and its Compose override, or explicitly configure the Caddy profile.
-  caddy:
-    labels:
-      com.urlx.stack: urlx
-    image: urlx/caddy:2.11.7-alpine-r1
-    build:
-      context: ./deploy/caddy
-    profiles: [ingress]
-    restart: unless-stopped
-    mem_limit: ${CADDY_MEMORY_LIMIT:?Set CADDY_MEMORY_LIMIT in bytes}
-    cpus: ${CADDY_CPU_LIMIT:?Set CADDY_CPU_LIMIT for this host}
-    ports:
-      - ${INGRESS_BIND_ADDRESS:-127.0.0.1}:${INGRESS_HTTP_PORT:-8080}:8080
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    networks: [app]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-
 volumes:
   postgres-data:
     name: urlx-postgres-data
     labels:
       com.urlx.data: postgres
-  caddy-data:
-  caddy-config:
-
 networks:
   app:
     internal: true

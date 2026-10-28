@@ -16,9 +16,9 @@ class ComposeActiveProfileTests(unittest.TestCase):
 	def test_reads_only_resolved_profile_selection(self) -> None:
 		self.assertEqual(
 			module.profiles_from_environment(
-				"DATABASE_URL=postgresql://private\nCOMPOSE_PROFILES=browser,ingress\n"
+				"DATABASE_URL=postgresql://private\nCOMPOSE_PROFILES=browser\n"
 			),
-			"browser,ingress",
+			"browser",
 		)
 
 	def test_empty_or_unset_profile_selection_is_empty(self) -> None:

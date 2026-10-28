@@ -157,8 +157,6 @@ jobs:
       MIGRATOR_CPU_LIMIT: "0.2"
       EGRESS_PROXY_MEMORY_LIMIT: "134217728"
       EGRESS_PROXY_CPU_LIMIT: "0.1"
-      CADDY_MEMORY_LIMIT: "67108864"
-      CADDY_CPU_LIMIT: "0.05"
       VALKEY_MAXMEMORY: "33554432"
       VALKEY_MEMORY_LIMIT: "67108864"
       VALKEY_CPU_LIMIT: "0.1"
@@ -186,4 +184,4 @@ jobs:
           python scripts/test-prepare-egress-gate.py
 
       - name: Build container images
-        run: docker compose build --pull web api conversion conversion-renderer migrate egress-proxy
+        run: docker compose build --pull web api conversion conversion-renderer migrate postgres egress-proxy
