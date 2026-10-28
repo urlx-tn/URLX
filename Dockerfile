@@ -3,14 +3,14 @@ FROM node:24-bookworm-slim AS workspace
 RUN corepack enable && corepack prepare pnpm@10.22.0 --activate
 WORKDIR /workspace
 COPY . .
-RUN pnpm install --frozen-lockfile
 
 FROM workspace AS web-build
 ARG PUBLIC_SERVER_URL
 ARG PUBLIC_CONVERSION_SERVER_URL
 ENV PUBLIC_SERVER_URL=${PUBLIC_SERVER_URL} \
 	PUBLIC_CONVERSION_SERVER_URL=${PUBLIC_CONVERSION_SERVER_URL}
-RUN pnpm --filter web build \
+RUN pnpm install --frozen-lockfile --filter-prod 'web...' \
+	&& pnpm --filter web build \
 	&& pnpm --filter web deploy --prod --legacy /out/web
 
 FROM oven/bun:1.4.4-debian AS web
@@ -26,7 +26,13 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/start-urlx-web"]
 CMD ["bun", "./dist/server/entry.mjs"]
 
-FROM workspace AS server-deploy
+FROM workspace AS urlx-production-install
+RUN pnpm install --frozen-lockfile --prod \
+	--filter-prod 'server...' \
+	--filter-prod '@urlx/conversion-renderer...' \
+	--filter-prod '@urlx/db...'
+
+FROM urlx-production-install AS server-deploy
 RUN pnpm --filter server deploy --prod --legacy /out/server
 
 FROM oven/bun:1.4.4-debian AS server
@@ -36,10 +42,10 @@ COPY --from=server-deploy --chown=bun:bun /out/server/ ./
 USER bun
 CMD ["bun", "src/main-api.ts"]
 
-FROM workspace AS renderer-deploy
+FROM urlx-production-install AS renderer-deploy
 RUN pnpm --filter @urlx/conversion-renderer deploy --prod --legacy /out/conversion-renderer
 
-FROM workspace AS migrator-deploy
+FROM urlx-production-install AS migrator-deploy
 RUN pnpm --filter @urlx/db deploy --prod --legacy /out/migrator
 
 FROM oven/bun:1.4.4-debian AS bun-runtime
