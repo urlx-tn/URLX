@@ -40,7 +40,7 @@
 		"dev": "pnpm --filter web dev:bare",
 		"build": "turbo run build",
 		"check-types": "turbo run check-types",
-		"test": "turbo run test --concurrency=1",
+		"test": "bun test deploy/entrypoints/start-web.test.ts && turbo run test --concurrency=1",
 		"dev:web": "pnpm --filter web dev:bare",
 		"dev:api": "pnpm --filter server exec bun src/main-api.ts",
 		"dev:conversion": "pnpm --filter server exec bun src/main-conversion.ts",

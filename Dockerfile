@@ -13,17 +13,20 @@ RUN pnpm install --frozen-lockfile --filter-prod 'web...' \
 	&& pnpm --filter web build \
 	&& pnpm --filter web deploy --prod --legacy /out/web
 
-FROM oven/bun:1.4.4-debian AS web
+FROM oven/bun:1.4.4-distroless@sha256:153a951ae40106e125898103e6e990ee0f38e6aee7f561029e26cf9fbed23470 AS bun-distroless
+ENV HOME=/tmp
+ENTRYPOINT []
+
+FROM bun-distroless AS web
 WORKDIR /app
 ENV HOST=0.0.0.0 PORT=8080 NODE_ENV=production
-COPY --from=web-build --chown=bun:bun /out/web/ ./
-COPY --from=web-build --chown=bun:bun /workspace/apps/web/dist/ ./dist/
-COPY --from=workspace --chown=bun:bun /workspace/deploy/entrypoints/check-egress-policy.ts /app/check-egress-policy.ts
-COPY --from=workspace --chown=bun:bun /workspace/deploy/entrypoints/start-web.sh /usr/local/bin/start-urlx-web
-RUN chmod 0555 /usr/local/bin/start-urlx-web
-USER bun
+COPY --from=web-build --chown=1000:1000 /out/web/ ./
+COPY --from=web-build --chown=1000:1000 /workspace/apps/web/dist/ ./dist/
+COPY --from=workspace --chown=1000:1000 /workspace/deploy/entrypoints/check-egress-policy.ts /app/check-egress-policy.ts
+COPY --from=workspace --chown=1000:1000 /workspace/deploy/entrypoints/start-web.ts /app/start-web.ts
+USER 1000:1000
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/start-urlx-web"]
+ENTRYPOINT ["/usr/local/bin/bun", "/app/start-web.ts"]
 CMD ["bun", "./dist/server/entry.mjs"]
 
 FROM workspace AS urlx-production-install
@@ -35,11 +38,11 @@ RUN pnpm install --frozen-lockfile --prod \
 FROM urlx-production-install AS server-deploy
 RUN pnpm --filter server deploy --prod --legacy /out/server
 
-FROM oven/bun:1.4.4-debian AS server
+FROM bun-distroless AS server
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=server-deploy --chown=bun:bun /out/server/ ./
-USER bun
+ENV NODE_ENV=production HOME=/tmp
+COPY --from=server-deploy --chown=1000:1000 /out/server/ ./
+USER 1000:1000
 CMD ["bun", "src/main-api.ts"]
 
 FROM urlx-production-install AS renderer-deploy
@@ -59,9 +62,9 @@ USER pwuser
 EXPOSE 3100
 CMD ["bun", "src/main.ts"]
 
-FROM oven/bun:1.4.4-debian AS migrator
+FROM bun-distroless AS migrator
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=migrator-deploy --chown=bun:bun /out/migrator/ ./
-USER bun
+ENV NODE_ENV=production HOME=/tmp
+COPY --from=migrator-deploy --chown=1000:1000 /out/migrator/ ./
+USER 1000:1000
 CMD ["bun", "run", "db:migrate"]

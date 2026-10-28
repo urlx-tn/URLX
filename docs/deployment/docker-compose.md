@@ -82,6 +82,47 @@ The egress image refreshes the Ubuntu Noble Squid package at build time and
 fails the build below version `6.14-0ubuntu0.24.04.5`, Canonical's fixed
 security floor for the proxy. Run the image package audit after building it.
 
+### Proxy base-image advisory disposition (R9 scan)
+
+This Candidate R9 review is tied to proxy image digest
+`sha256:6883a44bca237ec3bdfa4b1386a41523bd4c887f792ec90f836573377ab65996`
+and its local, report-only scan snapshot (not shipped with this repository).
+The companion `proxy-advisory-review.md` is also report-only and untracked.
+The scan completed at
+`2026-10-28T10:13:10Z`; its receipt records 136 OS packages and 37
+vulnerability rows (0 critical, 0 high, 27 medium, 10 low) that deduplicate to
+27 CVEs. The report SHA-256 is
+`aef5edf920602c49ab96a442a31f85d38aa5975ec152d2793916f1ec90b7ca8b`. The
+proxy scan's Ubuntu package versions are not interchangeable with the Debian
+13 package versions in the core-image HIGH findings. The following
+dispositions use Canonical and upstream records; they do not suppress scanner
+output or declare the image vulnerability-free. For every release, rebuild,
+record and scan the resulting image digest, then review the package inventory
+and current vendor advisory status again; do not carry these Candidate R9
+results forward to a different digest.
+
+| CVE | Proxy package version | Vendor/upstream disposition | Proxy runtime relevance |
+| --- | --- | --- | --- |
+| [CVE-2025-69720](https://ubuntu.com/security/CVE-2025-69720) | `ncurses-bin` / `libtinfo6` `6.4+20240113-1ubuntu2.2` | Ubuntu Noble is fixed from `6.4+20240113-1ubuntu2.1`. The defect is in the `infocmp` command parser. | `infocmp` is installed, but this image has Ubuntu's fixed package revision. The Debian 13 scan's affected version does not describe this Ubuntu package. |
+| [CVE-2026-16742](https://ubuntu.com/security/CVE-2026-16742) | `systemd` / libraries `255.4-1ubuntu8.18` | Ubuntu Noble is fixed from `255.4-1ubuntu8.17`. The flaw is in `systemd-homed`. | No `systemd-homed` package/service is in the proxy inventory. The entrypoint runs Squid directly as UID 13; it does not start systemd as PID 1. |
+| [CVE-2026-54369](https://ubuntu.com/security/CVE-2026-54369) | `libacl1` `2.3.2-1build1.1` | **Unresolved.** Canonical marks Noble `Ignored — backport too intrusive`; upstream's fix adds pathname-relative `acl_*_at()` APIs. This is not a fixed or not-affected determination. | `libacl.so` is installed. The described escalation requires a local attacker-controlled pathname component processed by a privileged caller. UID 13, read-only rootfs, dropped capabilities, and `no-new-privileges` reduce impact, but do not patch the library or prove all callers unreachable. |
+| [CVE-2026-76642](https://ubuntu.com/security/CVE-2026-76642) | `util-linux`, `mount`, `libmount1` `2.39.3-9ubuntu6.6` | **Unresolved upstream/vendor assessment.** [Upstream](https://github.com/util-linux/util-linux/security/advisories/GHSA-m25x-3hj9-m26f) lists versions through `2.42.2` as affected and fixes at `2.41.6` / `2.42.3`; Canonical Noble is `Needs evaluation`. | Requires a privileged mount helper plus configured `X-mount.idmap` or `X-mount.owner` post-hook. The proxy runs as UID 13, does not call `mount`, has no writable rootfs/fstab, drops all capabilities, and Compose enables `no-new-privileges`, which blocks SUID privilege gain. This is a strong runtime constraint, not a package fix. |
+| [CVE-2026-78408](https://ubuntu.com/security/CVE-2026-78408) | `util-linux` `2.39.3-9ubuntu6.6` | Canonical Noble is `Needs evaluation`; [upstream](https://github.com/util-linux/util-linux/security/advisories/GHSA-55fx-f4gg-cfhj) lists affected versions `>=2.40`. Installed `2.39.3` is below that upstream minimum. Keep Canonical's status unresolved; the upstream range alone does not establish Ubuntu's package status. | Requires a privileged operator to invoke `nsenter --join-cgroup` against an attacker-controlled target. The proxy lifecycle does not invoke `nsenter`. |
+| [CVE-2026-78409](https://ubuntu.com/security/CVE-2026-78409) | `util-linux` `2.39.3-9ubuntu6.6` | Canonical Noble is `Needs evaluation`; [upstream](https://github.com/util-linux/util-linux/security/advisories/GHSA-8f2p-47x3-43mv) lists affected versions `>=2.42`. Installed `2.39.3` is below that upstream minimum. Keep Canonical's status unresolved; the upstream range alone does not establish Ubuntu's package status. | Also requires Linux 6.15 or later and an fstab-authorized `X-mount.subdir` entry. URLX does not configure such an entry in the image or Compose. Host-kernel applicability is not inferred from the image scan. |
+| [CVE-2026-78410](https://ubuntu.com/security/CVE-2026-78410) | `util-linux`, `mount`, `libmount1` `2.39.3-9ubuntu6.6` | **Unresolved upstream/vendor assessment.** [Upstream](https://github.com/util-linux/util-linux/security/advisories/GHSA-rh77-686x-2f2m) lists versions through `2.42.2` as affected and fixes at `2.41.6` / `2.42.3`; Canonical Noble is `Needs evaluation`. | Requires restricted SUID `mount(8)`, an fstab-authorized bind entry, an attacker-replaceable source path, and an `X-mount.owner/group/mode` hook. URLX does not configure such an entry; read-only rootfs and `no-new-privileges` constrain this path, but do not update util-linux. |
+| [CVE-2026-9538](https://ubuntu.com/security/CVE-2026-9538) | `perl`, `perl-base`, `perl-modules-5.38` `5.38.2-3.2ubuntu0.6` | Ubuntu Noble is fixed from `5.38.2-3.2ubuntu0.4`. The issue is memory exhaustion in `Archive::Tar` on an attacker-controlled tar header. | Perl is installed, but the proxy image has the vendor-fixed revision. The Debian 13 finding is not the Ubuntu package status. |
+
+The live Compose proxy service is configured as `proxy:proxy` (UID/GID 13),
+with a read-only root filesystem, bounded writable tmpfs mounts, all Linux
+capabilities dropped, and `no-new-privileges`; its entrypoint executes
+`squid -N`. These controls reduce the practical reachability of local privilege
+escalation paths; they do not change package advisory status, protect a
+different runtime configuration, or establish that every library call is
+unreachable. In particular, keep ACL and the util-linux advisories above
+unresolved until Canonical publishes an affected/fixed assessment or the image
+is changed through a separately reviewed package-minimization/rebase. Do not
+describe a zero-HIGH Trivy result as a clean or cleared image.
+
 Chromium runs as the image's non-root `pwuser` with its sandbox enabled. The
 renderer uses the [Playwright v1.64.1 seccomp profile](https://github.com/microsoft/playwright/blob/v1.64.1/utils/docker/seccomp_profile.json),
 which retains the default-deny syscall policy and adds the user-namespace
