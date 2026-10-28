@@ -145,7 +145,14 @@ Python 3, and a Linux kernel with nftables bridge conntrack support. Do not
 start this stack on a public host until the host rules, Squid ACLs, and renderer
 network isolation have been verified from the test environment.
 
-Build images, then prepare the host gate:
+The PostgreSQL image is derived from the official `postgres:18.6-alpine3.24`
+manifest pinned by digest in its Dockerfile. It upgrades only `brotli-libs` and
+`libcurl` from Alpine v3.24 and checks their fixed-version floors; PostgreSQL
+remains 18.6 and keeps the official entrypoint and `/var/lib/postgresql` volume
+layout. The optional Caddy image is derived from the official
+`caddy:2.11.7-alpine` manifest pinned by digest and applies the equivalent
+package refresh on its Alpine v3.23 branch. Build the default images before
+preparing the host gate, which starts services with `--no-build`:
 
 ```bash
 pnpm containers:build
@@ -189,7 +196,8 @@ Keep the test overlay selected for every Compose lifecycle command by setting
 ```bash
 export COMPOSE_FILE=compose.yaml:compose.vps-test.yaml
 pnpm containers:preflight
-docker compose build web api conversion migrate egress-proxy
+docker compose build web api conversion migrate egress-proxy postgres
+docker compose --profile ingress build caddy  # only when using the Caddy profile
 sudo env URLX_COMPOSE_PROJECT=urlx-container-validation COMPOSE_FILE="$COMPOSE_FILE" pnpm egress:prepare
 docker compose ps --services
 docker compose logs --tail=100 egress-proxy api conversion web

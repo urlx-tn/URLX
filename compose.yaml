@@ -183,7 +183,9 @@ services:
   postgres:
     labels:
       com.urlx.stack: urlx
-    image: postgres:18.6-alpine3.24
+    image: urlx/postgres:18.6-alpine3.24-r1
+    build:
+      context: ./deploy/postgres
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:?Set POSTGRES_MEMORY_LIMIT in bytes}
     cpus: ${POSTGRES_CPU_LIMIT:?Set POSTGRES_CPU_LIMIT for this host}
@@ -285,7 +287,9 @@ services:
   caddy:
     labels:
       com.urlx.stack: urlx
-    image: caddy:2.11.7-alpine
+    image: urlx/caddy:2.11.7-alpine-r1
+    build:
+      context: ./deploy/caddy
     profiles: [ingress]
     restart: unless-stopped
     mem_limit: ${CADDY_MEMORY_LIMIT:?Set CADDY_MEMORY_LIMIT in bytes}
