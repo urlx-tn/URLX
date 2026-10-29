@@ -188,6 +188,53 @@ jobs:
           COMPOSE_PROJECT_NAME: urlx-ci
         run: docker compose build --pull web api conversion conversion-renderer migrate postgres egress-proxy
 
+      - name: Smoke test Squid startup with read-only root and bounded tmpfs
+        env:
+          COMPOSE_PROJECT_NAME: urlx-ci
+        run: |
+          set -euo pipefail
+          policy_dir="$(mktemp -d)"
+          container_name="urlx-ci-egress-proxy-pid-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+          cleanup() {
+            docker rm --force "$container_name" >/dev/null 2>&1 || true
+            rm -rf "$policy_dir"
+          }
+          trap cleanup EXIT
+          docker rm --force "$container_name" >/dev/null 2>&1 || true
+          chmod 0755 "$policy_dir"
+          printf '%s\n' '203.0.113.10' > "$policy_dir/host-denylist.txt"
+          chmod 0644 "$policy_dir/host-denylist.txt"
+
+          # Run Squid directly to isolate its runtime writes from the manifest wait.
+          # The network is disabled, and the read-only root/tmpfs settings match Compose.
+          docker run --detach --name "$container_name" --network none --read-only \
+            --mount "type=bind,src=$policy_dir,dst=/run/urlx-egress,readonly" \
+            --tmpfs /var/run/squid:size=8m,mode=0750,uid=13,gid=13 \
+            --tmpfs /var/cache/squid:size=16m,mode=0750,uid=13,gid=13 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --entrypoint squid urlx-ci-egress-proxy -N -f /etc/squid/squid.conf >/dev/null
+
+          for attempt in $(seq 1 20); do
+            if docker exec "$container_name" test -s /var/run/squid/squid.pid; then
+              break
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != true ]; then
+              docker logs "$container_name" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! docker exec "$container_name" sh -eu -c '
+            test -s /var/run/squid/squid.pid
+            pid="$(cat /var/run/squid/squid.pid)"
+            test "$pid" -gt 0
+            kill -0 "$pid"
+            test ! -e /run/squid.pid
+          '; then
+            docker logs "$container_name" >&2
+            exit 1
+          fi
+
       - name: Smoke test the distroless migrator entrypoint
         env:
           COMPOSE_PROJECT_NAME: urlx-ci
