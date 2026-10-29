@@ -36,6 +36,11 @@ KNOWN_SERVICES = {
 	"migrate",
 }
 REQUIRED_RUNNING_SERVICES = {"web", "api", "conversion", "egress-proxy", "postgres", "valkey"}
+HOST_INGRESS_PORTS = {"web": 8080, "api": 8787, "conversion": 8788}
+
+
+def host_ingress_network_name() -> str:
+	return f"{COMPOSE_PROJECT}_host-ingress"
 
 
 def run(*args: str) -> str:
@@ -396,6 +401,8 @@ def service_info(service: str) -> dict:
 		if ipaddress.ip_address(ip).version != 4:
 			raise RuntimeError(f"IPv6 container address is not enabled for {service}")
 		network = inspect_network(network_id)
+		if network.get("Id") != network_id:
+			raise RuntimeError(f"Docker returned the wrong URLX network identity for {network_name}")
 		if network.get("EnableIPv6"):
 			raise RuntimeError(f"IPv6 must be disabled on URLX network {network_name}")
 		networks[network_id] = {
@@ -403,7 +410,12 @@ def service_info(service: str) -> dict:
 			"ip": ip,
 			"mac": mac,
 			"name": network_name,
+			"actualName": network.get("Name"),
 			"internal": bool(network.get("Internal")),
+			"ipv6": bool(network.get("EnableIPv6")),
+			"driver": network.get("Driver"),
+			"labels": network.get("Labels") or {},
+			"members": sorted((network.get("Containers") or {}).keys()),
 			"bridge": network.get("Options", {}).get("com.docker.network.bridge.name")
 			or f"br-{network_id[:12]}",
 		}
@@ -416,6 +428,137 @@ def service_info(service: str) -> dict:
 		"netns": container_netns(container),
 		"networks": networks,
 	}
+
+
+def ingress_endpoint(service: dict, service_name: str) -> dict:
+	endpoints = [
+		endpoint
+		for endpoint in service["networks"].values()
+		if endpoint["name"] == host_ingress_network_name()
+	]
+	if len(endpoints) != 1:
+		raise RuntimeError(f"{service_name} must have exactly one URLX host-ingress endpoint")
+	return endpoints[0]
+
+
+def assert_host_ingress_contract(services: dict[str, dict]) -> None:
+	known_network_members: dict[str, dict[str, dict]] = {}
+	for service_name, service in services.items():
+		for network_id, endpoint in service["networks"].items():
+			known_network_members.setdefault(network_id, {})[service["containerId"]] = endpoint
+		ingress = [
+			endpoint
+			for endpoint in service["networks"].values()
+			if endpoint["name"] == host_ingress_network_name()
+		]
+		if service_name in HOST_INGRESS_PORTS:
+			if len(ingress) != 1:
+				raise RuntimeError(f"{service_name} must have exactly one URLX host-ingress endpoint")
+			network = ingress[0]
+			if (
+				network["internal"]
+				or network["ipv6"]
+				or network["driver"] != "bridge"
+				or network["actualName"] != host_ingress_network_name()
+				or network["labels"].get("com.docker.compose.project") != COMPOSE_PROJECT
+				or network["labels"].get("com.docker.compose.network") != "host-ingress"
+			):
+				raise RuntimeError("URLX host-ingress network is not the expected project-owned bridge")
+			if any(
+				endpoint is not network and not endpoint["internal"]
+				for endpoint in service["networks"].values()
+			):
+				raise RuntimeError(f"Service {service_name} has an unexpected external network")
+			assert_host_port_published(service_name, service)
+		else:
+			if ingress:
+				raise RuntimeError(f"Unexpected URLX host-ingress endpoint on {service_name}")
+			if service_name == "egress-proxy":
+				proxy_outbound = [
+					endpoint
+					for endpoint in service["networks"].values()
+					if endpoint["name"] == f"{COMPOSE_PROJECT}_proxy-outbound"
+				]
+				if (
+					len(proxy_outbound) != 1
+					or proxy_outbound[0]["internal"]
+					or proxy_outbound[0]["driver"] != "bridge"
+					or proxy_outbound[0]["ipv6"]
+					or proxy_outbound[0]["labels"].get("com.docker.compose.project") != COMPOSE_PROJECT
+					or proxy_outbound[0]["labels"].get("com.docker.compose.network") != "proxy-outbound"
+				):
+					raise RuntimeError("proxy-outbound must be the owned project bridge")
+			if any(not endpoint["internal"] for endpoint in service["networks"].values()):
+				if service_name != "egress-proxy":
+					raise RuntimeError(f"Service {service_name} has an unexpected external network")
+				for endpoint in service["networks"].values():
+					if not endpoint["internal"] and not (
+						endpoint["name"] == f"{COMPOSE_PROJECT}_proxy-outbound"
+						and endpoint["driver"] == "bridge"
+						and endpoint["labels"].get("com.docker.compose.project") == COMPOSE_PROJECT
+						and endpoint["labels"].get("com.docker.compose.network") == "proxy-outbound"
+					):
+						raise RuntimeError("Egress proxy has an unexpected external network")
+				if sum(not endpoint["internal"] for endpoint in service["networks"].values()) != 1:
+					raise RuntimeError("Egress proxy must have exactly one external network")
+	for service_name in HOST_INGRESS_PORTS:
+		if service_name not in services:
+			raise RuntimeError(f"Required published service is missing: {service_name}")
+	ingress_networks = {
+		ingress_endpoint(services[service_name], service_name)["networkId"]:
+		ingress_endpoint(services[service_name], service_name)
+		for service_name in HOST_INGRESS_PORTS
+	}
+	if len(ingress_networks) != 1:
+		raise RuntimeError("Published URLX services must share exactly one host-ingress network")
+	for network_id, endpoints in known_network_members.items():
+		actual_members = set(next(iter(endpoints.values()))["members"])
+		if actual_members != set(endpoints):
+			name = next(iter(endpoints.values()))["name"]
+			raise RuntimeError(f"URLX network {name} has unexpected container attachments")
+
+
+def assert_network_attachments_current(services: dict[str, dict]) -> None:
+	expected: dict[str, dict[str, dict]] = {}
+	for service in services.values():
+		for network_id, endpoint in service["networks"].items():
+			expected.setdefault(network_id, {})[service["containerId"]] = endpoint
+	for network_id, endpoints in expected.items():
+		inspected = inspect_network(network_id)
+		if inspected.get("Id") != network_id:
+			raise RuntimeError("URLX network identity changed while preparing the egress policy")
+		containers = inspected.get("Containers") or {}
+		if set(containers) != set(endpoints):
+			raise RuntimeError("URLX network attachments changed while preparing the egress policy")
+		for container_id, endpoint in endpoints.items():
+			member = containers[container_id]
+			address = member.get("IPv4Address", "").partition("/")[0]
+			if address != endpoint["ip"] or member.get("MacAddress", "").lower() != endpoint["mac"]:
+				raise RuntimeError("URLX network endpoint changed while preparing the egress policy")
+
+def assert_host_port_published(service_name: str, service: dict) -> None:
+	target = HOST_INGRESS_PORTS[service_name]
+	port_key = f"{target}/tcp"
+	bindings = service["container"].get("HostConfig", {}).get("PortBindings", {}).get(port_key)
+	published = service["container"].get("NetworkSettings", {}).get("Ports", {}).get(port_key)
+	if not isinstance(bindings, list) or len(bindings) != 1 or not isinstance(bindings[0], dict):
+		raise RuntimeError(f"{service_name} must configure exactly one loopback published port")
+	binding = bindings[0]
+	if binding.get("HostIp") != "127.0.0.1" or not str(binding.get("HostPort", "")).isdecimal():
+		raise RuntimeError(f"{service_name} published port must bind to 127.0.0.1")
+	if (
+		not isinstance(published, list)
+		or len(published) != 1
+		or not isinstance(published[0], dict)
+		or published[0].get("HostIp") != "127.0.0.1"
+		or published[0].get("HostPort") != binding["HostPort"]
+	):
+		raise RuntimeError(f"Docker did not publish {service_name} on the configured loopback port")
+	if (
+		set(service["container"].get("HostConfig", {}).get("PortBindings", {})) != {port_key}
+		or set(service["container"].get("NetworkSettings", {}).get("Ports", {})) != {port_key}
+	):
+		raise RuntimeError(f"{service_name} has unexpected published ports")
 
 
 def shared_networks(left: dict, right: dict) -> list[str]:
@@ -479,12 +622,24 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 		f"\tset urlx_blocked4 {{ type ipv4_addr; flags interval; elements = {{ {', '.join(blocked)} }} }}",
 		"\tchain input {",
 		"\t\ttype filter hook input priority -300; policy accept;",
-		"\t\tip saddr @urlx_containers drop",
-		"\t}",
-		"\tchain forward {",
-		"\t\ttype filter hook forward priority -300; policy accept;",
-		"\t\tct state established,related accept",
 	]
+	for service_name, port in HOST_INGRESS_PORTS.items():
+		if service_name not in services:
+			continue
+		endpoint = ingress_endpoint(services[service_name], service_name)
+		lines.append(
+			f"\t\tip saddr {endpoint['ip']} ether saddr {endpoint['mac']} "
+			f"tcp sport {port} ct direction reply ct state established,related accept"
+		)
+	lines.extend(
+		[
+			"\t\tip saddr @urlx_containers drop",
+			"\t}",
+			"\tchain forward {",
+			"\t\ttype filter hook forward priority -300; policy accept;",
+			"\t\tct state established,related accept",
+		]
+	)
 
 	allowed_edges = [
 		("web", "api", 8787),
@@ -506,8 +661,7 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 			source_endpoint = source["networks"][network_id]
 			target_endpoint = target["networks"][network_id]
 			if not source_endpoint["internal"] or not target_endpoint["internal"]:
-				if target_name != "egress-proxy":
-					raise RuntimeError(f"Unexpected non-internal service path: {source_name} -> {target_name}")
+				continue
 			lines.append(
 				f"\t\tip saddr {source_endpoint['ip']} ether saddr {source_endpoint['mac']} "
 				f"ip daddr {target_endpoint['ip']} ether daddr {target_endpoint['mac']} "
@@ -516,9 +670,17 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 
 	proxy = services["egress-proxy"]
 	proxy_outbound = [
-		endpoint for endpoint in proxy["networks"].values() if endpoint["name"].endswith("_proxy-outbound")
+		endpoint
+		for endpoint in proxy["networks"].values()
+		if endpoint["name"] == f"{COMPOSE_PROJECT}_proxy-outbound"
 	]
-	if len(proxy_outbound) != 1 or proxy_outbound[0]["internal"]:
+	if (
+		len(proxy_outbound) != 1
+		or proxy_outbound[0]["internal"]
+		or proxy_outbound[0]["driver"] != "bridge"
+		or proxy_outbound[0]["labels"].get("com.docker.compose.project") != COMPOSE_PROJECT
+		or proxy_outbound[0]["labels"].get("com.docker.compose.network") != "proxy-outbound"
+	):
 		raise RuntimeError("Egress proxy must have exactly one public proxy-outbound network")
 	proxy_endpoint = proxy_outbound[0]
 	lines.append(
@@ -633,24 +795,17 @@ def main() -> None:
 	check_active_project(args.project)
 	read_gate_owner(policy_dir, args.project)
 
-	for name, service in services.items():
-		if name == "egress-proxy":
-			continue
-		if any(not network["internal"] for network in service["networks"].values()):
-			raise RuntimeError(f"Service {name} has a non-internal external network")
-	for endpoint in services["egress-proxy"]["networks"].values():
-		if endpoint["name"].endswith("_proxy-outbound"):
-			continue
-		if not endpoint["internal"]:
-			raise RuntimeError("Egress proxy client networks must be internal")
+	assert_host_ingress_contract(services)
 
 	rules = make_rules(services, host_addresses)
 	for service in services.values():
 		assert_container_identity_current(service["container"])
+	assert_network_attachments_current(services)
 	rule_hash, install_marker = install_rules(rules)
 	try:
 		for service in services.values():
 			assert_container_identity_current(service["container"])
+		assert_network_attachments_current(services)
 	except Exception:
 		rollback_installed_rules(policy_dir, install_marker)
 		raise

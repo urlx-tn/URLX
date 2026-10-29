@@ -17,6 +17,72 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+def minimal_runtime_services() -> dict[str, dict]:
+	def network(network_id: str, name: str, address: str, mac: str, internal: bool) -> dict:
+		logical = name.removeprefix("urlx_")
+		return {
+			"networkId": network_id,
+			"ip": address,
+			"mac": mac,
+			"name": name,
+			"actualName": name,
+			"internal": internal,
+			"ipv6": False,
+			"driver": "bridge",
+			"labels": {
+				"com.docker.compose.project": "urlx",
+				"com.docker.compose.network": logical,
+			},
+			"members": [],
+		}
+
+	def service(name: str, letter: str, networks: dict, port: int | None = None) -> dict:
+		bindings = {}
+		published = {}
+		if port is not None:
+			key = f"{port}/tcp"
+			bindings[key] = [{"HostIp": "127.0.0.1", "HostPort": str(port)}]
+			published[key] = [{"HostIp": "127.0.0.1", "HostPort": str(port)}]
+		return {
+			"containerId": letter * 64,
+			"container": {
+				"Config": {"Labels": {"com.docker.compose.project": "urlx"}},
+				"HostConfig": {"PortBindings": bindings},
+				"NetworkSettings": {"Ports": published},
+			},
+			"networks": networks,
+		}
+
+	app = network("1" * 64, "urlx_app", "172.30.0.2", "02:42:ac:1e:00:02", True)
+	ingress = network(
+		"2" * 64, module.host_ingress_network_name(), "172.31.0.2", "02:42:ac:1f:00:02", False
+	)
+	web = service("web", "a", {app["networkId"]: app, ingress["networkId"]: ingress}, 8080)
+	api_ep = network("1" * 64, "urlx_app", "172.30.0.3", "02:42:ac:1e:00:03", True)
+	api_ingress = {**ingress, "ip": "172.31.0.3", "mac": "02:42:ac:1f:00:03"}
+	api = service("api", "b", {api_ep["networkId"]: api_ep, ingress["networkId"]: api_ingress}, 8787)
+	conversion_ep = network("1" * 64, "urlx_app", "172.30.0.4", "02:42:ac:1e:00:04", True)
+	conversion_ingress = {**ingress, "ip": "172.31.0.4", "mac": "02:42:ac:1f:00:04"}
+	conversion = service(
+		"conversion", "c", {conversion_ep["networkId"]: conversion_ep, ingress["networkId"]: conversion_ingress}, 8788
+	)
+	proxy_net = network("3" * 64, "urlx_web-egress", "172.32.0.2", "02:42:ac:20:00:02", True)
+	proxy_public = network(
+		"4" * 64, "urlx_proxy-outbound", "172.33.0.2", "02:42:ac:21:00:02", False
+	)
+	proxy = service("egress-proxy", "d", {proxy_net["networkId"]: proxy_net, proxy_public["networkId"]: proxy_public})
+	proxy_public["members"] = [proxy["containerId"]]
+	services = {"web": web, "api": api, "conversion": conversion, "egress-proxy": proxy}
+	for network_id in {key for item in services.values() for key in item["networks"]}:
+		member_ids = sorted(
+			item["containerId"] for item in services.values() if network_id in item["networks"]
+		)
+		for item in services.values():
+			if network_id in item["networks"]:
+				item["networks"][network_id]["members"] = member_ids
+	return services
+
+
 def owner_manifest(project: str) -> dict:
 	network = {
 		"networkId": "a" * 64,
@@ -76,6 +142,115 @@ class EgressAddressSetTests(unittest.TestCase):
 			),
 			["2001:db8::/32"],
 		)
+
+
+class HostIngressContractTests(unittest.TestCase):
+	def test_host_ingress_is_exactly_project_owned_and_attached_only_to_published_apps(self) -> None:
+		services = minimal_runtime_services()
+		module.assert_host_ingress_contract(services)
+
+		bad = minimal_runtime_services()
+		extra = dict(bad["api"]["networks"]["2" * 64])
+		extra["networkId"] = "5" * 64
+		extra["name"] = "urlx_untrusted"
+		extra["actualName"] = "urlx_untrusted"
+		extra["internal"] = False
+		extra["labels"] = {
+			"com.docker.compose.project": "other",
+			"com.docker.compose.network": "untrusted",
+		}
+		bad["api"]["networks"][extra["networkId"]] = extra
+		with self.assertRaisesRegex(RuntimeError, "unexpected external network"):
+			module.assert_host_ingress_contract(bad)
+
+		bad = minimal_runtime_services()
+		bad["egress-proxy"]["networks"][module.host_ingress_network_name()] = dict(
+			bad["web"]["networks"]["2" *  64]
+		)
+		with self.assertRaisesRegex(RuntimeError, "host-ingress endpoint"):
+			module.assert_host_ingress_contract(bad)
+
+		bad = minimal_runtime_services()
+		ingress = bad["web"]["networks"]["2" * 64]
+		ingress["members"] = sorted(ingress["members"] + ["9" * 64])
+		with self.assertRaisesRegex(RuntimeError, "unexpected container attachments"):
+			module.assert_host_ingress_contract(bad)
+
+		bad = minimal_runtime_services()
+		ingress = bad["web"]["networks"]["2" * 64]
+		ingress["labels"]["com.docker.compose.project"] = "other"
+		with self.assertRaisesRegex(RuntimeError, "project-owned bridge"):
+			module.assert_host_ingress_contract(bad)
+
+		bad = minimal_runtime_services()
+		bad["egress-proxy"]["networks"]["4" * 64]["members"].append("9" * 64)
+		with self.assertRaisesRegex(RuntimeError, "unexpected container attachments"):
+			module.assert_host_ingress_contract(bad)
+
+	def test_network_membership_is_rechecked_before_and_after_rule_install(self) -> None:
+		services = minimal_runtime_services()
+		members: dict[str, dict[str, dict]] = {}
+		for service in services.values():
+			for network_id, endpoint in service["networks"].items():
+				members.setdefault(network_id, {})[service["containerId"]] = {
+					"IPv4Address": f"{endpoint['ip']}/16",
+					"MacAddress": endpoint["mac"],
+				}
+		with patch.object(
+			module,
+			"inspect_network",
+			side_effect=lambda network_id: {"Id": network_id, "Containers": members[network_id]},
+		):
+			module.assert_network_attachments_current(services)
+
+		ingress_id = services["web"]["networks"]["2" * 64]["networkId"]
+		members[ingress_id]["9" * 64] = {
+			"IPv4Address": "172.31.0.9/16",
+			"MacAddress": "02:42:ac:1f:00:09",
+		}
+		with patch.object(
+			module,
+			"inspect_network",
+			side_effect=lambda network_id: {"Id": network_id, "Containers": members[network_id]},
+		):
+			with self.assertRaisesRegex(RuntimeError, "network attachments changed"):
+				module.assert_network_attachments_current(services)
+
+	def test_host_ingress_requires_docker_to_publish_only_exact_loopback_ports(self) -> None:
+		for mutation, message in (
+			(lambda service: service["container"]["NetworkSettings"]["Ports"].clear(), "did not publish"),
+			(lambda service: service["container"]["HostConfig"]["PortBindings"]["8787/tcp"][0].update(HostIp="0.0.0.0"), "127.0.0.1"),
+			(lambda service: service["container"]["HostConfig"]["PortBindings"].update({"9999/tcp": []}), "unexpected published ports"),
+		):
+			services = minimal_runtime_services()
+			mutation(services["api"])
+			with self.subTest(message=message), self.assertRaisesRegex(RuntimeError, message):
+				module.assert_host_ingress_contract(services)
+
+	def test_rules_allow_only_published_service_replies_and_drop_all_app_sources(self) -> None:
+		services = minimal_runtime_services()
+		module.assert_host_ingress_contract(services)
+		rules = module.make_rules(services, ["203.0.113.7"])
+		for address, mac, port in (
+			("172.31.0.2", "02:42:ac:1f:00:02", 8080),
+			("172.31.0.3", "02:42:ac:1f:00:03", 8787),
+			("172.31.0.4", "02:42:ac:1f:00:04", 8788),
+		):
+			self.assertIn(
+				f"ip saddr {address} ether saddr {mac} tcp sport {port} "
+				"ct direction reply ct state established,related accept",
+				rules,
+			)
+		self.assertIn("172.31.0.2, 172.31.0.3, 172.31.0.4", rules.split("chain input", 1)[0])
+		self.assertIn("chain input {\n\t\ttype filter hook input priority -300; policy accept;", rules)
+		input_rules = rules.split("\tchain forward {", 1)[0]
+		self.assertIn("ip saddr @urlx_containers drop", input_rules)
+		self.assertEqual(input_rules.count("ct direction reply"), 3)
+		self.assertNotIn("ct state new accept", input_rules)
+		forward = rules.split("\tchain forward {", 1)[1]
+		self.assertIn("ip saddr @urlx_containers drop", forward)
+		self.assertNotIn("ip saddr 172.31.0.2 ether saddr 02:42:ac:1f:00:02", forward)
+		self.assertIn("ip saddr 172.30.0.2 ether saddr 02:42:ac:1e:00:02 ip daddr 172.30.0.3", forward)
 
 
 class EgressProjectOwnershipTests(unittest.TestCase):

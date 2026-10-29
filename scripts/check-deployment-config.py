@@ -129,6 +129,56 @@ def require_valkey_runtime(service: dict[str, Any]) -> None:
 		raise ValueError("valkey /data tmpfs must be writable with mode 1777")
 
 
+def require_host_ingress_networks(
+	services: dict[str, Any], networks: dict[str, Any]
+) -> None:
+	def attached(service_name: str) -> set[str]:
+		value = services[service_name].get("networks")
+		if isinstance(value, dict):
+			return set(value)
+		if isinstance(value, list) and all(isinstance(name, str) for name in value):
+			return set(value)
+		raise ValueError(f"{service_name}.networks must be a resolved network map")
+
+	if not isinstance(networks, dict):
+		raise ValueError("Compose must define its private and host-ingress networks")
+	ingress = networks.get("host-ingress")
+	proxy_outbound = networks.get("proxy-outbound")
+	if (
+		not isinstance(ingress, dict)
+		or ingress.get("driver") != "bridge"
+		or ingress.get("internal") is True
+		or ingress.get("enable_ipv6") is not False
+		or ingress.get("external") is True
+	):
+		raise ValueError("host-ingress must be one project-owned non-internal IPv4 bridge")
+	if (
+		not isinstance(proxy_outbound, dict)
+		or proxy_outbound.get("driver") != "bridge"
+		or proxy_outbound.get("internal") is True
+		or proxy_outbound.get("enable_ipv6") is not False
+		or proxy_outbound.get("external") is True
+	):
+		raise ValueError("proxy-outbound must remain a project-owned bridge")
+	expected_ingress = {"web", "api", "conversion"}
+	for service_name in services:
+		memberships = attached(service_name)
+		if ("host-ingress" in memberships) != (service_name in expected_ingress):
+			raise ValueError("host-ingress may be attached only to web, api, and conversion")
+		if ("proxy-outbound" in memberships) != (service_name == "egress-proxy"):
+			raise ValueError("proxy-outbound may be attached only to egress-proxy")
+		external = {
+			name
+			for name in memberships
+			if name not in networks or networks[name].get("internal") is not True
+		}
+		expected = {"host-ingress"} if service_name in expected_ingress else set()
+		if service_name == "egress-proxy":
+			expected = {"proxy-outbound"}
+		if external != expected:
+			raise ValueError(f"{service_name} has an unexpected external Docker network")
+
+
 def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 	try:
 		all_services = config["services"]
@@ -172,6 +222,7 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 		missing = [name for name in required_services if name not in services]
 		if missing:
 			raise ValueError(f"Compose resource limits are missing services: {', '.join(missing)}")
+		require_host_ingress_networks(services, config.get("networks"))
 		require_postgres_tcp_healthcheck(services["postgres"])
 		require_valkey_runtime(services["valkey"])
 		published_ports = []

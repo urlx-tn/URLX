@@ -38,6 +38,7 @@ services:
     networks:
       - app
       - web-egress
+      - host-ingress
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -96,7 +97,7 @@ services:
         condition: service_healthy
       egress-proxy:
         condition: service_started
-    networks: [app, data, limits, api-egress]
+    networks: [app, data, limits, api-egress, host-ingress]
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -144,7 +145,7 @@ services:
         condition: service_started
       conversion-renderer:
         condition: service_started
-    networks: [app, limits, renderer-control, conversion-egress]
+    networks: [app, limits, renderer-control, conversion-egress, host-ingress]
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -335,3 +336,7 @@ networks:
     enable_ipv6: false
   proxy-outbound:
     driver: bridge
+    enable_ipv6: false
+  host-ingress:
+    driver: bridge
+    enable_ipv6: false

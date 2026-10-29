@@ -16,15 +16,20 @@ and cutover task.
 | `postgres` | PostgreSQL | Private data network; named persistent volume |
 | `valkey` | Valkey | Private rate-limit network; UID/GID 999:1000; no persistence |
 | `migrate` | Bun + Drizzle ORM | One-shot schema migration using `urlx_migrator` |
-| `egress-proxy` | Squid | Only service with an external Docker network |
+| `egress-proxy` | Squid | Only service with unrestricted outbound network access |
 
 Compose publishes only the web, API, and conversion upstreams on host loopback:
 `127.0.0.1:8080` to web `:8080`, `127.0.0.1:8787` to API `:8787`, and
 `127.0.0.1:8788` to conversion `:8788`. Host port numbers can be changed with
 `WEB_HOST_PORT`, `API_HOST_PORT`, and `CONVERSION_HOST_PORT`; Compose keeps the
-bind address fixed at `127.0.0.1`. Preflight rejects non-loopback bindings,
-incorrect targets, or extra published ports. Database, Valkey, renderer, and
-proxy ports remain unpublished.
+bind address fixed at `127.0.0.1`. A project-scoped, non-internal
+`host-ingress` bridge lets Docker realize these published ports. It is attached
+only to web, API, and conversion; their other networks remain private. The host
+egress gate verifies the bridge attachments and live loopback bindings, then
+drops all new traffic sourced by these containers on every network. It allows
+only established replies from the three published HTTP ports back to the host.
+Preflight rejects non-loopback bindings, incorrect targets, or extra published
+ports. Database, Valkey, renderer, and proxy ports remain unpublished.
 
 The independently managed host ingress owns routing and public TLS. Configure
 it with this route contract:

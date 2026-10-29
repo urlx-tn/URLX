@@ -65,8 +65,36 @@ def config(maxmemory: object = 80_000_000, memory_limit: object = 100_000_000) -
 		]
 	}
 	services["api"]["tmpfs"] = ["/tmp:size=64m,mode=1777"]
+	services["web"]["networks"] = {"app": {}, "web-egress": {}, "host-ingress": {}}
+	services["api"]["networks"] = {
+		"app": {}, "data": {}, "limits": {}, "api-egress": {}, "host-ingress": {}
+	}
+	services["conversion"]["networks"] = {
+		"app": {}, "limits": {}, "renderer-control": {}, "conversion-egress": {}, "host-ingress": {}
+	}
+	services["conversion-renderer"]["networks"] = {"renderer-control": {}, "renderer-egress": {}}
+	services["postgres"]["networks"] = {"data": {}}
+	services["valkey"]["networks"] = {"limits": {}}
+	services["migrate"]["networks"] = {"data": {}}
+	services["egress-proxy"]["networks"] = {
+		"proxy-outbound": {},
+		"api-egress": {},
+		"web-egress": {},
+		"conversion-egress": {},
+		"renderer-egress": {},
+	}
 	return {
-		"services": services
+		"services": services,
+		"networks": {
+			name: {"internal": True, "enable_ipv6": False}
+			for name in (
+				"app", "data", "limits", "renderer-control", "api-egress",
+				"web-egress", "conversion-egress", "renderer-egress",
+			)
+		} | {
+			"host-ingress": {"driver": "bridge", "enable_ipv6": False},
+			"proxy-outbound": {"driver": "bridge", "enable_ipv6": False},
+		},
 	}
 
 
@@ -151,6 +179,35 @@ class DeploymentConfigTests(unittest.TestCase):
 		bad["services"]["api"]["ports"][0]["host_ip"] = "0.0.0.0"
 		with self.assertRaisesRegex(ValueError, "127.0.0.1"):
 			module.validate_config(bad)
+
+	def test_host_ingress_is_project_bridge_attached_only_to_published_apps(self) -> None:
+		module.validate_config(config())
+		for mutate, message in (
+			(
+				lambda bad: bad["services"]["postgres"]["networks"].update({"host-ingress": {}}),
+				"host-ingress may be attached only",
+			),
+			(
+				lambda bad: bad["services"]["api"]["networks"].update({"untrusted": {}}),
+				"unexpected external Docker network",
+			),
+			(
+				lambda bad: bad["networks"]["host-ingress"].update({"internal": True}),
+				"host-ingress must be",
+			),
+			(
+				lambda bad: bad["networks"]["host-ingress"].update({"enable_ipv6": True}),
+				"host-ingress must be",
+			),
+			(
+				lambda bad: bad["services"]["egress-proxy"]["networks"].update({"host-ingress": {}}),
+				"host-ingress may be attached only",
+			),
+		):
+			bad = config()
+			mutate(bad)
+			with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+				module.validate_config(bad)
 
 	def test_rejects_wrong_upstream_target_or_additional_published_ports(self) -> None:
 		wrong_target = config()

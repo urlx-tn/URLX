@@ -188,6 +188,56 @@ jobs:
           COMPOSE_PROJECT_NAME: urlx-ci
         run: docker compose build --pull web api conversion conversion-renderer migrate postgres egress-proxy
 
+      - name: Smoke test Compose host-ingress port publication
+        env:
+          COMPOSE_PROJECT_NAME: urlx-ci-ingress-smoke
+        run: |
+          set -euo pipefail
+          smoke_compose="$(mktemp)"
+          cleanup() {
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$smoke_compose" down --remove-orphans >/dev/null 2>&1 || true
+            rm -f "$smoke_compose"
+          }
+          trap cleanup EXIT
+          cat > "$smoke_compose" <<'EOF'
+          name: urlx-ci-ingress-smoke
+          services:
+            api:
+              image: urlx-ci-api
+              entrypoint: ["/usr/local/bin/bun"]
+              command: ["-e", "Bun.serve({ hostname: '0.0.0.0', port: 8787, fetch: () => new Response('urlx-ingress-ok') })"]
+              ports:
+                - target: 8787
+                  published: "18787"
+                  host_ip: 127.0.0.1
+                  protocol: tcp
+              networks: [private, host-ingress]
+              read_only: true
+              tmpfs: ["/tmp:size=64m,mode=1777"]
+              cap_drop: [ALL]
+              security_opt: [no-new-privileges:true]
+          networks:
+            private:
+              internal: true
+              enable_ipv6: false
+            host-ingress:
+              driver: bridge
+              enable_ipv6: false
+          EOF
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$smoke_compose" up --detach
+          container_id="$(docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$smoke_compose" ps -q api)"
+          actual_binding="$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$container_id")"
+          jq -e '.["8787/tcp"] as $bindings | ($bindings | length == 1) and $bindings[0].HostIp == "127.0.0.1" and $bindings[0].HostPort == "18787"' <<<"$actual_binding"
+          for attempt in $(seq 1 15); do
+            if [[ "$(curl --silent --show-error --max-time 2 http://127.0.0.1:18787 2>/dev/null || true)" == "urlx-ingress-ok" ]]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$smoke_compose" logs >&2
+          echo "Compose did not publish the API on its loopback host-ingress bridge." >&2
+          exit 1
+
       - name: Smoke test Squid startup with read-only root and bounded tmpfs
         env:
           COMPOSE_PROJECT_NAME: urlx-ci
