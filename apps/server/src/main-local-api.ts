@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { createPgDb, createPgPool } from "@urlx/db";
@@ -58,7 +57,18 @@ if (
 )
 	throw new Error("Native API preview auth secret is missing or invalid");
 const local = createLocalDevRuntime(keyMaterial);
-const visitorKey = randomBytes(32);
+const visitorTokenKeyBase64 = required("URLX_LOCAL_VISITOR_TOKEN_KEY");
+const visitorKey = Buffer.from(visitorTokenKeyBase64, "base64");
+if (
+	!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+		visitorTokenKeyBase64,
+	) ||
+	visitorKey.byteLength !== 32 ||
+	visitorKey.toString("base64") !== visitorTokenKeyBase64
+)
+	throw new Error(
+		"Native API visitor key must be a canonical base64 32-byte key",
+	);
 const visitorTokenKey = await crypto.subtle.importKey(
 	"raw",
 	visitorKey,
@@ -83,6 +93,9 @@ if (
 	);
 const capturePath = resolve(captureDirectory, "magic-link.json");
 await mkdir(captureDirectory, { recursive: true });
+const nativeFetch = globalThis.fetch;
+const proxyToken = required("URLX_LOCAL_PROXY_TOKEN");
+const proxyAuthorization = `Basic ${Buffer.from(`urlx-local:${proxyToken}`).toString("base64")}`;
 
 // Resend's SDK uses fetch. The native preview intercepts only its exact
 // endpoint, permits one synthetic address, stores the one-time URL privately,
@@ -126,16 +139,27 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof fetch;
 
 const db = createPgDb(pool);
-const unavailableMetadataFetcher: ApiAppBindings["METADATA_FETCHER"] =
-	async () => {
-		throw new Error("Metadata fetching is disabled in native local preview");
-	};
+const metadataFetcher: ApiAppBindings["METADATA_FETCHER"] = (input, init) =>
+	nativeFetch(input, {
+		...init,
+		proxy: {
+			url: "http://127.0.0.1:8789",
+			headers: { "Proxy-Authorization": proxyAuthorization },
+			respectNoProxy: false,
+		},
+	} as RequestInit & {
+		proxy: {
+			url: string;
+			headers: Record<string, string>;
+			respectNoProxy: false;
+		};
+	}) as Promise<Response>;
 const bindings: ApiAppBindings = {
 	DB: db,
 	AUTH_SECONDARY_STORAGE: local.authStorage,
 	VISITOR_TOKEN_KEY: visitorTokenKey,
 	CORS_ORIGIN: webOrigin,
-	METADATA_FETCHER: unavailableMetadataFetcher,
+	METADATA_FETCHER: metadataFetcher,
 	METADATA_IP_RATE_LIMIT: local.limiters.metadataIp,
 	METADATA_VISITOR_RATE_LIMIT: local.limiters.metadataVisitor,
 	FORMS_RENDER_RATE_LIMIT: local.limiters.formsRender,

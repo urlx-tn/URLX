@@ -97,6 +97,8 @@ export function createLocalDevRuntime(keyMaterial: string, now = Date.now) {
 		limiters: {
 			metadataIp: limiter(rateLimitPolicy.metadataIp),
 			metadataVisitor: limiter(rateLimitPolicy.metadataVisitor),
+			conversionIp: limiter(rateLimitPolicy.conversionIp),
+			conversionVisitor: limiter(rateLimitPolicy.conversionVisitor),
 			formsRender: limiter(rateLimitPolicy.formsRender),
 			formsSubmit: limiter(rateLimitPolicy.formsSubmit),
 		},

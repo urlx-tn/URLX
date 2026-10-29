@@ -27,6 +27,9 @@ const pgData = path.join(localData, "postgresql-utf8");
 const pgPort = 5433;
 const webPort = 4321;
 const apiPort = 8787;
+const conversionPort = 8788;
+const proxyPort = 8789;
+const rendererPort = 8790;
 const children = new Set();
 let postgresStarted = false;
 let shuttingDown = false;
@@ -330,6 +333,25 @@ async function requireFreePort(port) {
 		);
 }
 
+async function waitForTcp(port, timeoutMs = 30_000) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const connected = await new Promise((resolve) => {
+			const socket = net.connect(port, "127.0.0.1");
+			socket.once("connect", () => {
+				socket.destroy();
+				resolve(true);
+			});
+			socket.once("error", () => resolve(false));
+		});
+		if (connected) return;
+		await new Promise((resolve) => setTimeout(resolve, 300));
+	}
+	throw new Error(
+		`Local preview service did not become ready on 127.0.0.1:${port}`,
+	);
+}
+
 async function shutdown(exitCode = 0) {
 	if (shuttingDown) return;
 	shuttingDown = true;
@@ -368,6 +390,9 @@ process.once("SIGTERM", () => void shutdown(0));
 
 try {
 	await requireFreePort(apiPort);
+	await requireFreePort(conversionPort);
+	await requireFreePort(proxyPort);
+	await requireFreePort(rendererPort);
 	await requireFreePort(webPort);
 	pgBin = await findPostgresBin();
 	const pg = await setupPostgres(pgBin);
@@ -381,15 +406,34 @@ try {
 		MIGRATOR_DATABASE_URL: migratorUrl,
 	};
 	await run("bun", ["packages/db/scripts/migrate.ts"], { env: privateEnv });
-	const apiEnv = {
+	const proxyToken = randomSecret();
+	const rendererToken = randomSecret();
+	const visitorTokenKey = randomBytes(32).toString("base64");
+	const localEnv = {
 		...privateEnv,
+		URLX_LOCAL_PROXY_TOKEN: proxyToken,
+		URLX_LOCAL_RENDERER_TOKEN: rendererToken,
+		URLX_LOCAL_VISITOR_TOKEN_KEY: visitorTokenKey,
+		URLX_LOCAL_WEB_ORIGIN: `http://127.0.0.1:${webPort}`,
+	};
+	start(
+		process.execPath,
+		[path.join(root, "scripts", "local-public-proxy.mjs")],
+		localEnv,
+	);
+	await waitForTcp(proxyPort);
+	start("bun", ["apps/conversion-renderer/src/main-local.ts"], localEnv);
+	await waitForHttp(`http://127.0.0.1:${rendererPort}/healthz`);
+	start("bun", ["apps/server/src/main-local-conversion.ts"], localEnv);
+	await waitForTcp(conversionPort);
+	const apiEnv = {
+		...localEnv,
 		PORT: String(apiPort),
 		URLX_LOCAL_PREVIEW_KEY: randomSecret(),
 		URLX_LOCAL_AUTH_SECRET: randomSecret(),
 		URLX_LOCAL_PREVIEW_DIR: previewRun,
 		LOCALAPPDATA:
 			process.env.LOCALAPPDATA || path.join(homedir(), "AppData", "Local"),
-		URLX_LOCAL_WEB_ORIGIN: `http://127.0.0.1:${webPort}`,
 	};
 	const api = start("bun", ["apps/server/src/main-local-api.ts"], apiEnv);
 	await waitForHttp(`http://127.0.0.1:${apiPort}/healthz`);
@@ -427,7 +471,7 @@ try {
 		`Magic-link capture: ${path.join(previewRun, "magic-link.json")}`,
 	);
 	console.info(
-		"Metadata fetch and conversion are disabled in native local preview; production Valkey/nftables startup is unchanged.",
+		"Metadata and conversion use the native public-only proxy; production Valkey/nftables startup is unchanged.",
 	);
 	await new Promise((resolve) => {
 		api.once("exit", resolve);

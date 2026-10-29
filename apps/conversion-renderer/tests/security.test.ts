@@ -29,6 +29,7 @@ describe("isolated conversion renderer security boundary", () => {
 		"http://database/",
 		"http://2130706433/",
 		"http://0x7f000001/",
+		"http://255.255.255.255/",
 		"file:///etc/passwd",
 	])("blocks unsafe browser destination %s", (url) => {
 		expect(isUnsafeRequestUrl(url)).toBe(true);
