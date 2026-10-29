@@ -9,6 +9,7 @@ import ipaddress
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -164,6 +165,49 @@ def inspect_network(network_id: str) -> dict:
 	return json.loads(run("docker", "network", "inspect", network_id))[0]
 
 
+def container_netns(container: dict) -> str:
+	"""Read a container's network namespace through the host procfs safely."""
+	container_id = container.get("Id", "")
+	state = container.get("State", {})
+	pid = state.get("Pid")
+	started_at = state.get("StartedAt")
+	if (
+		not re.fullmatch(r"[a-f0-9]{64}", container_id)
+		or state.get("Running") is not True
+		or not isinstance(pid, int)
+		or isinstance(pid, bool)
+		or pid <= 0
+		or not started_at
+	):
+		raise RuntimeError("Cannot identify the running URLX container network namespace")
+
+	netns = os.readlink(f"/proc/{pid}/ns/net")
+	if not re.fullmatch(r"net:\[\d+\]", netns):
+		raise RuntimeError("Host returned an invalid container network namespace identity")
+
+	# The PID can disappear or be reused while procfs is read. Docker's start
+	# timestamp and PID must still identify the same running container afterward.
+	assert_container_identity_current(container)
+	return netns
+
+
+def assert_container_identity_current(container: dict) -> None:
+	container_id = container.get("Id", "")
+	state = container.get("State", {})
+	inspected = json.loads(run("docker", "inspect", container_id))
+	if not isinstance(inspected, list) or len(inspected) != 1:
+		raise RuntimeError("Docker did not return the expected URLX container identity")
+	latest = inspected[0]
+	latest_state = latest.get("State", {})
+	if (
+		latest.get("Id") != container_id
+		or latest_state.get("Running") is not True
+		or latest_state.get("Pid") != state.get("Pid")
+		or latest_state.get("StartedAt") != state.get("StartedAt")
+	):
+		raise RuntimeError("URLX container changed while preparing its network policy")
+
+
 def assert_service_identity(service_name: str, container: dict) -> None:
 	labels = container.get("Config", {}).get("Labels", {})
 	if (
@@ -243,7 +287,7 @@ def service_info(service: str) -> dict:
 		"container": container,
 		"containerId": container_id,
 		"hostname": container["Config"].get("Hostname", ""),
-		"netns": run("docker", "exec", container_id, "readlink", "/proc/self/ns/net"),
+		"netns": container_netns(container),
 		"networks": networks,
 	}
 
@@ -349,14 +393,37 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 	return "\n".join(lines) + "\n"
 
 
-def install_rules(rules: str) -> str:
+def install_rules(rules: str) -> tuple[str, str]:
+	marker = f"urlx-egress-gate-{secrets.token_hex(16)}"
+	rules = rules.replace(
+		"table bridge urlx_egress {",
+		f'table bridge urlx_egress {{\n\tcomment "{marker}";',
+		1,
+	)
+	if marker not in rules:
+		raise RuntimeError("Could not mark URLX egress table ownership")
 	try:
 		run("nft", "list", "table", "bridge", "urlx_egress")
 		rules = "delete table bridge urlx_egress\n" + rules
 	except subprocess.CalledProcessError:
 		pass
 	subprocess.run(["nft", "-f", "-"], input=rules, text=True, check=True)
-	return hashlib.sha256(rules.encode("utf-8")).hexdigest()
+	return hashlib.sha256(rules.encode("utf-8")).hexdigest(), marker
+
+
+def rollback_installed_rules(policy_dir: Path, marker: str) -> None:
+	"""Remove only the table from this install and invalidate its readiness."""
+	try:
+		try:
+			table = run("nft", "list", "table", "bridge", NFT_TABLE)
+		except subprocess.CalledProcessError:
+			table = ""
+		marker_comment = re.compile(rf'\bcomment\s+"{re.escape(marker)}"\s*;')
+		if marker_comment.search(table):
+			run("nft", "delete", "table", "bridge", NFT_TABLE)
+	finally:
+		for name in ("ready.json", "ready.json.tmp"):
+			(policy_dir / name).unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -429,7 +496,15 @@ def main() -> None:
 			raise RuntimeError("Egress proxy client networks must be internal")
 
 	rules = make_rules(services, host_addresses)
-	rule_hash = install_rules(rules)
+	for service in services.values():
+		assert_container_identity_current(service["container"])
+	rule_hash, install_marker = install_rules(rules)
+	try:
+		for service in services.values():
+			assert_container_identity_current(service["container"])
+	except Exception:
+		rollback_installed_rules(policy_dir, install_marker)
+		raise
 
 	manifest = {
 		"policyVersion": 1,

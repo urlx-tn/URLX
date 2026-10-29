@@ -151,7 +151,10 @@ in the local browser-enabled test environment; the VPS application test overlay
 does not run Chromium. Do not switch the browser to `--no-sandbox`.
 
 The host setup helper derives the live container IDs, network IDs, IP/MAC
-addresses, and network namespace identities. It adds rules in the dedicated
+addresses, and network namespace identities. It reads each namespace through
+the host's `/proc/<Docker State.Pid>/ns/net` and rechecks the container ID,
+running state, PID, and start time, so runtime images need no inspection
+utilities. It adds rules in the dedicated
 `bridge urlx_egress` nftables table and writes a readiness manifest atomically.
 It does not edit the host's unrelated firewall tables or sysctls. The API,
 conversion, web, renderer, and proxy processes wait without opening listeners

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,121 @@ spec.loader.exec_module(module)
 
 
 class EgressProjectOwnershipTests(unittest.TestCase):
+	def test_container_netns_uses_host_procfs_and_revalidates_docker_state(self) -> None:
+		container = {
+			"Id": "a" * 64,
+			"State": {"Running": True, "Pid": 4321, "StartedAt": "2026-10-29T12:00:00Z"},
+		}
+		with patch.object(module.os, "readlink", return_value="net:[4026533001]") as readlink:
+			with patch.object(module, "run", return_value=json.dumps([container])) as run:
+				self.assertEqual(module.container_netns(container), "net:[4026533001]")
+		readlink.assert_called_once_with("/proc/4321/ns/net")
+		run.assert_called_once_with("docker", "inspect", "a" * 64)
+
+	def test_container_netns_fails_closed_on_state_change_or_invalid_identity(self) -> None:
+		container = {
+			"Id": "b" * 64,
+			"State": {"Running": True, "Pid": 4321, "StartedAt": "2026-10-29T12:00:00Z"},
+		}
+		changed = {
+			"Id": "b" * 64,
+			"State": {"Running": True, "Pid": 9876, "StartedAt": "2026-10-29T12:00:01Z"},
+		}
+		with patch.object(module.os, "readlink", return_value="net:[4026533001]"):
+			with patch.object(module, "run", return_value=json.dumps([changed])):
+				with self.assertRaisesRegex(RuntimeError, "changed while preparing"):
+					module.container_netns(container)
+		stopped = {"Id": "b" * 64, "State": {"Running": False, "Pid": 0}}
+		with patch.object(module.os, "readlink") as readlink:
+			with self.assertRaisesRegex(RuntimeError, "Cannot identify"):
+				module.container_netns(stopped)
+		readlink.assert_not_called()
+		missing_pid = {
+			"Id": "b" * 64,
+			"State": {"Running": True, "Pid": 0, "StartedAt": "2026-10-29T12:00:00Z"},
+		}
+		with self.assertRaisesRegex(RuntimeError, "Cannot identify"):
+			module.container_netns(missing_pid)
+		with patch.object(module.os, "readlink", return_value="not-a-netns"):
+			with self.assertRaisesRegex(RuntimeError, "invalid container network namespace"):
+				module.container_netns(container)
+		with patch.object(module.os, "readlink", side_effect=OSError("procfs unavailable")):
+			with self.assertRaisesRegex(OSError, "procfs unavailable"):
+				module.container_netns(container)
+
+	def test_late_container_identity_check_detects_restart(self) -> None:
+		container = {
+			"Id": "c" * 64,
+			"State": {"Running": True, "Pid": 4321, "StartedAt": "2026-10-29T12:00:00Z"},
+		}
+		changed = {
+			"Id": "c" * 64,
+			"State": {"Running": True, "Pid": 4321, "StartedAt": "2026-10-29T12:00:01Z"},
+		}
+		with patch.object(module, "run", return_value=json.dumps([changed])):
+			with self.assertRaisesRegex(RuntimeError, "changed while preparing"):
+				module.assert_container_identity_current(container)
+		with patch.object(module, "run", return_value="[]"):
+			with self.assertRaisesRegex(RuntimeError, "expected URLX container identity"):
+				module.assert_container_identity_current(container)
+
+	def test_rollback_deletes_only_its_marked_table_and_invalidates_readiness(self) -> None:
+		marker = "urlx-egress-gate-test-marker"
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready = policy_dir / "ready.json"
+			ready.write_text("stale readiness")
+			with patch.object(module, "run", return_value=f'table bridge urlx_egress {{ comment "{marker}"; }}') as run:
+				module.rollback_installed_rules(policy_dir, marker)
+			self.assertFalse(ready.exists())
+			run.assert_any_call("nft", "delete", "table", "bridge", module.NFT_TABLE)
+
+	def test_install_rules_embeds_unique_comment_ownership_marker(self) -> None:
+		marker_suffix = "a1" * 16
+		with patch.object(module.secrets, "token_hex", return_value=marker_suffix):
+			with patch.object(module, "run", side_effect=subprocess.CalledProcessError(1, ["nft"])):
+				with patch.object(module.subprocess, "run") as nft_apply:
+					rule_hash, marker = module.install_rules("table bridge urlx_egress {\n}\n")
+		self.assertEqual(marker, f"urlx-egress-gate-{marker_suffix}")
+		self.assertRegex(rule_hash, r"^[a-f0-9]{64}$")
+		self.assertIn(f'comment "{marker}";', nft_apply.call_args.kwargs["input"])
+
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready = policy_dir / "ready.json"
+			ready.write_text("stale readiness")
+			with patch.object(module, "run", return_value=f'table bridge urlx_egress {{ comment "foreign-{marker}"; }}') as run:
+				module.rollback_installed_rules(policy_dir, marker)
+			self.assertFalse(ready.exists())
+			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready = policy_dir / "ready.json"
+			ready.write_text("stale readiness")
+			with patch.object(
+				module,
+				"run",
+				side_effect=subprocess.CalledProcessError(1, ["nft"]),
+			) as run:
+				module.rollback_installed_rules(policy_dir, marker)
+			self.assertFalse(ready.exists())
+			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready = policy_dir / "ready.json"
+			ready.write_text("stale readiness")
+			with patch.object(
+				module,
+				"run",
+				side_effect=[f'table bridge urlx_egress {{ comment "{marker}"; }}', subprocess.CalledProcessError(1, ["nft"])],
+			) as run:
+				with self.assertRaises(subprocess.CalledProcessError):
+					module.rollback_installed_rules(policy_dir, marker)
+			self.assertFalse(ready.exists())
+			run.assert_any_call("nft", "delete", "table", "bridge", module.NFT_TABLE)
+
 	def test_empty_startup_inventory_allows_bootstrap_and_post_start_core_check(self) -> None:
 		active_before_start = module.running_service_names("", require_core=False)
 		self.assertEqual(module.egress_clients_to_stop(active_before_start), [])
