@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import ipaddress
 import json
 import subprocess
 import tempfile
@@ -14,6 +15,38 @@ spec = importlib.util.spec_from_file_location("egress_gate", module_path)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+class EgressAddressSetTests(unittest.TestCase):
+	def test_blocked_ipv4_union_collapses_contained_hosts_and_keeps_public_hosts(self) -> None:
+		blocked = [
+			ipaddress.ip_network(value)
+			for value in module.blocked_ipv4_networks(
+				["127.0.0.1", "172.31.0.1", "192.168.20.1", "8.8.8.8", "2001:db8::1"]
+			)
+		]
+		self.assertFalse(
+			any(left.overlaps(right) for index, left in enumerate(blocked) for right in blocked[index + 1 :])
+		)
+		for address in ("127.0.0.1", "172.31.0.1", "192.168.20.1", "8.8.8.8"):
+			parsed = ipaddress.ip_address(address)
+			self.assertTrue(any(parsed in network for network in blocked), address)
+		self.assertIn("8.8.8.8/32", [str(network) for network in blocked])
+		self.assertNotIn("127.0.0.1/32", [str(network) for network in blocked])
+
+	def test_canonicalization_merges_adjacent_and_nested_ipv4_and_ipv6_networks(self) -> None:
+		self.assertEqual(
+			module.canonicalize_ip_networks(
+				["198.0.0.0/16", "198.1.0.0/16", "198.0.4.1/32"]
+			),
+			["198.0.0.0/15"],
+		)
+		self.assertEqual(
+			module.canonicalize_ip_networks(
+				["2001:db8::/33", "2001:db8:8000::/33", "2001:db8:1::/48"]
+			),
+			["2001:db8::/32"],
+		)
 
 
 class EgressProjectOwnershipTests(unittest.TestCase):

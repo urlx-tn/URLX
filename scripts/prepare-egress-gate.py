@@ -296,17 +296,19 @@ def shared_networks(left: dict, right: dict) -> list[str]:
 	return sorted(set(left["networks"]) & set(right["networks"]))
 
 
-def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
-	container_ips = sorted(
-		{
-			endpoint["ip"]
-			for service in services.values()
-			for endpoint in service["networks"].values()
-		}
-	)
-	if not container_ips:
-		raise RuntimeError("No URLX container IP addresses found")
+def canonicalize_ip_networks(values: list[str]) -> list[str]:
+	by_version: dict[int, list[ipaddress.IPv4Network | ipaddress.IPv6Network]] = {4: [], 6: []}
+	for value in values:
+		network = ipaddress.ip_network(value, strict=False)
+		by_version[network.version].append(network)
+	return [
+		str(network)
+		for version in (4, 6)
+		for network in ipaddress.collapse_addresses(by_version[version])
+	]
 
+
+def blocked_ipv4_networks(host_addresses: list[str]) -> list[str]:
 	blocked = [
 		"0.0.0.0/8",
 		"10.0.0.0/8",
@@ -325,11 +327,25 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 		"255.255.255.255/32",
 	]
 	blocked.extend(
-		str(ipaddress.ip_address(address))
+		f"{address}/32"
 		for address in host_addresses
 		if ipaddress.ip_address(address).version == 4
 	)
-	blocked = sorted(set(blocked), key=lambda item: (ipaddress.ip_network(item, strict=False).network_address, ipaddress.ip_network(item, strict=False).prefixlen))
+	return canonicalize_ip_networks(blocked)
+
+
+def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
+	container_ips = sorted(
+		{
+			endpoint["ip"]
+			for service in services.values()
+			for endpoint in service["networks"].values()
+		}
+	)
+	if not container_ips:
+		raise RuntimeError("No URLX container IP addresses found")
+
+	blocked = blocked_ipv4_networks(host_addresses)
 
 	lines = [
 		"table bridge urlx_egress {",
