@@ -68,6 +68,22 @@ def require_loopback_port(service: dict[str, Any], name: str, target: int) -> in
 	return int(published)
 
 
+def require_postgres_tcp_healthcheck(service: dict[str, Any]) -> None:
+	healthcheck = service.get("healthcheck", {})
+	test = healthcheck.get("test") if isinstance(healthcheck, dict) else None
+	if (
+		not isinstance(test, list)
+		or len(test) != 2
+		or test[0] != "CMD-SHELL"
+		or not isinstance(test[1], str)
+		or "pg_isready" not in test[1]
+		or "-h 127.0.0.1" not in test[1]
+	):
+		raise ValueError(
+			"postgres healthcheck must use pg_isready over TCP on 127.0.0.1"
+		)
+
+
 def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 	try:
 		all_services = config["services"]
@@ -109,6 +125,7 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 		missing = [name for name in required_services if name not in services]
 		if missing:
 			raise ValueError(f"Compose resource limits are missing services: {', '.join(missing)}")
+		require_postgres_tcp_healthcheck(services["postgres"])
 		published_ports = []
 		for service_name, target_port in (("web", 8080), ("api", 8787), ("conversion", 8788)):
 			published_ports.append(require_loopback_port(services[service_name], service_name, target_port))

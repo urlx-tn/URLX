@@ -55,6 +55,12 @@ def config(maxmemory: object = 80_000_000, memory_limit: object = 100_000_000) -
 		"com.urlx.host-memory-budget-bytes": "2000000000",
 		"com.urlx.host-cpu-budget": "4",
 	}
+	services["postgres"]["healthcheck"] = {
+		"test": [
+			"CMD-SHELL",
+			'pg_isready -h 127.0.0.1 -U urlx_bootstrap -d "$${POSTGRES_DB}"',
+		]
+	}
 	return {
 		"services": services
 	}
@@ -64,6 +70,14 @@ class DeploymentConfigTests(unittest.TestCase):
 	def test_accepts_twenty_percent_headroom(self) -> None:
 		result = module.validate_config(config("80000000", "100000000"))
 		self.assertEqual(result["valkey_maxmemory"], 80_000_000)
+
+	def test_rejects_postgres_socket_only_healthcheck(self) -> None:
+		bad = config()
+		bad["services"]["postgres"]["healthcheck"]["test"][1] = (
+			'pg_isready -U urlx_bootstrap -d "$${POSTGRES_DB}"'
+		)
+		with self.assertRaisesRegex(ValueError, "over TCP on 127.0.0.1"):
+			module.validate_config(bad)
 
 	def test_rejects_insufficient_headroom(self) -> None:
 		with self.assertRaisesRegex(ValueError, "80%"):

@@ -220,7 +220,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - 'pg_isready -U urlx_bootstrap -d "$${POSTGRES_DB}"'
+        - 'pg_isready -h 127.0.0.1 -U urlx_bootstrap -d "$${POSTGRES_DB}"'
       interval: 5s
       timeout: 5s
       retries: 12
