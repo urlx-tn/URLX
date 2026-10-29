@@ -615,6 +615,21 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 		raise RuntimeError("No URLX container IP addresses found")
 
 	blocked = blocked_ipv4_networks(host_addresses)
+	proxy = services["egress-proxy"]
+	proxy_outbound = [
+		endpoint
+		for endpoint in proxy["networks"].values()
+		if endpoint["name"] == f"{COMPOSE_PROJECT}_proxy-outbound"
+	]
+	if (
+		len(proxy_outbound) != 1
+		or proxy_outbound[0]["internal"]
+		or proxy_outbound[0]["driver"] != "bridge"
+		or proxy_outbound[0]["labels"].get("com.docker.compose.project") != COMPOSE_PROJECT
+		or proxy_outbound[0]["labels"].get("com.docker.compose.network") != "proxy-outbound"
+	):
+		raise RuntimeError("Egress proxy must have exactly one public proxy-outbound network")
+	proxy_endpoint = proxy_outbound[0]
 
 	lines = [
 		"table bridge urlx_egress {",
@@ -631,6 +646,11 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 			f"\t\tip saddr {endpoint['ip']} ether saddr {endpoint['mac']} "
 			f"tcp sport {port} ct direction reply ct state established,related accept"
 		)
+	lines.append(
+		f"\t\tip saddr {proxy_endpoint['ip']} ether saddr {proxy_endpoint['mac']} "
+		"ip daddr != @urlx_blocked4 tcp dport { 80, 443 } "
+		"ct direction original ct state { new, established } accept"
+	)
 	lines.extend(
 		[
 			"\t\tip saddr @urlx_containers drop",
@@ -668,21 +688,6 @@ def make_rules(services: dict[str, dict], host_addresses: list[str]) -> str:
 				f"tcp dport {port} ct state new accept"
 			)
 
-	proxy = services["egress-proxy"]
-	proxy_outbound = [
-		endpoint
-		for endpoint in proxy["networks"].values()
-		if endpoint["name"] == f"{COMPOSE_PROJECT}_proxy-outbound"
-	]
-	if (
-		len(proxy_outbound) != 1
-		or proxy_outbound[0]["internal"]
-		or proxy_outbound[0]["driver"] != "bridge"
-		or proxy_outbound[0]["labels"].get("com.docker.compose.project") != COMPOSE_PROJECT
-		or proxy_outbound[0]["labels"].get("com.docker.compose.network") != "proxy-outbound"
-	):
-		raise RuntimeError("Egress proxy must have exactly one public proxy-outbound network")
-	proxy_endpoint = proxy_outbound[0]
 	lines.append(
 		f"\t\tip saddr {proxy_endpoint['ip']} ether saddr {proxy_endpoint['mac']} "
 		"ip daddr != @urlx_blocked4 tcp dport { 80, 443 } ct state new accept"

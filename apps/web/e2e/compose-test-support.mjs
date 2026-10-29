@@ -61,6 +61,15 @@ import { createValkeyAuthStorage } from "./src/lib/valkey-auth-storage.ts";
 const email = Buffer.from(${JSON.stringify(encodedEmail)}, "base64").toString("utf8");
 const pool = createPgPool(process.env.DATABASE_URL, { max: 1 });
 const redis = new Redis(process.env.VALKEY_URL, { maxRetriesPerRequest: 2 });
+const authStorageClient = {
+  get: (key) => redis.get(key),
+  set: (key, value, ttlSeconds) =>
+    ttlSeconds === undefined
+      ? redis.set(key, value)
+      : redis.set(key, value, "EX", ttlSeconds),
+  del: (key) => redis.del(key),
+  eval: (script, keyCount, ...args) => redis.eval(script, keyCount, ...args),
+};
 const nativeFetch = globalThis.fetch;
 let html = "";
 globalThis.fetch = async (input, init) => {
@@ -77,7 +86,10 @@ try {
   const auth = createFormsAuth(
     process.env,
     createPgDb(pool),
-    createValkeyAuthStorage(redis, process.env.VISITOR_TOKEN_KEY_BASE64),
+    createValkeyAuthStorage(
+      authStorageClient,
+      process.env.VISITOR_TOKEN_KEY_BASE64,
+    ),
   );
   const base = process.env.BETTER_AUTH_URL.replace(/\\/$/, "");
   const response = await auth.handler(new Request(base + "/sign-in/magic-link", {

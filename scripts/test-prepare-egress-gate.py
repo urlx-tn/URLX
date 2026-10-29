@@ -244,6 +244,14 @@ class HostIngressContractTests(unittest.TestCase):
 		self.assertIn("172.31.0.2, 172.31.0.3, 172.31.0.4", rules.split("chain input", 1)[0])
 		self.assertIn("chain input {\n\t\ttype filter hook input priority -300; policy accept;", rules)
 		input_rules = rules.split("\tchain forward {", 1)[0]
+		proxy_allow = (
+			"ip saddr 172.33.0.2 ether saddr 02:42:ac:21:00:02 "
+			"ip daddr != @urlx_blocked4 tcp dport { 80, 443 } "
+			"ct direction original ct state { new, established } accept"
+		)
+		self.assertIn(proxy_allow, input_rules)
+		self.assertLess(input_rules.index(proxy_allow), input_rules.index("ip saddr @urlx_containers drop"))
+		self.assertNotIn("tcp dport 53", input_rules)
 		self.assertIn("ip saddr @urlx_containers drop", input_rules)
 		self.assertEqual(input_rules.count("ct direction reply"), 3)
 		self.assertNotIn("ct state new accept", input_rules)

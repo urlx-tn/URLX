@@ -94,13 +94,16 @@ database, auth, visitor-token, email, or Valkey credentials.
 
 ## Build and egress startup gate
 
-The egress policy is part of the runtime boundary. Internal Compose networks
-keep app containers from having a direct default route. The renderer shares
-only its control network and a private proxy network; Squid denies non-global
-and reserved destinations, host interface addresses, and ports outside HTTP
-and HTTPS. A host nftables table further restricts container-to-container
-connections, blocks URLX container traffic to the host, and limits proxy
-egress.
+The egress policy is part of the runtime boundary. Private Compose networks
+remain internal. Web, API, and conversion also join `host-ingress` so Docker can
+publish their fixed loopback ports; the host nftables table drops their direct
+outbound traffic on that routed bridge. Only the exact egress-proxy endpoint
+can start or continue TCP connections to non-blocked public addresses on ports
+80 and 443. The renderer shares only its control network and a private proxy
+network; Squid denies non-global and reserved destinations, host interface
+addresses, and ports outside HTTP and HTTPS. The table also restricts
+container-to-container connections and blocks URLX container traffic to the
+host.
 
 The egress image refreshes the Ubuntu Noble Squid package at build time and
 fails the build below version `6.14-0ubuntu0.24.04.5`, Canonical's fixed
