@@ -61,6 +61,7 @@ def config(maxmemory: object = 80_000_000, memory_limit: object = 100_000_000) -
 			'pg_isready -h 127.0.0.1 -U urlx_bootstrap -d "$${POSTGRES_DB}"',
 		]
 	}
+	services["api"]["tmpfs"] = ["/tmp:size=64m,mode=1777"]
 	return {
 		"services": services
 	}
@@ -78,6 +79,28 @@ class DeploymentConfigTests(unittest.TestCase):
 		)
 		with self.assertRaisesRegex(ValueError, "over TCP on 127.0.0.1"):
 			module.validate_config(bad)
+
+	def test_rejects_split_tmpfs_mount_options(self) -> None:
+		bad = config()
+		bad["services"]["api"]["tmpfs"] = ["/tmp:size=64m", "mode=1777"]
+		with self.assertRaisesRegex(ValueError, "api.tmpfs entries"):
+			module.validate_config(bad)
+
+	def test_rejects_split_tmpfs_options_on_inactive_renderer(self) -> None:
+		bad = config()
+		bad["services"]["conversion-renderer"]["profiles"] = ["browser"]
+		bad["services"]["conversion-renderer"]["tmpfs"] = [
+			"/tmp:size=256m",
+			"mode=1777",
+		]
+		with patch.dict("os.environ", {"COMPOSE_PROFILES": ""}):
+			with self.assertRaisesRegex(ValueError, "conversion-renderer.tmpfs entries"):
+				module.validate_config(bad)
+
+	def test_accepts_valid_tmpfs_bare_option(self) -> None:
+		valid = config()
+		valid["services"]["api"]["tmpfs"] = ["/tmp:size=64m,noexec"]
+		module.validate_config(valid)
 
 	def test_rejects_insufficient_headroom(self) -> None:
 		with self.assertRaisesRegex(ValueError, "80%"):

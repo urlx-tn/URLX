@@ -98,7 +98,8 @@ services:
         condition: service_started
     networks: [app, data, limits, api-egress]
     read_only: true
-    tmpfs: [/tmp:size=64m,mode=1777]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -145,7 +146,8 @@ services:
         condition: service_started
     networks: [app, limits, renderer-control, conversion-egress]
     read_only: true
-    tmpfs: [/tmp:size=64m,mode=1777]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     init: true
@@ -181,7 +183,8 @@ services:
         condition: service_started
     networks: [renderer-control, renderer-egress]
     read_only: true
-    tmpfs: [/tmp:size=256m,mode=1777]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     security_opt:
       - no-new-privileges:true
       - seccomp=./deploy/egress/renderer-seccomp.json
@@ -244,7 +247,8 @@ services:
     cpus: ${VALKEY_CPU_LIMIT:?Set VALKEY_CPU_LIMIT for this host}
     networks: [limits]
     read_only: true
-    tmpfs: [/data:size=16m,mode=1777]
+    tmpfs:
+      - /data:size=16m,mode=1777
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     healthcheck:
@@ -269,7 +273,8 @@ services:
         condition: service_healthy
     networks: [data]
     read_only: true
-    tmpfs: [/tmp:size=64m,mode=1777]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
 

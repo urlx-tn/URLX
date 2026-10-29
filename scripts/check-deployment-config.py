@@ -84,6 +84,32 @@ def require_postgres_tcp_healthcheck(service: dict[str, Any]) -> None:
 		)
 
 
+def require_valid_tmpfs_entries(service: dict[str, Any], name: str) -> None:
+	tmpfs = service.get("tmpfs")
+	if tmpfs is None:
+		return
+	entries = [tmpfs] if isinstance(tmpfs, str) else tmpfs
+	if not isinstance(entries, list):
+		raise ValueError(f"{name}.tmpfs must be a string or a list of mount strings")
+	for entry in entries:
+		if not isinstance(entry, str) or not entry.startswith("/"):
+			raise ValueError(
+				f"{name}.tmpfs entries must each be one absolute path[:options] string"
+			)
+		path, separator, options = entry.partition(":")
+		if not path.startswith("/"):
+			raise ValueError(
+				f"{name}.tmpfs options must stay with one absolute mount path"
+			)
+		if separator:
+			for option in options.split(","):
+				key, has_value, value = option.partition("=")
+				if not key or (has_value and not value):
+					raise ValueError(
+						f"{name}.tmpfs options must stay with one absolute mount path"
+					)
+
+
 def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 	try:
 		all_services = config["services"]
@@ -108,6 +134,8 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 			if not service.get("profiles")
 			or active_profiles.intersection(service["profiles"])
 		}
+		for name, service in all_services.items():
+			require_valid_tmpfs_entries(service, name)
 		unknown_services = sorted(set(services) - known_services)
 		if unknown_services:
 			raise ValueError(
