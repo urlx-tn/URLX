@@ -88,12 +88,13 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 			denylist = policy_dir / "host-denylist.txt"
 			denylist.write_text("203.0.113.10\n")
 			marker = "urlx-egress-gate-" + "a" * 32
+			nft_listing = f'table bridge urlx_egress {{\n\tcomment "{marker}"\n}}'
 			calls: list[tuple[str, ...]] = []
 
 			def run(*args: str) -> str:
 				calls.append(args)
 				if args[:3] == ("nft", "list", "table"):
-					return f'table bridge urlx_egress {{ comment "{marker}"; }}'
+					return nft_listing
 				if args[:3] == ("nft", "delete", "table"):
 					self.assertFalse(ready_path.exists())
 					self.assertTrue((policy_dir / module.OWNER_SIDECAR).is_file())
@@ -123,8 +124,8 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 				module,
 				"run",
 				side_effect=[
-					f'table bridge urlx_egress {{ comment "{marker}"; }}',
-					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					f'table bridge urlx_egress {{\n\tcomment "{marker}"\n}}',
+					f'table bridge urlx_egress {{\n\tcomment "{marker}"\n}}',
 					delete_error,
 				],
 			):
@@ -140,8 +141,8 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 				module,
 				"run",
 				side_effect=[
-					f'table bridge urlx_egress {{ comment "{marker}"; }}',
-					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					f'table bridge urlx_egress {{\n\tcomment "{marker}";\n}}',
+					f'table bridge urlx_egress {{\n\tcomment "{marker}";\n}}',
 					"",
 				],
 			) as run:
@@ -172,6 +173,15 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 				with self.assertRaisesRegex(RuntimeError, "manifest is invalid"):
 					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
 			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+			self.assertTrue(ready_path.exists())
+
+			wrong_marker = "urlx-egress-gate-" + "a" * 32 + "x"
+			ready_path.write_text(json.dumps(owner_manifest("urlx-test")))
+			listing = f'table bridge urlx_egress {{\n\tcomment "{wrong_marker}"\n}}'
+			with patch.object(module, "run", return_value=listing) as run:
+				with self.assertRaisesRegex(RuntimeError, "verified install marker"):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			self.assertEqual(run.call_count, 2)
 			self.assertTrue(ready_path.exists())
 
 	def test_runtime_invalidation_refuses_unowned_table_but_allows_cold_start(self) -> None:
@@ -211,7 +221,6 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 				with self.assertRaisesRegex(RuntimeError, "ambiguous"):
 					module.gate_owner_state(policy_dir)
 			run.assert_not_called()
-
 			ready_path.unlink()
 			with patch.object(
 				Path,
@@ -223,6 +232,27 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 					with self.assertRaisesRegex(RuntimeError, "path is unsafe"):
 						module.gate_owner_state(policy_dir)
 			run.assert_not_called()
+
+	def test_nft_marker_parser_accepts_normalized_comments_but_rejects_near_matches(self) -> None:
+		marker = "urlx-egress-gate-3a4c993afae41dc0d833440bbbad0574"
+		self.assertTrue(
+			module.nft_table_has_install_marker(
+				f'table bridge urlx_egress {{\n\tcomment "{marker}"\n}}', marker
+			)
+		)
+		self.assertTrue(
+			module.nft_table_has_install_marker(
+				f'table bridge urlx_egress {{\n\tcomment "{marker}";\n}}', marker
+			)
+		)
+		for listing in (
+			f'\tcomment "x{marker}"',
+			f'\tcomment "{marker}x"',
+			f'\tcomment "{marker}" extra',
+			f'\tcomment "urlx-egress-gate-{"a" * 31}"',
+		):
+			self.assertFalse(module.nft_table_has_install_marker(listing, marker), listing)
+		self.assertFalse(module.nft_table_has_install_marker(f'\tcomment "{marker}" extra'))
 
 	def test_container_netns_uses_host_procfs_and_revalidates_docker_state(self) -> None:
 		container = {
@@ -283,12 +313,16 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 				module.assert_container_identity_current(container)
 
 	def test_rollback_deletes_only_its_marked_table_and_invalidates_readiness(self) -> None:
-		marker = "urlx-egress-gate-test-marker"
+		marker = "urlx-egress-gate-" + "d" * 32
 		with tempfile.TemporaryDirectory() as directory:
 			policy_dir = Path(directory)
 			ready = policy_dir / "ready.json"
 			ready.write_text("stale readiness")
-			with patch.object(module, "run", return_value=f'table bridge urlx_egress {{ comment "{marker}"; }}') as run:
+			with patch.object(
+				module,
+				"run",
+				return_value=f'table bridge urlx_egress {{\n\tcomment "{marker}"\n}}',
+			) as run:
 				module.rollback_installed_rules(policy_dir, marker)
 			self.assertFalse(ready.exists())
 			run.assert_any_call("nft", "delete", "table", "bridge", module.NFT_TABLE)
@@ -332,7 +366,10 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 			with patch.object(
 				module,
 				"run",
-				side_effect=[f'table bridge urlx_egress {{ comment "{marker}"; }}', subprocess.CalledProcessError(1, ["nft"])],
+				side_effect=[
+					f'table bridge urlx_egress {{\n\tcomment "{marker}";\n}}',
+					subprocess.CalledProcessError(1, ["nft"]),
+				],
 			) as run:
 				with self.assertRaises(subprocess.CalledProcessError):
 					module.rollback_installed_rules(policy_dir, marker)

@@ -237,6 +237,18 @@ def assert_egress_clients_stopped(services: set[str]) -> None:
 		)
 
 
+def nft_table_has_install_marker(table: str, marker: str | None = None) -> bool:
+	marker_expression = r"urlx-egress-gate-[a-f0-9]{32}"
+	if marker is not None:
+		if not re.fullmatch(marker_expression, marker):
+			return False
+		marker_expression = re.escape(marker)
+	marker_line = re.compile(
+		rf'(?m)^[ \t]*comment[ \t]+"{marker_expression}"[ \t]*;?[ \t]*$'
+	)
+	return marker_line.search(table) is not None
+
+
 def invalidate_runtime_policy(policy_dir: Path, project: str, services: set[str]) -> None:
 	assert_egress_clients_stopped(services)
 	manifest, table_exists = gate_owner_state(policy_dir)
@@ -246,7 +258,7 @@ def invalidate_runtime_policy(policy_dir: Path, project: str, services: set[str]
 
 	if table_exists:
 		table = run("nft", "list", "table", "bridge", NFT_TABLE)
-		if not re.search(r'\bcomment\s+"urlx-egress-gate-[a-f0-9]{32}"\s*;', table):
+		if not nft_table_has_install_marker(table):
 			raise RuntimeError("URLX egress table has no verified install marker; refusing policy invalidation")
 
 	ready_path = policy_dir / "ready.json"
@@ -548,8 +560,7 @@ def rollback_installed_rules(policy_dir: Path, marker: str) -> None:
 			table = run("nft", "list", "table", "bridge", NFT_TABLE)
 		except subprocess.CalledProcessError:
 			table = ""
-		marker_comment = re.compile(rf'\bcomment\s+"{re.escape(marker)}"\s*;')
-		if marker_comment.search(table):
+		if nft_table_has_install_marker(table, marker):
 			run("nft", "delete", "table", "bridge", NFT_TABLE)
 	finally:
 		for name in ("ready.json", "ready.json.tmp"):
