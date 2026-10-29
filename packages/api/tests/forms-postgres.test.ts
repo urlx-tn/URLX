@@ -5,6 +5,7 @@ import {
 	createPgDb,
 	createPgPool,
 	type DatabaseRoleIdentity,
+	formAliases,
 	formMonthlyUsage,
 	formResponses,
 	forms,
@@ -17,6 +18,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FormsError, FormsService } from "../src/modules/forms/forms.service";
+import { LinkService } from "../src/modules/links/link.service";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const migratorDatabaseUrl = process.env.TEST_MIGRATOR_DATABASE_URL;
@@ -138,6 +140,164 @@ describe("forms PostgreSQL integration", () => {
 			.from(formMonthlyUsage)
 			.where(eq(formMonthlyUsage.ownerId, ownerId));
 		expect(usage?.responseCount).toBe(1);
+	});
+
+	it("publishes first-party loopback form links while generic shortening still blocks private URLs", async () => {
+		const ownerId = await createOwner(db, owners);
+		const created = await service.create(ownerId, definition("Loopback form"));
+		const slug = runSlug("loopback-form");
+		const published = await service.publish(
+			ownerId,
+			created!.form.id,
+			slug,
+			"http://127.0.0.1:18080",
+			"http://127.0.0.1:18080",
+			"public",
+		);
+		expect(published?.url).toBe(`http://127.0.0.1:18080/f/${slug}`);
+		expect(published?.shortUrl).toMatch(/^http:\/\/127\.0\.0\.1:18080\/u\//);
+		const [link] = await db
+			.select()
+			.from(links)
+			.where(eq(links.shortCode, published!.form.shortCode!))
+			.limit(1);
+		expect(link?.originalUrl).toBe(`http://127.0.0.1:18080/f/${slug}`);
+		await expect(
+			new LinkService({ db, shortUrlBase: "https://short.test" }).shorten(
+				`http://127.0.0.1:18080/f/${slug}`,
+			),
+		).rejects.toMatchObject({ code: "PRIVATE_IP_NOT_ALLOWED" });
+	});
+
+	it("rolls back slug, alias, version, and publication quota when link persistence fails", async () => {
+		const ownerId = await createOwner(db, owners);
+		const created = await service.create(ownerId, definition("Link rollback"));
+		const slug = runSlug("link-rollback");
+		const migrationPool = createPgPool(migratorDatabaseUrl!, { max: 1 });
+		const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 10);
+		const functionName = `urlx_test_reject_form_link_${suffix}`;
+		const triggerName = `urlx_test_reject_form_link_${suffix}`;
+		try {
+			await assertPoolIdentity(migrationPool, "urlx_migrator");
+			await migrationPool.query(`
+				CREATE FUNCTION public.${functionName}() RETURNS trigger
+				LANGUAGE plpgsql AS $$
+				BEGIN
+					IF NEW.original_url = 'http://127.0.0.1:18080/f/${slug}' THEN
+						RAISE EXCEPTION 'intentional form link persistence failure';
+					END IF;
+					RETURN NEW;
+				END;
+				$$
+			`);
+			await migrationPool.query(`
+				CREATE TRIGGER ${triggerName}
+				BEFORE INSERT ON public.links
+				FOR EACH ROW EXECUTE FUNCTION public.${functionName}()
+			`);
+			let publishFailed = false;
+			try {
+				await service.publish(
+					ownerId,
+					created!.form.id,
+					slug,
+					"http://127.0.0.1:18080",
+					"http://127.0.0.1:18080",
+					"public",
+				);
+			} catch (error) {
+				publishFailed = true;
+				expect(nestedPostgresCode(error)).toBe("P0001");
+			}
+			expect(publishFailed).toBe(true);
+		} finally {
+			await migrationPool.query(
+				`DROP TRIGGER IF EXISTS ${triggerName} ON public.links`,
+			);
+			await migrationPool.query(
+				`DROP FUNCTION IF EXISTS public.${functionName}()`,
+			);
+			await migrationPool.end();
+		}
+
+		const [form] = await db
+			.select({ slug: forms.slug, shortCode: forms.shortCode })
+			.from(forms)
+			.where(eq(forms.id, created!.form.id))
+			.limit(1);
+		const [version] = await db
+			.select({ publishedAt: formVersions.publishedAt })
+			.from(formVersions)
+			.where(eq(formVersions.formId, created!.form.id))
+			.limit(1);
+		const aliases = await db
+			.select()
+			.from(formAliases)
+			.where(eq(formAliases.formId, created!.form.id));
+		expect(form).toEqual({ slug: null, shortCode: null });
+		expect(version?.publishedAt).toBeNull();
+		expect(aliases).toHaveLength(0);
+	});
+
+	it("keeps concurrent and sequential republishing on one stable alias and short link", async () => {
+		const ownerId = await createOwner(db, owners);
+		const created = await service.create(
+			ownerId,
+			definition("Republish stable"),
+		);
+		const slug = runSlug("republish-stable");
+		const simultaneous = await Promise.allSettled([
+			service.publish(
+				ownerId,
+				created!.form.id,
+				slug,
+				"https://forms.test",
+				"https://short.test",
+				"public",
+			),
+			service.publish(
+				ownerId,
+				created!.form.id,
+				slug,
+				"https://forms.test",
+				"https://short.test",
+				"public",
+			),
+		]);
+		expect(
+			simultaneous.filter((result) => result.status === "fulfilled"),
+		).toHaveLength(1);
+		expect(
+			simultaneous.filter((result) => result.status === "rejected"),
+		).toHaveLength(1);
+		const concurrentFailure = simultaneous.find(
+			(result) => result.status === "rejected",
+		);
+		expect(concurrentFailure).toMatchObject({ reason: expect.any(FormsError) });
+		const initial = simultaneous.find(
+			(result) => result.status === "fulfilled",
+		)!;
+		if (initial.status !== "fulfilled")
+			throw new Error("Expected one publish to succeed");
+		const repeated = await service.publish(
+			ownerId,
+			created!.form.id,
+			"",
+			"https://forms.test",
+			"https://short.test",
+			"public",
+		);
+		expect(repeated?.form.shortCode).toBe(initial.value?.form.shortCode);
+		const aliases = await db
+			.select()
+			.from(formAliases)
+			.where(eq(formAliases.formId, created!.form.id));
+		expect(aliases.map((alias) => alias.alias)).toEqual([slug]);
+		const storedLinks = await db
+			.select()
+			.from(links)
+			.where(eq(links.shortCode, repeated!.form.shortCode!));
+		expect(storedLinks).toHaveLength(1);
 	});
 
 	it("keeps trigger idempotency and monthly accounting correct across a UTC month boundary", async () => {
@@ -698,6 +858,25 @@ async function createOwner(db: UrlxDb, owners: Set<string>) {
 	});
 	owners.add(id);
 	return id;
+}
+
+function nestedPostgresCode(error: unknown) {
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (
+			typeof current === "object" &&
+			"code" in current &&
+			typeof (current as { code?: unknown }).code === "string"
+		)
+			return (current as { code: string }).code;
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return null;
 }
 
 function definition(title: string) {

@@ -39,4 +39,17 @@ describe("LinkService PostgreSQL text inputs", () => {
 			originalUrl: rawUrl,
 		});
 	});
+
+	it("continues to reject private destinations before repository access", async () => {
+		const { repository, service } = createService();
+
+		await expect(
+			service.shorten("http://127.0.0.1:18080/f/test-form"),
+		).rejects.toMatchObject({
+			code: "PRIVATE_IP_NOT_ALLOWED",
+			status: 400,
+		});
+		expect(repository.findByUrlHash).not.toHaveBeenCalled();
+		expect(repository.create).not.toHaveBeenCalled();
+	});
 });

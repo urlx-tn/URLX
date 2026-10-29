@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm";
 
 import type { NewLink } from "./link.types";
 
+export type LinkDb = Pick<UrlxDb, "select" | "insert">;
+
 export class LinkRepository {
-	constructor(private readonly db: UrlxDb) {}
+	constructor(private readonly db: LinkDb) {}
 
 	async findByUrlHash(urlHash: string) {
 		const [link] = await this.db
@@ -28,5 +30,14 @@ export class LinkRepository {
 	async create(link: NewLink) {
 		await this.db.insert(links).values(link);
 		return link;
+	}
+
+	async createIfMissing(link: NewLink) {
+		const inserted = await this.db
+			.insert(links)
+			.values(link)
+			.onConflictDoNothing()
+			.returning({ shortCode: links.shortCode });
+		return inserted.length > 0;
 	}
 }

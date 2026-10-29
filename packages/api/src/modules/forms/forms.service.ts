@@ -23,7 +23,10 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import { LinkService } from "../links/link.service";
+import {
+	createFirstPartyFormLink,
+	normalizeTrustedOrigin,
+} from "../links/form-link.service";
 import {
 	type FormDefinitionDto,
 	type FormFieldDto,
@@ -34,6 +37,7 @@ import {
 } from "./forms.types";
 
 export type FormsDb = UrlxDb;
+type FormsTransaction = Parameters<Parameters<FormsDb["transaction"]>[0]>[0];
 export type FormField = FormFieldDto;
 export type FormDefinition = FormDefinitionDto;
 export const maxFormFields = 50;
@@ -356,58 +360,85 @@ export class FormsService {
 	) {
 		if (!respondentAccessModes.includes(respondentAccess))
 			throw new FormsError("RESPONDENT_ACCESS_REQUIRED", 400);
-		let current = await this.get(ownerId, id);
-		if (!current || !current.draft) return null;
-		// A blank draft can be saved, but respondents should never see an empty form.
-		if (!current.draft.fields?.length)
-			throw new FormsError(
-				"NO_QUESTIONS",
-				400,
-				"Add at least one question before publishing.",
-			);
-		if (requestedSlug) await this.setSlug(ownerId, id, requestedSlug);
-		current = await this.get(ownerId, id);
-		if (!current?.form.slug) {
-			const titleSlug = current?.draft?.title
-				.toLowerCase()
-				.normalize("NFKD")
-				.replace(/[\u0300-\u036f]/g, "")
-				.replace(/[^a-z0-9]+/g, "-")
-				.replace(/^-+|-+$/g, "")
-				.slice(0, 38)
-				.replace(/-+$/g, "");
-			const idSuffix = id
-				.replace(/[^a-z0-9]/gi, "")
-				.slice(-8)
-				.toLowerCase();
-			await this.setSlug(
-				ownerId,
-				id,
-				`${titleSlug || "form"}-${idSuffix || "link"}`,
-			);
-			current = await this.get(ownerId, id);
-		}
-		if (!current?.form.slug) throw new FormsError("SLUG_REQUIRED", 409);
-		const [latest] = await this.db
-			.select()
+		const publicOrigin = normalizeTrustedOrigin(publicBaseUrl);
+		const shortOrigin = normalizeTrustedOrigin(shortUrlBase);
+		const normalizedRequestedSlug = requestedSlug
+			? requestedSlug.trim().toLowerCase()
+			: undefined;
+		const [expectedLatest] = await this.db
+			.select({
+				id: formVersions.id,
+				version: formVersions.version,
+				publishedAt: formVersions.publishedAt,
+			})
 			.from(formVersions)
+			.innerJoin(forms, eq(forms.id, formVersions.formId))
 			.where(
 				and(
-					eq(formVersions.formId, id),
-					eq(formVersions.version, current.revision),
+					eq(forms.id, id),
+					eq(forms.ownerId, ownerId),
+					isNull(forms.disabledAt),
 				),
 			)
+			.orderBy(desc(formVersions.version))
 			.limit(1);
+		if (!expectedLatest) {
+			if (!(await this.getOwnedFormId(ownerId, id))) return null;
+			throw new FormsError("DRAFT_NOT_FOUND", 409);
+		}
+		if (normalizedRequestedSlug !== undefined)
+			validateFormSlug(normalizedRequestedSlug);
+
 		const now = this.now();
-		if (!latest) throw new FormsError("DRAFT_NOT_FOUND", 409);
-		// Published versions are immutable. Re-publishing without an intervening
-		// draft still creates a snapshot so the access decision has its own version.
-		const publishedVersionId =
-			latest.publishedAt !== null ? crypto.randomUUID() : latest.id;
+		let publishedVersionId = "";
+		let slug = "";
+		let shortCode: string | null = null;
 		try {
-			if (latest.publishedAt !== null) {
-				await this.db.transaction(async (tx) => {
-					await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+			const completed = await this.db.transaction(async (tx) => {
+				await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+				const [form] = await tx
+					.select()
+					.from(forms)
+					.where(
+						and(
+							eq(forms.id, id),
+							eq(forms.ownerId, ownerId),
+							isNull(forms.disabledAt),
+						),
+					)
+					.limit(1)
+					.for("update");
+				if (!form) return null;
+				const [latest] = await tx
+					.select()
+					.from(formVersions)
+					.where(eq(formVersions.formId, id))
+					.orderBy(desc(formVersions.version))
+					.limit(1)
+					.for("update");
+				if (!latest) throw new FormsError("DRAFT_NOT_FOUND", 409);
+				if (
+					latest.id !== expectedLatest.id ||
+					latest.version !== expectedLatest.version ||
+					latest.publishedAt !== expectedLatest.publishedAt
+				)
+					throw new FormsError("REVISION_CONFLICT", 409);
+				if (!parseFields(latest.fieldsJson).length)
+					throw new FormsError(
+						"NO_QUESTIONS",
+						400,
+						"Add at least one question before publishing.",
+					);
+
+				slug =
+					normalizedRequestedSlug ??
+					form.slug ??
+					makeDefaultFormSlug(latest.title, id);
+				if (normalizedRequestedSlug !== undefined || !form.slug)
+					await this.claimSlugInTransaction(tx, ownerId, id, slug, now);
+
+				if (latest.publishedAt !== null) {
+					publishedVersionId = crypto.randomUUID();
 					await tx.insert(formVersions).values({
 						id: publishedVersionId,
 						formId: id,
@@ -421,14 +452,8 @@ export class FormsService {
 						createdAt: now,
 						publishedAt: now,
 					});
-					await tx
-						.update(forms)
-						.set({ updatedAt: now })
-						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
-				});
-			} else {
-				const published = await this.db.transaction(async (tx) => {
-					await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+				} else {
+					publishedVersionId = latest.id;
 					const [updated] = await tx
 						.update(formVersions)
 						.set({ publishedAt: now, respondentAccess })
@@ -440,14 +465,21 @@ export class FormsService {
 							),
 						)
 						.returning({ id: formVersions.id });
-					await tx
-						.update(forms)
-						.set({ updatedAt: now })
-						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
-					return updated;
-				});
-				if (!published) throw new FormsError("REVISION_CONFLICT", 409);
-			}
+					if (!updated) throw new FormsError("REVISION_CONFLICT", 409);
+				}
+
+				shortCode =
+					form.shortCode ??
+					(await createFirstPartyFormLink(tx, publicOrigin, slug));
+				await tx
+					.update(forms)
+					.set({ updatedAt: now, shortCode })
+					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
+				return { slug, shortCode };
+			});
+			if (!completed) return null;
+			slug = completed.slug;
+			shortCode = completed.shortCode;
 		} catch (error) {
 			if (error instanceof FormsError) throw error;
 			if (errorText(error).includes("forms_owner_published_limit"))
@@ -461,40 +493,17 @@ export class FormsService {
 				throw new FormsError("REVISION_CONFLICT", 409);
 			throw error;
 		}
-		let shortCode = current.form.shortCode;
-		if (!shortCode) {
-			const link = await new LinkService({ db: this.db, shortUrlBase }).shorten(
-				new URL(
-					`/f/${encodeURIComponent(current.form.slug)}`,
-					publicBaseUrl,
-				).toString(),
-			);
-			shortCode = new URL(link.shortUrl).pathname.split("/").at(-1) ?? null;
-			if (shortCode)
-				await this.db
-					.update(forms)
-					.set({ shortCode })
-					.where(
-						and(
-							eq(forms.id, id),
-							eq(forms.ownerId, ownerId),
-							isNull(forms.disabledAt),
-						),
-					);
-		}
 		const result = await this.get(ownerId, id);
 		return result
 			? {
 					...result,
-					form: { ...result.form, slug: current.form.slug },
+					form: { ...result.form, slug },
 					version: publishedVersionId,
 					url: new URL(
-						`/f/${encodeURIComponent(current.form.slug)}`,
-						publicBaseUrl,
+						`/f/${encodeURIComponent(slug)}`,
+						publicOrigin,
 					).toString(),
-					shortUrl: shortCode
-						? `${shortUrlBase.replace(/\/+$/, "")}/u/${shortCode}`
-						: null,
+					shortUrl: shortCode ? `${shortOrigin}/u/${shortCode}` : null,
 				}
 			: null;
 	}
@@ -507,8 +516,7 @@ export class FormsService {
 		shortUrlBase?: string,
 	) {
 		const slug = rawSlug.trim().toLowerCase();
-		if (!/^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/.test(slug))
-			throw new FormsError("INVALID_SLUG", 400);
+		validateFormSlug(slug);
 		if (!(await this.getOwnedFormId(ownerId, id))) return null;
 		const current = await this.db.transaction(async (tx) => {
 			await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
@@ -525,31 +533,7 @@ export class FormsService {
 				.limit(1)
 				.for("update");
 			if (!form) return null;
-
-			await tx.execute(sql`select public.lock_form_alias(${slug})`);
-			const [alias] = await tx
-				.select()
-				.from(formAliases)
-				.where(eq(formAliases.alias, slug))
-				.limit(1);
-			if (alias && alias.formId !== id) throw new FormsError("SLUG_TAKEN", 409);
-			const [tombstone] = await tx
-				.select()
-				.from(formAliasTombstones)
-				.where(eq(formAliasTombstones.alias, slug))
-				.limit(1);
-			if (tombstone) throw new FormsError("SLUG_TAKEN", 409);
-			if (!alias)
-				await tx
-					.insert(formAliases)
-					.values({ alias: slug, formId: id, createdAt: this.now() })
-					.onConflictDoNothing();
-			const [updated] = await tx
-				.update(forms)
-				.set({ slug, updatedAt: this.now() })
-				.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)))
-				.returning({ id: forms.id });
-			return updated?.id ?? null;
+			return this.claimSlugInTransaction(tx, ownerId, id, slug, this.now());
 		});
 		if (!current) return null;
 		const result = await this.get(ownerId, id);
@@ -568,6 +552,39 @@ export class FormsService {
 							: null,
 				}
 			: null;
+	}
+
+	private async claimSlugInTransaction(
+		tx: FormsTransaction,
+		ownerId: string,
+		id: string,
+		slug: string,
+		now: number,
+	) {
+		await tx.execute(sql`select public.lock_form_alias(${slug})`);
+		const [alias] = await tx
+			.select()
+			.from(formAliases)
+			.where(eq(formAliases.alias, slug))
+			.limit(1);
+		if (alias && alias.formId !== id) throw new FormsError("SLUG_TAKEN", 409);
+		const [tombstone] = await tx
+			.select()
+			.from(formAliasTombstones)
+			.where(eq(formAliasTombstones.alias, slug))
+			.limit(1);
+		if (tombstone) throw new FormsError("SLUG_TAKEN", 409);
+		if (!alias)
+			await tx
+				.insert(formAliases)
+				.values({ alias: slug, formId: id, createdAt: now })
+				.onConflictDoNothing();
+		const [updated] = await tx
+			.update(forms)
+			.set({ slug, updatedAt: now })
+			.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)))
+			.returning({ id: forms.id });
+		return updated?.id ?? null;
 	}
 
 	async delete(ownerId: string, id: string) {
@@ -1172,6 +1189,27 @@ export class FormsError extends Error {
 	) {
 		super(message);
 	}
+}
+
+function validateFormSlug(slug: string) {
+	if (!/^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/.test(slug))
+		throw new FormsError("INVALID_SLUG", 400);
+}
+
+function makeDefaultFormSlug(title: string, id: string) {
+	const titleSlug = title
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 38)
+		.replace(/-+$/g, "");
+	const idSuffix = id
+		.replace(/[^a-z0-9]/gi, "")
+		.slice(-8)
+		.toLowerCase();
+	return `${titleSlug || "form"}-${idSuffix || "link"}`;
 }
 
 export function validateDefinition(value: FormDefinition): FormDefinition {
