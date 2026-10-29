@@ -660,7 +660,13 @@ test("magic-link auth, editor keyboard flow, draft save, publish, response and p
 		page.getByRole("status").filter({ hasText: "Check your inbox" }),
 	).toBeVisible();
 	if (composeMode) {
-		capturedEmailHtml = composeMagicLink(email, composeProject, root).html;
+		const selectedTemplate = new URL(page.url()).searchParams.get("template");
+		capturedEmailHtml = composeMagicLink(
+			email,
+			composeProject,
+			root,
+			selectedTemplate,
+		).html;
 	}
 	expect(capturedEmailHtml.includes("href=")).toBe(true);
 	const link = /href="([^"]+)"/

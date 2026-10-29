@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	composeFormsCallbackURL,
 	createComposeResendFetch,
 	wrapRemoteCommand,
 } from "./compose-test-support.mjs";
@@ -77,4 +78,20 @@ test("unexpected Resend fetch targets fail closed without a network fallback", a
 		/Unexpected outbound request from isolated auth helper/,
 	);
 	assert.equal(captured, false);
+});
+
+test("Forms callback preserves only a validated template and drops sign-in state", () => {
+	assert.equal(composeFormsCallbackURL(), "/forms");
+	assert.equal(
+		composeFormsCallbackURL("registration"),
+		"/forms?template=registration",
+	);
+	assert.throws(
+		() => composeFormsCallbackURL("registration&signin=1"),
+		/Invalid isolated Forms callback template/,
+	);
+	assert.throws(
+		() => composeFormsCallbackURL("https://example.invalid/forms"),
+		/Invalid isolated Forms callback template/,
+	);
 });

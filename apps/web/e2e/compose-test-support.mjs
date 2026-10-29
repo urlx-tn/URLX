@@ -40,6 +40,15 @@ export function createComposeResendFetch(email, captureHtml) {
 	};
 }
 
+export function composeFormsCallbackURL(template) {
+	if (template === undefined || template === null || template === "")
+		return "/forms";
+	if (typeof template !== "string" || !/^[a-z0-9-]{1,64}$/i.test(template)) {
+		throw new Error("Invalid isolated Forms callback template");
+	}
+	return `/forms?template=${encodeURIComponent(template)}`;
+}
+
 export function requireComposeTestTarget() {
 	const project = process.env.URLX_COMPOSE_PROJECT ?? "";
 	const rawBaseUrl = process.env.URLX_FORMS_E2E_BASE_URL ?? "";
@@ -70,8 +79,9 @@ export function requireComposeTestTarget() {
 	return { project, origin: baseUrl.origin };
 }
 
-export function composeMagicLink(email, project, repoRoot) {
+export function composeMagicLink(email, project, repoRoot, template) {
 	const encodedEmail = Buffer.from(email, "utf8").toString("base64");
+	const callbackURL = composeFormsCallbackURL(template);
 	const source = `
 import Redis from "ioredis";
 import { createFormsAuth } from "@urlx/api/modules/forms/auth";
@@ -110,7 +120,7 @@ try {
   const response = await auth.handler(new Request(base + "/sign-in/magic-link", {
     method: "POST",
     headers: { origin: new URL(base).origin, "content-type": "application/json" },
-    body: JSON.stringify({ email, callbackURL: "/forms" }),
+    body: JSON.stringify({ email, callbackURL: ${JSON.stringify(callbackURL)} }),
   }));
   if (response.status !== 200 || !html.includes("href=")) {
     throw new Error("Could not create an isolated test magic link");
