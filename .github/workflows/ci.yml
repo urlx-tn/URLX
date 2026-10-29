@@ -184,4 +184,23 @@ jobs:
           python scripts/test-prepare-egress-gate.py
 
       - name: Build container images
+        env:
+          COMPOSE_PROJECT_NAME: urlx-ci
         run: docker compose build --pull web api conversion conversion-renderer migrate postgres egress-proxy
+
+      - name: Smoke test the distroless migrator entrypoint
+        env:
+          COMPOSE_PROJECT_NAME: urlx-ci
+        run: |
+          set -euo pipefail
+          if output="$(docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,size=64m,mode=1777 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e HOME=/tmp -e MIGRATOR_DATABASE_URL= \
+            urlx-ci-migrate 2>&1)"; then
+            echo "Migrator unexpectedly succeeded without MIGRATOR_DATABASE_URL" >&2
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          grep -Fq "MIGRATOR_DATABASE_URL is required" <<<"$output"
+          ! grep -Fq "MissingShell" <<<"$output"

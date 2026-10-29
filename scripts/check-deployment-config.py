@@ -110,6 +110,25 @@ def require_valid_tmpfs_entries(service: dict[str, Any], name: str) -> None:
 					)
 
 
+def require_valkey_runtime(service: dict[str, Any]) -> None:
+	if service.get("user") != "999:1000":
+		raise ValueError("valkey must run as the verified non-root UID:GID 999:1000")
+	if "ALL" not in service.get("cap_drop", []) or service.get("cap_add"):
+		raise ValueError("valkey must drop all capabilities without adding any")
+	tmpfs = service.get("tmpfs", [])
+	entries = [tmpfs] if isinstance(tmpfs, str) else tmpfs
+	data_mounts = [
+		entry
+		for entry in entries
+		if isinstance(entry, str) and entry.startswith("/data")
+	]
+	if len(data_mounts) != 1 or data_mounts[0].split(":", 1)[0] != "/data":
+		raise ValueError("valkey requires one writable /data tmpfs")
+	options = data_mounts[0].partition(":")[2].split(",")
+	if "ro" in options or "mode=1777" not in options:
+		raise ValueError("valkey /data tmpfs must be writable with mode 1777")
+
+
 def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 	try:
 		all_services = config["services"]
@@ -154,6 +173,7 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 		if missing:
 			raise ValueError(f"Compose resource limits are missing services: {', '.join(missing)}")
 		require_postgres_tcp_healthcheck(services["postgres"])
+		require_valkey_runtime(services["valkey"])
 		published_ports = []
 		for service_name, target_port in (("web", 8080), ("api", 8787), ("conversion", 8788)):
 			published_ports.append(require_loopback_port(services[service_name], service_name, target_port))

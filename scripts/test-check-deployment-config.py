@@ -36,6 +36,9 @@ def config(maxmemory: object = 80_000_000, memory_limit: object = 100_000_000) -
 		]
 	services["valkey"].update(
 		{
+			"user": "999:1000",
+			"cap_drop": ["ALL"],
+			"tmpfs": ["/data:size=16m,mode=1777"],
 			# This is the resolved `docker compose config --format json` argv shape.
 			"command": [
 				"valkey-server",
@@ -71,6 +74,19 @@ class DeploymentConfigTests(unittest.TestCase):
 	def test_accepts_twenty_percent_headroom(self) -> None:
 		result = module.validate_config(config("80000000", "100000000"))
 		self.assertEqual(result["valkey_maxmemory"], 80_000_000)
+
+	def test_requires_valkey_verified_nonroot_identity_and_writable_tmpfs(self) -> None:
+		for update, message in (
+			({"user": "0:0"}, "999:1000"),
+			({"cap_drop": []}, "drop all capabilities"),
+			({"cap_add": ["CHOWN"]}, "without adding any"),
+			({"tmpfs": ["/data:ro,mode=1777"]}, "must be writable"),
+			({"tmpfs": ["/data:mode=0555"]}, "must be writable"),
+		):
+			bad = config()
+			bad["services"]["valkey"].update(update)
+			with self.subTest(update=update), self.assertRaisesRegex(ValueError, message):
+				module.validate_config(bad)
 
 	def test_rejects_postgres_socket_only_healthcheck(self) -> None:
 		bad = config()

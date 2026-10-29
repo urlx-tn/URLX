@@ -62,7 +62,11 @@ async function main() {
 
 if (import.meta.main) {
 	main().catch(() => {
-		console.error("Database migration failed; no query details were logged.");
+		if (!process.env.MIGRATOR_DATABASE_URL?.trim()) {
+			console.error("MIGRATOR_DATABASE_URL is required");
+		} else {
+			console.error("Database migration failed; no query details were logged.");
+		}
 		process.exitCode = 1;
 	});
 }

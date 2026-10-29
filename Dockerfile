@@ -80,4 +80,4 @@ WORKDIR /app
 ENV NODE_ENV=production HOME=/tmp
 COPY --from=migrator-deploy --chown=1000:1000 /out/migrator/ ./
 USER 1000:1000
-CMD ["bun", "run", "db:migrate"]
+CMD ["bun", "./scripts/migrate.ts"]

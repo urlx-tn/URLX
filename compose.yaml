@@ -232,6 +232,7 @@ services:
     labels:
       com.urlx.stack: urlx
     image: valkey/valkey:8.1.11-alpine
+    user: "999:1000"
     command:
       - valkey-server
       - --save

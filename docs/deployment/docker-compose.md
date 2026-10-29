@@ -14,7 +14,7 @@ and cutover task.
 | `conversion` | Hono on Bun | Loopback-published host upstream; Valkey, renderer, egress proxy |
 | `conversion-renderer` | Playwright 1.64.1 on Bun | Conversion control service and egress proxy only |
 | `postgres` | PostgreSQL | Private data network; named persistent volume |
-| `valkey` | Valkey | Private rate-limit network; no persistence |
+| `valkey` | Valkey | Private rate-limit network; UID/GID 999:1000; no persistence |
 | `migrate` | Bun + Drizzle ORM | One-shot schema migration using `urlx_migrator` |
 | `egress-proxy` | Squid | Only service with an external Docker network |
 
