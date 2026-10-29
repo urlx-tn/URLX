@@ -77,7 +77,7 @@ fi
 if nft list table bridge urlx_egress >/dev/null 2>&1; then
 	nft delete table bridge urlx_egress
 fi
-rm -f "$policy_dir/ready.json" "$policy_dir/ready.json.tmp"
+rm -f "$policy_dir/ready.json" "$policy_dir/ready.json.tmp" "$policy_dir/ready.json.owner"
 rm -f "$policy_dir/host-denylist.txt"
 
 echo "URLX containers are stopped; PostgreSQL volume is retained."

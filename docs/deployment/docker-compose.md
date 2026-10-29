@@ -188,8 +188,14 @@ without listeners until the egress policy and matching readiness manifest are
 installed. The helper does not wait for those gated healthchecks before
 installing the policy; PostgreSQL, Valkey, and the one-shot migration can still
 satisfy their startup dependencies. On an existing stack it stops only the
-known running egress clients after the same ownership checks, then recreates
-the policy and manifest. If a foreign project is active or the nftables table
+known running egress clients after the same ownership checks. Before Compose
+starts, it atomically removes the readiness manifest and deletes only the
+owner-verified URLX table, preventing stale container IP/MAC rules from
+blocking PostgreSQL initialization after a network recreation. PostgreSQL,
+Valkey, and the migrator use internal networks; app and proxy entrypoints stay
+gated until the helper installs fresh rules and a fresh manifest. If table
+deletion fails, Compose does not start and the non-readiness owner sidecar is
+retained for a safe retry. If a foreign project is active or the nftables table
 has no matching owner manifest, it stops before stopping containers or changing
 the firewall. A fresh checkout does not need a pre-created egress policy
 directory: the helper checks firewall/manifest ownership first, then creates

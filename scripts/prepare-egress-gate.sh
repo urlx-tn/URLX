@@ -60,6 +60,7 @@ if [[ -n "$egress_clients_output" ]]; then
 fi
 python3 scripts/prepare-egress-gate.py --project "$compose_project" --check-active-only
 python3 scripts/prepare-egress-gate.py --project "$compose_project" --policy-dir "$policy_dir" --check-owner-only
+python3 scripts/prepare-egress-gate.py --project "$compose_project" --policy-dir "$policy_dir" --invalidate-runtime-only
 
 ip -j address show | jq -r '.[].addr_info[]?.local' | sort -u > "$policy_dir/host-denylist.txt"
 if [[ ! -s "$policy_dir/host-denylist.txt" ]]; then
@@ -68,9 +69,9 @@ if [[ ! -s "$policy_dir/host-denylist.txt" ]]; then
 fi
 chmod 0644 "$policy_dir/host-denylist.txt"
 
-# Client services start behind their own policy barrier; they do not bind ports,
-# fetch URLs, or launch Chromium until the refreshed, owner-bound manifest is
-# written below. Keep the previous manifest so ownership remains provable.
+# PostgreSQL, Valkey, and the one-shot migrator start on internal networks.
+# Egress clients stay behind their policy barriers until fresh rules and the
+# owner-bound readiness manifest are written below.
 docker compose --project-name "$compose_project" up --detach --no-build
 
 python3 scripts/prepare-egress-gate.py --project "$compose_project" --policy-dir "$policy_dir"

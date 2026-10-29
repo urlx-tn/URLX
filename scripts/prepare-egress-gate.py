@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - the gate itself runs only on Linux.
 PROJECT_NAME_PATTERN = re.compile(r"^urlx(-[a-z0-9][a-z0-9_-]{0,42})?$")
 COMPOSE_PROJECT = "urlx"
 NFT_TABLE = "urlx_egress"
+OWNER_SIDECAR = "ready.json.owner"
 LOCK_PATH = Path("/run/lock/urlx-egress-gate.lock")
 KNOWN_SERVICES = {
 	"web",
@@ -125,24 +126,137 @@ def assert_gate_owner(project: str, manifest: dict | None, table_exists: bool) -
 		raise RuntimeError("Existing URLX nftables table has no owner manifest; refusing mutation")
 	if manifest is not None and manifest.get("composeProject") != project:
 		raise RuntimeError("URLX egress manifest belongs to another Compose project")
+	if manifest is not None and not gate_owner_manifest_is_valid(manifest, project):
+		raise RuntimeError("URLX egress owner manifest is invalid; refusing mutation")
+
+
+def gate_owner_manifest_is_valid(manifest: dict, project: str) -> bool:
+	def valid_id(value: object) -> bool:
+		return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value, re.I) is not None
+
+	def valid_networks(value: object) -> bool:
+		return isinstance(value, list) and bool(value) and all(
+			isinstance(network, dict)
+			and valid_id(network.get("networkId"))
+			and isinstance(network.get("ip"), str)
+			and _valid_ip(network["ip"])
+			and isinstance(network.get("mac"), str)
+			and re.fullmatch(r"(?:[a-f0-9]{2}:){5}[a-f0-9]{2}", network["mac"], re.I)
+			for network in value
+		)
+
+	if (
+		type(manifest.get("policyVersion")) is not int
+		or manifest["policyVersion"] != 1
+		or manifest.get("composeProject") != project
+		or not isinstance(manifest.get("ruleSetHash"), str)
+		or not re.fullmatch(r"[a-f0-9]{64}", manifest["ruleSetHash"], re.I)
+		or not isinstance(manifest.get("hostAddresses"), list)
+		or not manifest["hostAddresses"]
+		or any(not _valid_ip(address) for address in manifest["hostAddresses"])
+		or not isinstance(manifest.get("verifiedAt"), str)
+		or not isinstance(manifest.get("proxy"), dict)
+		or not valid_id(manifest["proxy"].get("containerId"))
+		or not isinstance(manifest["proxy"].get("netns"), str)
+		or not re.fullmatch(r"net:\[\d+\]", manifest["proxy"]["netns"])
+		or not valid_networks(manifest["proxy"].get("networks"))
+		or not isinstance(manifest.get("services"), dict)
+	):
+		return False
+	try:
+		verified_at = datetime.fromisoformat(manifest["verifiedAt"].replace("Z", "+00:00"))
+	except ValueError:
+		return False
+	if verified_at.tzinfo is None:
+		return False
+	services = manifest["services"]
+	if (
+		not {"api", "web", "conversion"}.issubset(services)
+		or not set(services).issubset({"api", "web", "conversion", "conversion-renderer"})
+	):
+		return False
+	for service in services.values():
+		if (
+			not isinstance(service, dict)
+			or not valid_id(service.get("containerId"))
+			or not isinstance(service.get("hostname"), str)
+			or not re.fullmatch(r"[a-f0-9]{12,64}", service["hostname"], re.I)
+			or not service["containerId"].lower().startswith(service["hostname"].lower())
+			or not isinstance(service.get("netns"), str)
+			or not re.fullmatch(r"net:\[\d+\]", service["netns"])
+			or not valid_networks(service.get("networks"))
+		):
+			return False
+	return True
+
+
+def _valid_ip(value: object) -> bool:
+	if not isinstance(value, str):
+		return False
+	try:
+		ipaddress.ip_address(value)
+		return True
+	except ValueError:
+		return False
 
 
 def gate_owner_state(policy_dir: Path) -> tuple[dict | None, bool]:
 	manifest_path = policy_dir / "ready.json"
+	owner_path = policy_dir / OWNER_SIDECAR
 	manifest = None
 	if policy_dir.exists() and not policy_dir.is_dir():
 		raise RuntimeError("URLX egress policy path is not a directory")
-	if manifest_path.exists():
+	for path in (manifest_path, owner_path):
+		if path.is_symlink() or (path.exists() and not path.is_file()):
+			raise RuntimeError("URLX egress owner manifest path is unsafe")
+	if manifest_path.exists() and owner_path.exists():
+		if manifest_path.read_bytes() != owner_path.read_bytes():
+			raise RuntimeError("URLX egress owner manifests are ambiguous")
+	if manifest_path.exists() or owner_path.exists():
+		owner_manifest_path = manifest_path if manifest_path.exists() else owner_path
 		try:
-			manifest = json.loads(manifest_path.read_text())
+			manifest = json.loads(owner_manifest_path.read_text())
 		except (OSError, json.JSONDecodeError) as error:
 			raise RuntimeError("URLX egress owner manifest is malformed") from error
+		if not isinstance(manifest, dict):
+			raise RuntimeError("URLX egress owner manifest is malformed")
 	try:
 		run("nft", "list", "table", "bridge", NFT_TABLE)
 		table_exists = True
 	except subprocess.CalledProcessError:
 		table_exists = False
 	return manifest, table_exists
+
+
+def assert_egress_clients_stopped(services: set[str]) -> None:
+	clients = egress_clients_to_stop(services)
+	if clients:
+		raise RuntimeError(
+			"URLX egress clients must be stopped before invalidating policy: "
+			f"{', '.join(clients)}"
+		)
+
+
+def invalidate_runtime_policy(policy_dir: Path, project: str, services: set[str]) -> None:
+	assert_egress_clients_stopped(services)
+	manifest, table_exists = gate_owner_state(policy_dir)
+	assert_gate_owner(project, manifest, table_exists)
+	if manifest is not None and not gate_owner_manifest_is_valid(manifest, project):
+		raise RuntimeError("URLX egress owner manifest is invalid; refusing policy invalidation")
+
+	if table_exists:
+		table = run("nft", "list", "table", "bridge", NFT_TABLE)
+		if not re.search(r'\bcomment\s+"urlx-egress-gate-[a-f0-9]{32}"\s*;', table):
+			raise RuntimeError("URLX egress table has no verified install marker; refusing policy invalidation")
+
+	ready_path = policy_dir / "ready.json"
+	owner_path = policy_dir / OWNER_SIDECAR
+	if ready_path.exists():
+		os.replace(ready_path, owner_path)
+	(policy_dir / "ready.json.tmp").unlink(missing_ok=True)
+	if table_exists:
+		run("nft", "delete", "table", "bridge", NFT_TABLE)
+	owner_path.unlink(missing_ok=True)
 
 
 def read_gate_owner(policy_dir: Path, project: str) -> None:
@@ -449,6 +563,7 @@ def main() -> None:
 	parser.add_argument("--check-active-only", action="store_true")
 	parser.add_argument("--check-owner-only", action="store_true")
 	parser.add_argument("--preflight-only", action="store_true")
+	parser.add_argument("--invalidate-runtime-only", action="store_true")
 	parser.add_argument("--list-egress-clients", action="store_true")
 	args = parser.parse_args()
 	if not PROJECT_NAME_PATTERN.fullmatch(args.project):
@@ -481,6 +596,13 @@ def main() -> None:
 	policy_dir = args.policy_dir.resolve(strict=True)
 	read_gate_owner(policy_dir, args.project)
 	if args.check_owner_only:
+		return
+	if args.invalidate_runtime_only:
+		services = running_service_names(
+			compose("ps", "--services", "--status", "running"),
+			require_core=False,
+		)
+		invalidate_runtime_policy(policy_dir, args.project, services)
 		return
 	if not (policy_dir / "host-denylist.txt").is_file():
 		raise RuntimeError("Host denylist must exist before starting the stack")

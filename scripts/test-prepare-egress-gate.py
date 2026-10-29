@@ -17,6 +17,35 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+def owner_manifest(project: str) -> dict:
+	network = {
+		"networkId": "a" * 64,
+		"ip": "172.29.0.3",
+		"mac": "02:42:ac:1d:00:03",
+	}
+	return {
+		"policyVersion": 1,
+		"composeProject": project,
+		"verifiedAt": "2026-10-29T17:00:00+00:00",
+		"ruleSetHash": "b" * 64,
+		"hostAddresses": ["203.0.113.10"],
+		"proxy": {
+			"containerId": "c" * 64,
+			"netns": "net:[4026533001]",
+			"networks": [network],
+		},
+		"services": {
+			name: {
+				"containerId": f"{letter}" * 64,
+				"hostname": letter * 12,
+				"netns": "net:[4026533002]",
+				"networks": [network],
+			}
+			for name, letter in (("api", "d"), ("web", "e"), ("conversion", "f"))
+		},
+	}
+
+
 class EgressAddressSetTests(unittest.TestCase):
 	def test_blocked_ipv4_union_collapses_contained_hosts_and_keeps_public_hosts(self) -> None:
 		blocked = [
@@ -50,6 +79,151 @@ class EgressAddressSetTests(unittest.TestCase):
 
 
 class EgressProjectOwnershipTests(unittest.TestCase):
+	def test_runtime_invalidation_deletes_only_owned_table_after_readiness_is_hidden(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready_path = policy_dir / "ready.json"
+			ready_path.write_text(json.dumps(owner_manifest("urlx-test")))
+			(policy_dir / "ready.json.tmp").write_text("stale temp")
+			denylist = policy_dir / "host-denylist.txt"
+			denylist.write_text("203.0.113.10\n")
+			marker = "urlx-egress-gate-" + "a" * 32
+			calls: list[tuple[str, ...]] = []
+
+			def run(*args: str) -> str:
+				calls.append(args)
+				if args[:3] == ("nft", "list", "table"):
+					return f'table bridge urlx_egress {{ comment "{marker}"; }}'
+				if args[:3] == ("nft", "delete", "table"):
+					self.assertFalse(ready_path.exists())
+					self.assertTrue((policy_dir / module.OWNER_SIDECAR).is_file())
+					self.assertTrue(denylist.is_file())
+					return ""
+				self.fail(f"unexpected command: {args}")
+				return ""
+
+			with patch.object(module, "run", side_effect=run):
+				module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			self.assertFalse(ready_path.exists())
+			self.assertFalse((policy_dir / module.OWNER_SIDECAR).exists())
+			self.assertFalse((policy_dir / "ready.json.tmp").exists())
+			self.assertTrue(denylist.is_file())
+			self.assertEqual(calls[-1], ("nft", "delete", "table", "bridge", module.NFT_TABLE))
+
+	def test_runtime_invalidation_keeps_owner_sidecar_after_delete_failure_and_retry_clears_it(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			manifest = owner_manifest("urlx-test")
+			ready_path = policy_dir / "ready.json"
+			ready_path.write_text(json.dumps(manifest))
+			(policy_dir / "ready.json.tmp").write_text("stale temp")
+			marker = "urlx-egress-gate-" + "b" * 32
+			delete_error = subprocess.CalledProcessError(1, ["nft", "delete"])
+			with patch.object(
+				module,
+				"run",
+				side_effect=[
+					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					delete_error,
+				],
+			):
+				with self.assertRaises(subprocess.CalledProcessError):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			self.assertFalse(ready_path.exists())
+			self.assertFalse((policy_dir / "ready.json.tmp").exists())
+			self.assertEqual(
+				json.loads((policy_dir / module.OWNER_SIDECAR).read_text()), manifest
+			)
+
+			with patch.object(
+				module,
+				"run",
+				side_effect=[
+					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					f'table bridge urlx_egress {{ comment "{marker}"; }}',
+					"",
+				],
+			) as run:
+				module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			self.assertFalse((policy_dir / module.OWNER_SIDECAR).exists())
+			run.assert_any_call("nft", "delete", "table", "bridge", module.NFT_TABLE)
+
+	def test_runtime_invalidation_rejects_live_clients_foreign_owners_and_bad_manifests(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			ready_path = policy_dir / "ready.json"
+			ready_path.write_text(json.dumps(owner_manifest("urlx-test")))
+			with patch.object(module, "run") as run:
+				with self.assertRaisesRegex(RuntimeError, "must be stopped"):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", {"api"})
+			run.assert_not_called()
+			self.assertTrue(ready_path.exists())
+
+			ready_path.write_text(json.dumps(owner_manifest("urlx-other")))
+			with patch.object(module, "run", return_value="table bridge urlx_egress {}") as run:
+				with self.assertRaisesRegex(RuntimeError, "belongs to another"):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+			self.assertTrue(ready_path.exists())
+
+			ready_path.write_text(json.dumps({"composeProject": "urlx-test"}))
+			with patch.object(module, "run", return_value="table bridge urlx_egress {}") as run:
+				with self.assertRaisesRegex(RuntimeError, "manifest is invalid"):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+			self.assertTrue(ready_path.exists())
+
+	def test_runtime_invalidation_refuses_unowned_table_but_allows_cold_start(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			with patch.object(module, "run", return_value="table bridge urlx_egress {}") as run:
+				with self.assertRaisesRegex(RuntimeError, "no owner manifest"):
+					module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			run.assert_called_once_with("nft", "list", "table", "bridge", module.NFT_TABLE)
+
+			ready_temp = policy_dir / "ready.json.tmp"
+			ready_temp.write_text("incomplete")
+			with patch.object(
+				module,
+				"run",
+				side_effect=subprocess.CalledProcessError(1, ["nft", "list"]),
+			):
+				module.invalidate_runtime_policy(policy_dir, "urlx-test", set())
+			self.assertFalse(ready_temp.exists())
+
+	def test_owner_state_uses_safe_sidecar_fallback_and_rejects_ambiguity_or_symlinks(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			policy_dir = Path(directory)
+			owner_path = policy_dir / module.OWNER_SIDECAR
+			manifest = owner_manifest("urlx-test")
+			owner_path.write_text(json.dumps(manifest))
+			with patch.object(
+				module,
+				"run",
+				side_effect=subprocess.CalledProcessError(1, ["nft", "list"]),
+			):
+				self.assertEqual(module.gate_owner_state(policy_dir), (manifest, False))
+
+			ready_path = policy_dir / "ready.json"
+			ready_path.write_text(json.dumps({**manifest, "ruleSetHash": "c" * 64}))
+			with patch.object(module, "run") as run:
+				with self.assertRaisesRegex(RuntimeError, "ambiguous"):
+					module.gate_owner_state(policy_dir)
+			run.assert_not_called()
+
+			ready_path.unlink()
+			with patch.object(
+				Path,
+				"is_symlink",
+				autospec=True,
+				side_effect=lambda path: path.name == module.OWNER_SIDECAR,
+			):
+				with patch.object(module, "run") as run:
+					with self.assertRaisesRegex(RuntimeError, "path is unsafe"):
+						module.gate_owner_state(policy_dir)
+			run.assert_not_called()
+
 	def test_container_netns_uses_host_procfs_and_revalidates_docker_state(self) -> None:
 		container = {
 			"Id": "a" * 64,
@@ -282,12 +456,20 @@ class EgressProjectOwnershipTests(unittest.TestCase):
 			module.assert_no_other_urlx_project("urlx-e2e-ci", {"urlx", "urlx-e2e-ci"})
 
 	def test_existing_table_requires_matching_owner_manifest(self) -> None:
-		module.assert_gate_owner("urlx-e2e-ci", {"composeProject": "urlx-e2e-ci"}, True)
+		module.assert_gate_owner("urlx-e2e-ci", owner_manifest("urlx-e2e-ci"), True)
 		module.assert_gate_owner("urlx-e2e-ci", None, False)
 		with self.assertRaisesRegex(RuntimeError, "no owner manifest"):
 			module.assert_gate_owner("urlx-e2e-ci", None, True)
 		with self.assertRaisesRegex(RuntimeError, "belongs to another Compose project"):
-			module.assert_gate_owner("urlx-e2e-ci", {"composeProject": "urlx"}, True)
+			module.assert_gate_owner("urlx-e2e-ci", owner_manifest("urlx"), True)
+		invalid_version = owner_manifest("urlx-e2e-ci")
+		invalid_version["policyVersion"] = True
+		with self.assertRaisesRegex(RuntimeError, "manifest is invalid"):
+			module.assert_gate_owner("urlx-e2e-ci", invalid_version, True)
+		unknown_service = owner_manifest("urlx-e2e-ci")
+		unknown_service["services"]["other"] = unknown_service["services"]["api"]
+		with self.assertRaisesRegex(RuntimeError, "manifest is invalid"):
+			module.assert_gate_owner("urlx-e2e-ci", unknown_service, True)
 
 
 if __name__ == "__main__":
