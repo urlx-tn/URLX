@@ -10,7 +10,28 @@ import {
 	normalizeSQLiteRow,
 	openSQLiteSnapshot,
 	sqliteImportTables,
+	validateTarget,
 } from "./import-sqlite-to-postgres";
+
+describe("PostgreSQL importer target preflight", () => {
+	it("accepts a UTF8 target after validating the migrator identity", async () => {
+		const { client, getQueryCount } = mockTargetClient("UTF8");
+		await expect(validateTarget(client)).resolves.toMatchObject({
+			database: "urlx_import_test",
+			serverEncoding: "UTF8",
+			role: "urlx_migrator",
+		});
+		expect(getQueryCount()).toBe(1);
+	});
+
+	it("rejects a non-UTF8 target during the read-only target preflight", async () => {
+		const { client, getQueryCount } = mockTargetClient("LATIN1");
+		await expect(validateTarget(client)).rejects.toThrow(
+			"PostgreSQL import target must use UTF8 server encoding",
+		);
+		expect(getQueryCount()).toBe(1);
+	});
+});
 
 describe("SQLite snapshot import preflight", () => {
 	let directory = "";
@@ -263,4 +284,31 @@ function seedSyntheticSnapshot(database: Database) {
 		)
 		.run(instant);
 	database.query("DELETE FROM forms WHERE id = 'deleted-form'").run();
+}
+
+function mockTargetClient(serverEncoding: string) {
+	let queryCount = 0;
+	const client = {
+		async query() {
+			queryCount += 1;
+			return {
+				rows: [
+					{
+						database: "urlx_import_test",
+						serverEncoding,
+						role: "urlx_migrator",
+						sessionRole: "urlx_migrator",
+						superuser: false,
+						createRole: false,
+						createDatabase: false,
+						replication: false,
+						bypassRls: false,
+						canCreateDatabase: true,
+						canCreatePublicSchema: true,
+					},
+				],
+			};
+		},
+	} as unknown as Parameters<typeof validateTarget>[0];
+	return { client, getQueryCount: () => queryCount };
 }

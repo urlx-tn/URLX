@@ -450,10 +450,11 @@ function parseArgs(args: string[]) {
 	return { source, apply, sourceOnly, confirmDatabase };
 }
 
-async function validateTarget(client: Client) {
+export async function validateTarget(client: Client) {
 	const result = await client.query<
-		DatabaseRoleIdentity & { database: string }
+		DatabaseRoleIdentity & { database: string; serverEncoding: string }
 	>(`SELECT current_database() AS database,
+			current_setting('server_encoding') AS "serverEncoding",
 		current_user AS role,
 		session_user AS "sessionRole",
 		roles.rolsuper AS superuser,
@@ -467,6 +468,8 @@ async function validateTarget(client: Client) {
 	const target = result.rows[0];
 	if (!target) throw new Error("Unable to validate the importer target role");
 	assertImporterTargetIdentity(target);
+	if (target.serverEncoding !== "UTF8")
+		throw new Error("PostgreSQL import target must use UTF8 server encoding");
 	return target;
 }
 

@@ -4,8 +4,10 @@ The importer copies a current URLX SQLite/D1 database snapshot into a fresh,
 migrated PostgreSQL database. It preserves primary IDs, auth sessions and
 tokens, aliases and tombstones, millisecond timestamps, retained responses,
 monthly accepted-response counters (including deleted responses), and
-`form_limits`. It does not access the Cloudflare account, export D1, or copy
-data over a network.
+`form_limits`. The PostgreSQL target must use UTF8 server encoding so imported
+Unicode text can be represented exactly. The importer checks this before its
+dry-run or apply target checks. It does not access the Cloudflare account,
+export D1, or copy data over a network.
 
 The input must be a SQLite database file using the repository's current
 historical SQLite migration schema. Keep the snapshot outside the checkout and
@@ -33,10 +35,10 @@ pnpm --filter @urlx/db db:import-sqlite -- --source /absolute/path/outside/check
 ```
 
 Dry run validates SQLite integrity, foreign keys, schema columns, target role,
-and that the PostgreSQL application tables are empty. It reports row counts and
-SHA-256 checksums of primary keys only. The fresh migration's default
-`form_limits` row is permitted; changed limit values or any other target data
-cause refusal.
+UTF8 server encoding, and that the PostgreSQL application tables are empty. It
+reports row counts and SHA-256 checksums of primary keys only. The fresh
+migration's default `form_limits` row is permitted; changed limit values or any
+other target data cause refusal.
 
 ## Apply
 
