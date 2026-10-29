@@ -20,6 +20,26 @@ function shellQuote(value) {
 	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+export function createComposeResendFetch(email, captureHtml) {
+	return async (input, init) => {
+		const url = new URL(input instanceof Request ? input.url : String(input));
+		if (url.origin !== "https://api.resend.com" || url.pathname !== "/emails") {
+			throw new Error("Unexpected outbound request from isolated auth helper");
+		}
+		const message = JSON.parse(String(init?.body ?? "{}"));
+		const recipients = Array.isArray(message.to) ? message.to : [message.to];
+		if (
+			init?.method !== "POST" ||
+			recipients.length !== 1 ||
+			recipients[0] !== email
+		) {
+			throw new Error("Test mail recipient mismatch");
+		}
+		captureHtml(String(message.html ?? ""));
+		return Response.json({ id: "urlx-container-e2e" });
+	};
+}
+
 export function requireComposeTestTarget() {
 	const project = process.env.URLX_COMPOSE_PROJECT ?? "";
 	const rawBaseUrl = process.env.URLX_FORMS_E2E_BASE_URL ?? "";
@@ -72,19 +92,14 @@ const authStorageClient = {
 };
 const nativeFetch = globalThis.fetch;
 let html = "";
-globalThis.fetch = async (input, init) => {
-  const url = new URL(input instanceof Request ? input.url : String(input));
-  if (url.origin !== "https://api.resend.com") return nativeFetch(input, init);
-  const message = JSON.parse(String(init?.body ?? "{}"));
-  if (!Array.isArray(message.to) || !message.to.includes(email)) {
-    throw new Error("Test mail recipient mismatch");
-  }
-  html = String(message.html ?? "");
-  return Response.json({ id: "urlx-container-e2e" });
-};
+const createComposeResendFetch = ${createComposeResendFetch.toString()};
+globalThis.fetch = createComposeResendFetch(email, (capturedHtml) => {
+  html = capturedHtml;
+});
 try {
+  const authEnv = { ...process.env, RESEND_API_KEY: "re_test_e2e_not_sent" };
   const auth = createFormsAuth(
-    process.env,
+    authEnv,
     createPgDb(pool),
     createValkeyAuthStorage(
       authStorageClient,

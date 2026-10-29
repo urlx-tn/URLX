@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { wrapRemoteCommand } from "./compose-test-support.mjs";
+import {
+	createComposeResendFetch,
+	wrapRemoteCommand,
+} from "./compose-test-support.mjs";
 
 const command = `cd /root/urlx/test && docker compose --project-name urlx-container-validation --file compose.yaml exec -T api bun -e "$(printf '%s' 'YWJj' | base64 -d)"`;
 
@@ -33,4 +36,45 @@ test("invalid sudo flags are rejected", () => {
 			/URLX_FORMS_E2E_SSH_SUDO must be exactly "true" or "false"/,
 		);
 	}
+});
+
+test("Resend test fetch captures one exact synthetic recipient without networking", async () => {
+	let capturedHtml = "";
+	const fetch = createComposeResendFetch(
+		"browser-1-abcdef@example.invalid",
+		(html) => {
+			capturedHtml = html;
+		},
+	);
+	const response = await fetch("https://api.resend.com/emails", {
+		method: "POST",
+		body: JSON.stringify({
+			to: "browser-1-abcdef@example.invalid",
+			html: "<p>synthetic test</p>",
+		}),
+	});
+	assert.equal(response.status, 200);
+	assert.deepEqual(await response.json(), { id: "urlx-container-e2e" });
+	assert.equal(capturedHtml, "<p>synthetic test</p>");
+});
+
+test("unexpected Resend fetch targets fail closed without a network fallback", async () => {
+	let captured = false;
+	const fetch = createComposeResendFetch(
+		"browser-1-abcdef@example.invalid",
+		() => {
+			captured = true;
+		},
+	);
+	await assert.rejects(
+		fetch("https://unexpected.example/emails", {
+			method: "POST",
+			body: JSON.stringify({
+				to: "browser-1-abcdef@example.invalid",
+				html: "<p>synthetic test</p>",
+			}),
+		}),
+		/Unexpected outbound request from isolated auth helper/,
+	);
+	assert.equal(captured, false);
 });
