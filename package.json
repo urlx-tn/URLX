@@ -38,6 +38,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "pnpm --filter web dev:bare",
+		"dev:local": "node scripts/dev-local.mjs",
 		"build": "turbo run build",
 		"check-types": "turbo run check-types",
 		"test": "bun test deploy/entrypoints/start-web.test.ts && turbo run test --concurrency=1",
