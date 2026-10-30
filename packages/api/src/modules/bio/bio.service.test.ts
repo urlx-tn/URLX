@@ -103,3 +103,51 @@ describe("BioService PostgreSQL text inputs", () => {
 		expect(capturedLinkRows[0]?.[0]?.url).toBe(rawUrl);
 	});
 });
+
+describe("BioService search pagination", () => {
+	it("preserves last-page metadata for an out-of-range request", async () => {
+		const searchPages = vi.fn(async () => ({
+			total: 100,
+			items: [
+				{
+					slug: "last-page",
+					title: "Last page",
+					description: null,
+					createdAt: 1,
+				},
+			],
+		}));
+		const service = new BioService({
+			db: {} as never,
+			repository: { searchPages } as never,
+		});
+
+		await expect(
+			service.searchBioPages({
+				query: "page",
+				page: Number.MAX_SAFE_INTEGER,
+				pageSize: 24,
+			}),
+		).resolves.toEqual({
+			query: "page",
+			page: 5,
+			pageSize: 24,
+			totalItems: 100,
+			totalPages: 5,
+			items: [
+				{
+					slug: "last-page",
+					title: "Last page",
+					description: null,
+					createdAt: 1,
+				},
+			],
+		});
+		expect(searchPages).toHaveBeenCalledTimes(1);
+		expect(searchPages).toHaveBeenCalledWith({
+			query: "page",
+			limit: 24,
+			page: Number.MAX_SAFE_INTEGER,
+		});
+	});
+});

@@ -155,39 +155,22 @@ export class BioService {
 		);
 		const requestedPage = Math.max(1, input.page ?? 1);
 
-		const firstPass = await this.repository.searchPages({
+		const result = await this.repository.searchPages({
 			query,
 			limit: pageSize,
-			offset: (requestedPage - 1) * pageSize,
+			page: requestedPage,
 		});
 
-		const totalPages = Math.max(1, Math.ceil(firstPass.total / pageSize));
+		const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
 		const page = Math.min(requestedPage, totalPages);
-
-		if (page === requestedPage) {
-			return {
-				query,
-				page,
-				pageSize,
-				totalItems: firstPass.total,
-				totalPages,
-				items: firstPass.items,
-			};
-		}
-
-		const clamped = await this.repository.searchPages({
-			query,
-			limit: pageSize,
-			offset: (page - 1) * pageSize,
-		});
 
 		return {
 			query,
 			page,
 			pageSize,
-			totalItems: clamped.total,
+			totalItems: result.total,
 			totalPages,
-			items: clamped.items,
+			items: result.items,
 		};
 	}
 
