@@ -1,12 +1,10 @@
-import type { ServerBindings } from "@urlx/api/context";
 import { formsAreEnabled } from "@urlx/api/modules/forms/auth";
 import { FormsService } from "@urlx/api/modules/forms/forms.service";
-import { createDb } from "@urlx/db";
 import { Hono } from "hono";
-
 import { renderFormOg } from "./forms-og/renderer";
+import type { ApiAppBindings } from "./runtime/bindings";
 
-type OgEnv = { Bindings: ServerBindings };
+type OgEnv = { Bindings: ApiAppBindings };
 type WorkerCacheStorage = CacheStorage & { default?: Cache };
 
 export const formsOgApp = new Hono<OgEnv>();
@@ -15,7 +13,7 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 	if (!formsAreEnabled(c.env))
 		return c.json({ error: "FORMS_UNAVAILABLE" }, 503);
 	const slug = c.req.param("slug").toLowerCase();
-	const service = new FormsService(createDb(c.env.DB));
+	const service = new FormsService(c.env.DB);
 	const found = await service.getPublic(slug);
 	if (!found)
 		return c.json({ error: "FORM_NOT_FOUND" }, 404, {
@@ -82,8 +80,17 @@ formsOgApp.get("/api/forms/public/:slug/og.png", async (c) => {
 		}
 		return response;
 	} catch (error) {
-		console.error("Unable to render form social image", error);
-		return c.json({ error: "OG_RENDER_FAILED" }, 500, {
+		const requestId = crypto.randomUUID();
+		console.error("Unable to render form social image", {
+			requestId,
+			errorType:
+				error instanceof Error &&
+				/^[A-Za-z][A-Za-z0-9_]{0,59}$/.test(error.name)
+					? error.name
+					: "Error",
+		});
+		return c.json({ error: "OG_RENDER_FAILED", requestId }, 500, {
+			"X-Request-ID": requestId,
 			"Cache-Control": "no-store",
 		});
 	}

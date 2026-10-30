@@ -8,6 +8,7 @@ export const bioErrorCodes = [
 	"NO_LINKS",
 	"TOO_MANY_LINKS",
 	"INVALID_LINK_LABEL",
+	"INVALID_TEXT",
 	"PAGE_NOT_FOUND",
 	"SERVER_ERROR",
 ] as const;
@@ -25,6 +26,7 @@ const defaultMessages: Record<BioErrorCode, string> = {
 	NO_LINKS: "Please add at least one link.",
 	TOO_MANY_LINKS: "You can add up to 25 links.",
 	INVALID_LINK_LABEL: "Each link needs a label of 60 characters or fewer.",
+	INVALID_TEXT: "Text cannot contain unsupported characters.",
 	PAGE_NOT_FOUND: "Page not found.",
 	SERVER_ERROR: "Something went wrong. Please try again.",
 };
@@ -39,6 +41,7 @@ const defaultStatuses: Record<BioErrorCode, number> = {
 	NO_LINKS: 400,
 	TOO_MANY_LINKS: 400,
 	INVALID_LINK_LABEL: 400,
+	INVALID_TEXT: 400,
 	PAGE_NOT_FOUND: 404,
 	SERVER_ERROR: 500,
 };

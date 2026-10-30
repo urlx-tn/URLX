@@ -1,11 +1,4 @@
-type FormsRuntimeConfig = {
-	FORMS_ENABLED?: boolean | string;
-};
-
-/** Alchemy sets this server-side only when all private auth and email bindings are configured. */
-export function formsReady(env: FormsRuntimeConfig) {
-	return (
-		env.FORMS_ENABLED === true ||
-		String(env.FORMS_ENABLED ?? "").toLowerCase() === "true"
-	);
+/** Forms are enabled only when the deployment has provisioned their services. */
+export function formsReady(value: string | boolean | undefined) {
+	return value === true || String(value ?? "").toLowerCase() === "true";
 }

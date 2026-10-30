@@ -1,39 +1,44 @@
 import {
 	checkLayeredRateLimit,
+	type RateLimiter,
 	type RateLimitIdentity,
 } from "../../lib/layered-rate-limit";
 import { normalizeUrl } from "../../lib/normalize-url";
 import { validateDestinationUrl } from "../../lib/validate-url";
 import { ConversionError, type ConversionErrorCode } from "./conversion.errors";
 
-type BrowserRenderer = Pick<BrowserRun, "quickAction">;
-type ConversionRateLimiter = Pick<RateLimit, "limit">;
+type ConversionRateLimiter = RateLimiter;
 
-type BrowserSuccessResponse = {
-	success: true;
-	result: string;
-};
-
-type ConversionFormat = "html" | "markdown";
+export type ConversionFormat = "html" | "markdown";
 
 type ConversionConfig = {
-	action: "content" | "markdown";
 	maxLength: number;
 	tooLargeCode: ConversionErrorCode;
 	rejectResourceTypes: Array<"font" | "image" | "media" | "stylesheet">;
 	waitUntil: "domcontentloaded" | "networkidle2";
 };
 
+export type ConversionRenderOptions = {
+	url: string;
+	format: ConversionFormat;
+	timeoutMs: number;
+	waitUntil: ConversionConfig["waitUntil"];
+	rejectResourceTypes: ConversionConfig["rejectResourceTypes"];
+	maxLength: number;
+};
+
+export type ConversionRenderer = {
+	render(options: ConversionRenderOptions): Promise<string>;
+};
+
 const conversionConfigs: Record<ConversionFormat, ConversionConfig> = {
 	markdown: {
-		action: "markdown",
 		maxLength: 1_000_000,
 		tooLargeCode: "MARKDOWN_TOO_LARGE",
 		rejectResourceTypes: ["image", "media", "font", "stylesheet"],
 		waitUntil: "domcontentloaded",
 	},
 	html: {
-		action: "content",
 		maxLength: 2_000_000,
 		tooLargeCode: "HTML_TOO_LARGE",
 		rejectResourceTypes: ["image", "media", "font"],
@@ -42,7 +47,7 @@ const conversionConfigs: Record<ConversionFormat, ConversionConfig> = {
 };
 
 export type ConversionServiceOptions = {
-	browser: BrowserRenderer;
+	renderer: ConversionRenderer;
 	clientIp: string;
 	ipRateLimiter: ConversionRateLimiter;
 	rateLimitIdentity: RateLimitIdentity;
@@ -50,14 +55,14 @@ export type ConversionServiceOptions = {
 };
 
 export class ConversionService {
-	private readonly browser: BrowserRenderer;
+	private readonly renderer: ConversionRenderer;
 	private readonly clientIp: string;
 	private readonly ipRateLimiter: ConversionRateLimiter;
 	private readonly rateLimitIdentity: RateLimitIdentity;
 	private readonly visitorRateLimiter: ConversionRateLimiter;
 
 	constructor(options: ConversionServiceOptions) {
-		this.browser = options.browser;
+		this.renderer = options.renderer;
 		this.clientIp = options.clientIp;
 		this.ipRateLimiter = options.ipRateLimiter;
 		this.rateLimitIdentity = options.rateLimitIdentity;
@@ -79,65 +84,29 @@ export class ConversionService {
 		}
 
 		const config = conversionConfigs[format];
-		const options = {
+		const options: ConversionRenderOptions = {
 			url: sourceUrl,
-			gotoOptions: {
-				timeout: 30_000,
-				waitUntil: config.waitUntil,
-			},
+			format,
+			timeoutMs: 30_000,
+			waitUntil: config.waitUntil,
 			rejectResourceTypes: config.rejectResourceTypes,
-			bestAttempt: true,
-			cacheTTL: 300,
+			maxLength: config.maxLength,
 		};
-		let response: Response;
+		let result: string;
 
 		try {
-			response =
-				config.action === "content"
-					? await this.browser.quickAction("content", options)
-					: await this.browser.quickAction("markdown", options);
+			result = await this.renderer.render(options);
 		} catch (error) {
-			console.error(`Browser Run ${format} request failed`, error);
+			if (error instanceof ConversionError) throw error;
 			throw new ConversionError("BROWSER_UNAVAILABLE");
 		}
-
-		if (!response.ok) {
-			throw response.status === 429
-				? new ConversionError("BROWSER_UNAVAILABLE")
-				: response.status >= 500
-					? new ConversionError("BROWSER_UNAVAILABLE")
-					: new ConversionError("PAGE_FETCH_FAILED");
-		}
-
-		let payload: unknown;
-		try {
-			payload = await response.json();
-		} catch {
-			throw new ConversionError("PAGE_FETCH_FAILED");
-		}
-
-		if (!isBrowserSuccessResponse(payload)) {
-			throw new ConversionError("PAGE_FETCH_FAILED");
-		}
-
-		if (payload.result.length > config.maxLength) {
+		if (result.length > config.maxLength) {
 			throw new ConversionError(config.tooLargeCode);
 		}
 
 		return {
 			sourceUrl,
-			result: payload.result,
+			result,
 		};
 	}
-}
-
-function isBrowserSuccessResponse(
-	payload: unknown,
-): payload is BrowserSuccessResponse {
-	if (!payload || typeof payload !== "object") {
-		return false;
-	}
-
-	const candidate = payload as Partial<BrowserSuccessResponse>;
-	return candidate.success === true && typeof candidate.result === "string";
 }

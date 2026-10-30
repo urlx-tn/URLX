@@ -1,14 +1,11 @@
-import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
-dotenv.config({
-	path: "../../.env",
-});
-
 export default defineConfig({
-	schema: "./src/schema",
-	out: "./src/migrations",
-	// DOCS: https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit
-	dialect: "sqlite",
-	driver: "d1-http",
+	schema: "./src/schema/index.ts",
+	out: "./src/migrations/pg",
+	dialect: "postgresql",
+	dbCredentials: {
+		// Never fall back to the restricted API role for schema migrations.
+		url: process.env.MIGRATOR_DATABASE_URL ?? "postgresql://localhost/urlx",
+	},
 });

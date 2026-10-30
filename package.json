@@ -1,7 +1,7 @@
 {
 	"name": "urlx",
 	"private": true,
-	"description": "Free and open-source URL tools built for Cloudflare.",
+	"description": "Free and open-source URL tools built for Bun and PostgreSQL.",
 	"license": "MIT",
 	"author": "Chames Eddine Dhibi (https://v1.chames.dhibi.tn)",
 	"contributors": [
@@ -37,19 +37,22 @@
 	],
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm --filter @urlx/infra exec alchemy dev",
+		"dev": "pnpm --filter web dev:bare",
+		"dev:local": "node scripts/dev-local.mjs",
 		"build": "turbo run build",
 		"check-types": "turbo run check-types",
-		"test": "turbo run test",
+		"test": "bun test deploy/entrypoints/start-web.test.ts && turbo run test --concurrency=1",
 		"dev:web": "pnpm --filter web dev:bare",
-		"dev:server": "pnpm --filter @urlx/infra exec alchemy dev --app server",
-		"db:generate": "turbo run db:generate --filter=@urlx/db",
-		"deploy": "pnpm --filter @urlx/infra exec alchemy deploy --stage prod",
-		"deploy:dev": "pnpm --filter @urlx/infra exec alchemy deploy --stage dev",
-		"deploy:prod": "pnpm --filter @urlx/infra exec alchemy deploy --stage prod",
-		"destroy": "pnpm --filter @urlx/infra exec alchemy destroy --stage prod",
-		"destroy:dev": "pnpm --filter @urlx/infra exec alchemy destroy --stage dev",
-		"destroy:prod": "pnpm --filter @urlx/infra exec alchemy destroy --stage prod",
+		"dev:api": "pnpm --filter server exec bun src/main-api.ts",
+		"dev:conversion": "pnpm --filter server exec bun src/main-conversion.ts",
+		"db:generate": "pnpm --filter @urlx/db db:generate",
+		"db:migrate": "pnpm --filter @urlx/db db:migrate",
+		"containers:preflight": "bash scripts/check-compose-config.sh",
+		"containers:build": "docker compose build",
+		"containers:up": "pnpm containers:preflight && pnpm containers:build && pnpm egress:prepare",
+		"containers:down": "bash scripts/remove-egress-gate.sh",
+		"containers:logs": "docker compose logs -f",
+		"egress:prepare": "bash scripts/prepare-egress-gate.sh --apply",
 		"check": "biome check .",
 		"check:write": "biome check --write ."
 	},
@@ -57,6 +60,14 @@
 		"@urlx/env": "workspace:*",
 		"dotenv": "catalog:",
 		"zod": "catalog:"
+	},
+	"pnpm": {
+		"overrides": {
+			"@esbuild-kit/core-utils>esbuild": "^0.25.0",
+			"@vitest/mocker": "^4.1.12",
+			"source-map-js": "^1.2.2",
+			"better-auth@1.7.10>drizzle-kit": "-"
+		}
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.11",

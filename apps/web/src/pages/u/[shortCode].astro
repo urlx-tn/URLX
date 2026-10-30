@@ -2,8 +2,8 @@
 import { isValidShortCode } from "@urlx/api/lib/validate-short-code";
 import StatusPage from "../../components/StatusPage.astro";
 import Layout from "../../layouts/Layout.astro";
-import { orpc } from "../../lib/orpc";
 import { isOrpcErrorCode } from "../../lib/orpc-errors";
+import { serverOrpc } from "../../lib/orpc-server";
 
 const { shortCode } = Astro.params;
 
@@ -12,7 +12,7 @@ let isNotFound = !shortCode || !isValidShortCode(shortCode);
 
 if (shortCode && !isNotFound) {
 	try {
-		const link = await orpc.links.getByShortCode({ shortCode });
+		const link = await serverOrpc.links.getByShortCode({ shortCode });
 		originalUrl = link.originalUrl;
 	} catch (error) {
 		if (isOrpcErrorCode(error, "SHORT_CODE_NOT_FOUND")) {

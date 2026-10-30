@@ -5,6 +5,7 @@
 		"declarationMap": true,
 		"sourceMap": true,
 		"outDir": "dist",
+		"types": ["node", "@cloudflare/workers-types", "bun-types"],
 		"composite": true
 	}
 }

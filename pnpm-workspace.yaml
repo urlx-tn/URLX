@@ -14,8 +14,10 @@ catalog:
   '@orpc/server': ^1.15.0
   '@orpc/zod': ^1.15.0
   '@types/node': ^26.0.0
-  alchemy: ^0.93.12
+  '@types/pg': ^8.23.1
+  bun-types: ^1.4.4
   dotenv: ^17.4.2
-  hono: ^4.13.5
+  drizzle-orm: ^0.45.2
+  hono: ^4.13.11
   typescript: 6.0.3
-  zod: ^4.5.4
+  zod: ^4.6.6

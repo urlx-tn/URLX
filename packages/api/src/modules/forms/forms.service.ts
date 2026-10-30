@@ -1,4 +1,4 @@
-import type { createDb } from "@urlx/db";
+import type { UrlxDb } from "@urlx/db";
 import {
 	formAliases,
 	formAliasTombstones,
@@ -23,7 +23,10 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import { LinkService } from "../links/link.service";
+import {
+	createFirstPartyFormLink,
+	normalizeTrustedOrigin,
+} from "../links/form-link.service";
 import {
 	type FormDefinitionDto,
 	type FormFieldDto,
@@ -33,14 +36,14 @@ import {
 	respondentAccessModes,
 } from "./forms.types";
 
-export type FormsDb = ReturnType<typeof createDb>;
+export type FormsDb = UrlxDb;
+type FormsTransaction = Parameters<Parameters<FormsDb["transaction"]>[0]>[0];
 export type FormField = FormFieldDto;
 export type FormDefinition = FormDefinitionDto;
 export const maxFormFields = 50;
 export const maxResponsesPerMonth = 1000;
 export const maxRetainedResponses = 10000;
-// Keeps a 10k-response stats read below D1's 50-read Free invocation limit,
-// including this service's fixed reads, while bounding answer memory per page.
+// Bounds answer JSON materialized for each stats aggregation query.
 const responseStatsChunkSize = 250;
 const exportPageSize = 250;
 
@@ -73,6 +76,7 @@ export class FormsService {
 
 	async list(ownerId: string, options: FormsListOptions = {}) {
 		const search = options.search?.trim().toLowerCase() ?? "";
+		if (search.includes("\0")) throw new FormsError("INVALID_SEARCH", 400);
 		const requestedLimit = Number.isInteger(options.limit)
 			? (options.limit as number)
 			: 50;
@@ -89,8 +93,8 @@ export class FormsService {
 		if (search)
 			baseConditions.push(
 				or(
-					sql`instr(lower(${forms.title}), ${search}) > 0`,
-					sql`instr(lower(coalesce(${forms.slug}, '')), ${search}) > 0`,
+					sql`position(${search} in lower(${forms.title})) > 0`,
+					sql`position(${search} in lower(coalesce(${forms.slug}, ''))) > 0`,
 				)!,
 			);
 		const conditions = [...baseConditions];
@@ -181,6 +185,7 @@ export class FormsService {
 	}
 
 	async get(ownerId: string, id: string) {
+		if (id.includes("\0")) return null;
 		const [form] = await this.db
 			.select()
 			.from(forms)
@@ -240,8 +245,8 @@ export class FormsService {
 		const now = this.now();
 		const formId = crypto.randomUUID();
 		const versionId = crypto.randomUUID();
-		await this.db.batch([
-			this.db.insert(forms).values({
+		await this.db.transaction(async (tx) => {
+			await tx.insert(forms).values({
 				id: formId,
 				ownerId,
 				title: clean.title,
@@ -254,8 +259,8 @@ export class FormsService {
 				createdAt: now,
 				updatedAt: now,
 				disabledAt: null,
-			}),
-			this.db.insert(formVersions).values({
+			});
+			await tx.insert(formVersions).values({
 				id: versionId,
 				formId,
 				version: 1,
@@ -266,8 +271,8 @@ export class FormsService {
 				accent: clean.accent,
 				createdAt: now,
 				publishedAt: null,
-			}),
-		]);
+			});
+		});
 		return this.get(ownerId, formId);
 	}
 
@@ -289,8 +294,9 @@ export class FormsService {
 		const now = this.now();
 		const nextVersion = current.revision + 1;
 		try {
-			await this.db.batch([
-				this.db
+			await this.db.transaction(async (tx) => {
+				await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+				await tx
 					.delete(formVersions)
 					.where(
 						and(
@@ -298,8 +304,8 @@ export class FormsService {
 							isNull(formVersions.publishedAt),
 							lte(formVersions.version, current.revision),
 						),
-					),
-				this.db
+					);
+				await tx
 					.update(forms)
 					.set({
 						title: clean.title,
@@ -308,8 +314,8 @@ export class FormsService {
 						confirmationMessage: clean.confirmationMessage ?? null,
 						updatedAt: now,
 					})
-					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
-				this.db.insert(formVersions).values({
+					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
+				await tx.insert(formVersions).values({
 					id: crypto.randomUUID(),
 					formId: id,
 					version: nextVersion,
@@ -320,8 +326,8 @@ export class FormsService {
 					accent: clean.accent,
 					createdAt: now,
 					publishedAt: null,
-				}),
-			]);
+				});
+			});
 		} catch (error) {
 			const latest = await this.getDraftState(ownerId, id);
 			if (latest && latest.revision !== current.revision)
@@ -354,58 +360,86 @@ export class FormsService {
 	) {
 		if (!respondentAccessModes.includes(respondentAccess))
 			throw new FormsError("RESPONDENT_ACCESS_REQUIRED", 400);
-		let current = await this.get(ownerId, id);
-		if (!current || !current.draft) return null;
-		// A blank draft can be saved, but respondents should never see an empty form.
-		if (!current.draft.fields?.length)
-			throw new FormsError(
-				"NO_QUESTIONS",
-				400,
-				"Add at least one question before publishing.",
-			);
-		if (requestedSlug) await this.setSlug(ownerId, id, requestedSlug);
-		current = await this.get(ownerId, id);
-		if (!current?.form.slug) {
-			const titleSlug = current?.draft?.title
-				.toLowerCase()
-				.normalize("NFKD")
-				.replace(/[\u0300-\u036f]/g, "")
-				.replace(/[^a-z0-9]+/g, "-")
-				.replace(/^-+|-+$/g, "")
-				.slice(0, 38)
-				.replace(/-+$/g, "");
-			const idSuffix = id
-				.replace(/[^a-z0-9]/gi, "")
-				.slice(-8)
-				.toLowerCase();
-			await this.setSlug(
-				ownerId,
-				id,
-				`${titleSlug || "form"}-${idSuffix || "link"}`,
-			);
-			current = await this.get(ownerId, id);
-		}
-		if (!current?.form.slug) throw new FormsError("SLUG_REQUIRED", 409);
-		const [latest] = await this.db
-			.select()
+		const publicOrigin = normalizeTrustedOrigin(publicBaseUrl);
+		const shortOrigin = normalizeTrustedOrigin(shortUrlBase);
+		const normalizedRequestedSlug = requestedSlug
+			? requestedSlug.trim().toLowerCase()
+			: undefined;
+		const [expectedLatest] = await this.db
+			.select({
+				id: formVersions.id,
+				version: formVersions.version,
+				publishedAt: formVersions.publishedAt,
+			})
 			.from(formVersions)
+			.innerJoin(forms, eq(forms.id, formVersions.formId))
 			.where(
 				and(
-					eq(formVersions.formId, id),
-					eq(formVersions.version, current.revision),
+					eq(forms.id, id),
+					eq(forms.ownerId, ownerId),
+					isNull(forms.disabledAt),
 				),
 			)
+			.orderBy(desc(formVersions.version))
 			.limit(1);
+		if (!expectedLatest) {
+			if (!(await this.getOwnedFormId(ownerId, id))) return null;
+			throw new FormsError("DRAFT_NOT_FOUND", 409);
+		}
+		if (normalizedRequestedSlug !== undefined)
+			validateFormSlug(normalizedRequestedSlug);
+
 		const now = this.now();
-		if (!latest) throw new FormsError("DRAFT_NOT_FOUND", 409);
-		// Published versions are immutable. Re-publishing without an intervening
-		// draft still creates a snapshot so the access decision has its own version.
-		const publishedVersionId =
-			latest.publishedAt !== null ? crypto.randomUUID() : latest.id;
+		let publishedVersionId = "";
+		let slug = "";
+		let shortCode: string | null = null;
 		try {
-			if (latest.publishedAt !== null) {
-				await this.db.batch([
-					this.db.insert(formVersions).values({
+			const completed = await this.db.transaction(async (tx) => {
+				await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+				const [form] = await tx
+					.select()
+					.from(forms)
+					.where(
+						and(
+							eq(forms.id, id),
+							eq(forms.ownerId, ownerId),
+							isNull(forms.disabledAt),
+						),
+					)
+					.limit(1)
+					.for("update");
+				if (!form) return null;
+				const [latest] = await tx
+					.select()
+					.from(formVersions)
+					.where(eq(formVersions.formId, id))
+					.orderBy(desc(formVersions.version))
+					.limit(1)
+					.for("update");
+				if (!latest) throw new FormsError("DRAFT_NOT_FOUND", 409);
+				if (
+					latest.id !== expectedLatest.id ||
+					latest.version !== expectedLatest.version ||
+					latest.publishedAt !== expectedLatest.publishedAt
+				)
+					throw new FormsError("REVISION_CONFLICT", 409);
+				if (!parseFields(latest.fieldsJson).length)
+					throw new FormsError(
+						"NO_QUESTIONS",
+						400,
+						"Add at least one question before publishing.",
+					);
+
+				slug =
+					normalizedRequestedSlug ??
+					form.slug ??
+					makeDefaultFormSlug(latest.title, id);
+				if (normalizedRequestedSlug !== undefined || !form.slug)
+					await this.claimSlugInTransaction(tx, ownerId, id, slug, now);
+
+				if (latest.publishedAt !== null) {
+					publishedVersionId = crypto.randomUUID();
+					await tx.insert(formVersions).values({
 						id: publishedVersionId,
 						formId: id,
 						version: latest.version + 1,
@@ -417,15 +451,10 @@ export class FormsService {
 						respondentAccess,
 						createdAt: now,
 						publishedAt: now,
-					}),
-					this.db
-						.update(forms)
-						.set({ updatedAt: now })
-						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
-				]);
-			} else {
-				const [published] = await this.db.batch([
-					this.db
+					});
+				} else {
+					publishedVersionId = latest.id;
+					const [updated] = await tx
 						.update(formVersions)
 						.set({ publishedAt: now, respondentAccess })
 						.where(
@@ -435,14 +464,22 @@ export class FormsService {
 								isNull(formVersions.publishedAt),
 							),
 						)
-						.returning({ id: formVersions.id }),
-					this.db
-						.update(forms)
-						.set({ updatedAt: now })
-						.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId))),
-				]);
-				if (!published.length) throw new FormsError("REVISION_CONFLICT", 409);
-			}
+						.returning({ id: formVersions.id });
+					if (!updated) throw new FormsError("REVISION_CONFLICT", 409);
+				}
+
+				shortCode =
+					form.shortCode ??
+					(await createFirstPartyFormLink(tx, publicOrigin, slug));
+				await tx
+					.update(forms)
+					.set({ updatedAt: now, shortCode })
+					.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
+				return { slug, shortCode };
+			});
+			if (!completed) return null;
+			slug = completed.slug;
+			shortCode = completed.shortCode;
 		} catch (error) {
 			if (error instanceof FormsError) throw error;
 			if (errorText(error).includes("forms_owner_published_limit"))
@@ -450,45 +487,23 @@ export class FormsService {
 			if (
 				errorText(error).includes(
 					"form_versions.form_id, form_versions.version",
-				)
+				) ||
+				pgConstraint(error) === "form_versions_form_version_unique"
 			)
 				throw new FormsError("REVISION_CONFLICT", 409);
 			throw error;
-		}
-		let shortCode = current.form.shortCode;
-		if (!shortCode) {
-			const link = await new LinkService({ db: this.db, shortUrlBase }).shorten(
-				new URL(
-					`/f/${encodeURIComponent(current.form.slug)}`,
-					publicBaseUrl,
-				).toString(),
-			);
-			shortCode = new URL(link.shortUrl).pathname.split("/").at(-1) ?? null;
-			if (shortCode)
-				await this.db
-					.update(forms)
-					.set({ shortCode })
-					.where(
-						and(
-							eq(forms.id, id),
-							eq(forms.ownerId, ownerId),
-							isNull(forms.disabledAt),
-						),
-					);
 		}
 		const result = await this.get(ownerId, id);
 		return result
 			? {
 					...result,
-					form: { ...result.form, slug: current.form.slug },
+					form: { ...result.form, slug },
 					version: publishedVersionId,
 					url: new URL(
-						`/f/${encodeURIComponent(current.form.slug)}`,
-						publicBaseUrl,
+						`/f/${encodeURIComponent(slug)}`,
+						publicOrigin,
 					).toString(),
-					shortUrl: shortCode
-						? `${shortUrlBase.replace(/\/+$/, "")}/u/${shortCode}`
-						: null,
+					shortUrl: shortCode ? `${shortOrigin}/u/${shortCode}` : null,
 				}
 			: null;
 	}
@@ -501,42 +516,26 @@ export class FormsService {
 		shortUrlBase?: string,
 	) {
 		const slug = rawSlug.trim().toLowerCase();
-		if (!/^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/.test(slug))
-			throw new FormsError("INVALID_SLUG", 400);
-		const current = await this.getOwnedFormId(ownerId, id);
+		validateFormSlug(slug);
+		if (!(await this.getOwnedFormId(ownerId, id))) return null;
+		const current = await this.db.transaction(async (tx) => {
+			await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+			const [form] = await tx
+				.select({ id: forms.id })
+				.from(forms)
+				.where(
+					and(
+						eq(forms.id, id),
+						eq(forms.ownerId, ownerId),
+						isNull(forms.disabledAt),
+					),
+				)
+				.limit(1)
+				.for("update");
+			if (!form) return null;
+			return this.claimSlugInTransaction(tx, ownerId, id, slug, this.now());
+		});
 		if (!current) return null;
-		const [alias] = await this.db
-			.select()
-			.from(formAliases)
-			.where(eq(formAliases.alias, slug))
-			.limit(1);
-		if (alias && alias.formId !== id) throw new FormsError("SLUG_TAKEN", 409);
-		const [tombstone] = await this.db
-			.select()
-			.from(formAliasTombstones)
-			.where(eq(formAliasTombstones.alias, slug))
-			.limit(1);
-		if (tombstone) throw new FormsError("SLUG_TAKEN", 409);
-		if (!alias) {
-			try {
-				await this.db
-					.insert(formAliases)
-					.values({ alias: slug, formId: id, createdAt: this.now() });
-			} catch (error) {
-				const [conflict] = await this.db
-					.select()
-					.from(formAliases)
-					.where(eq(formAliases.alias, slug))
-					.limit(1);
-				if (conflict && conflict.formId !== id)
-					throw new FormsError("SLUG_TAKEN", 409);
-				throw error;
-			}
-		}
-		await this.db
-			.update(forms)
-			.set({ slug, updatedAt: this.now() })
-			.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)));
 		const result = await this.get(ownerId, id);
 		return result
 			? {
@@ -555,20 +554,59 @@ export class FormsService {
 			: null;
 	}
 
+	private async claimSlugInTransaction(
+		tx: FormsTransaction,
+		ownerId: string,
+		id: string,
+		slug: string,
+		now: number,
+	) {
+		await tx.execute(sql`select public.lock_form_alias(${slug})`);
+		const [alias] = await tx
+			.select()
+			.from(formAliases)
+			.where(eq(formAliases.alias, slug))
+			.limit(1);
+		if (alias && alias.formId !== id) throw new FormsError("SLUG_TAKEN", 409);
+		const [tombstone] = await tx
+			.select()
+			.from(formAliasTombstones)
+			.where(eq(formAliasTombstones.alias, slug))
+			.limit(1);
+		if (tombstone) throw new FormsError("SLUG_TAKEN", 409);
+		if (!alias)
+			await tx
+				.insert(formAliases)
+				.values({ alias: slug, formId: id, createdAt: now })
+				.onConflictDoNothing();
+		const [updated] = await tx
+			.update(forms)
+			.set({ slug, updatedAt: now })
+			.where(and(eq(forms.id, id), eq(forms.ownerId, ownerId)))
+			.returning({ id: forms.id });
+		return updated?.id ?? null;
+	}
+
 	async delete(ownerId: string, id: string) {
-		const deleted = await this.db
-			.delete(forms)
-			.where(
-				and(
-					eq(forms.id, id),
-					eq(forms.ownerId, ownerId),
-					isNull(forms.disabledAt),
-				),
-			);
-		return deleted.meta.changes > 0;
+		if (id.includes("\0")) return false;
+		const deleted = await this.db.transaction(async (tx) => {
+			await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+			return tx
+				.delete(forms)
+				.where(
+					and(
+						eq(forms.id, id),
+						eq(forms.ownerId, ownerId),
+						isNull(forms.disabledAt),
+					),
+				)
+				.returning({ id: forms.id });
+		});
+		return deleted.length > 0;
 	}
 
 	async getPublic(slug: string) {
+		if (slug.includes("\0")) return null;
 		const [alias] = await this.db
 			.select()
 			.from(formAliases)
@@ -627,50 +665,78 @@ export class FormsService {
 	) {
 		if (!key || key.length > 128)
 			throw new FormsError("INVALID_SUBMISSION_KEY", 400);
-		const existing = await this.db
-			.select()
-			.from(formResponses)
-			.where(
-				and(
-					eq(formResponses.formId, formId),
-					eq(formResponses.idempotencyKey, key),
-				),
-			)
-			.limit(1);
-		if (existing.length)
-			return { responseId: existing[0]!.id, duplicate: true };
 		const responseId = crypto.randomUUID();
 		try {
-			await this.db.insert(formResponses).values({
-				id: responseId,
-				formId,
-				versionId,
-				idempotencyKey: key,
-				answersJson: JSON.stringify(answers),
-				createdAt: this.now(),
+			const result = await this.db.transaction(async (tx) => {
+				const [form] = await tx
+					.select({ ownerId: forms.ownerId })
+					.from(forms)
+					.where(eq(forms.id, formId))
+					.limit(1);
+				if (!form) throw new FormsError("FORM_VERSION_CLOSED", 409);
+				await tx.execute(sql`select public.lock_form_owner(${form.ownerId})`);
+				const [existing] = await tx
+					.select({ id: formResponses.id })
+					.from(formResponses)
+					.where(
+						and(
+							eq(formResponses.formId, formId),
+							eq(formResponses.idempotencyKey, key),
+						),
+					)
+					.limit(1);
+				if (existing) return { responseId: existing.id, duplicate: true };
+				const [publishedVersion] = await tx
+					.select({ id: formVersions.id })
+					.from(formVersions)
+					.innerJoin(forms, eq(forms.id, formVersions.formId))
+					.where(
+						and(
+							eq(forms.id, formId),
+							isNull(forms.disabledAt),
+							eq(formVersions.id, versionId),
+							isNotNull(formVersions.publishedAt),
+						),
+					)
+					.limit(1);
+				if (!publishedVersion) throw new FormsError("FORM_VERSION_CLOSED", 409);
+				await tx.insert(formResponses).values({
+					id: responseId,
+					formId,
+					versionId,
+					idempotencyKey: key,
+					answersJson: JSON.stringify(answers),
+					createdAt: this.now(),
+				});
+				return { responseId, duplicate: false };
 			});
+			return result;
 		} catch (error) {
-			const retry = await this.db
-				.select()
-				.from(formResponses)
-				.where(
-					and(
-						eq(formResponses.formId, formId),
-						eq(formResponses.idempotencyKey, key),
-					),
-				)
-				.limit(1);
-			if (retry.length) return { responseId: retry[0]!.id, duplicate: true };
 			if (errorText(error).includes("forms_owner_monthly_quota"))
 				throw new FormsError("QUOTA_EXCEEDED", 429);
 			if (
 				errorText(error).includes("forms_collection_closed") ||
-				errorText(error).includes("FOREIGN KEY constraint failed")
+				pgCode(error) === "23503"
 			)
 				throw new FormsError("FORM_VERSION_CLOSED", 409);
+			if (
+				pgCode(error) === "23505" &&
+				pgConstraint(error) === "form_responses_idempotency_unique"
+			) {
+				const [existing] = await this.db
+					.select({ id: formResponses.id })
+					.from(formResponses)
+					.where(
+						and(
+							eq(formResponses.formId, formId),
+							eq(formResponses.idempotencyKey, key),
+						),
+					)
+					.limit(1);
+				if (existing) return { responseId: existing.id, duplicate: true };
+			}
 			throw error;
 		}
-		return { responseId, duplicate: false };
 	}
 
 	async responses(ownerId: string, id: string, limit = 100, offset = 0) {
@@ -701,7 +767,13 @@ export class FormsService {
 			.having(
 				or(
 					gt(count(formResponses.id), 0),
-					isNull(formVersions.publishedAt),
+					and(
+						isNull(formVersions.publishedAt),
+						eq(
+							formVersions.version,
+							sql`(select max("draft"."version") from "form_versions" as "draft" where "draft"."form_id" = ${formVersions.formId} and "draft"."published_at" is null)`,
+						),
+					),
 					eq(
 						formVersions.version,
 						sql`(select max("latest"."version") from "form_versions" as "latest" where "latest"."form_id" = ${formVersions.formId} and "latest"."published_at" is not null)`,
@@ -760,15 +832,26 @@ export class FormsService {
 	}
 
 	async deleteResponse(ownerId: string, id: string, responseId?: string) {
+		if (responseId?.includes("\0")) return null;
 		if (!(await this.getOwnedFormId(ownerId, id))) return null;
-		const deleted = responseId
-			? await this.db
-					.delete(formResponses)
-					.where(
-						and(eq(formResponses.formId, id), eq(formResponses.id, responseId)),
-					)
-			: await this.db.delete(formResponses).where(eq(formResponses.formId, id));
-		return { success: true, deleted: deleted.meta.changes };
+		const deleted = await this.db.transaction(async (tx) => {
+			await tx.execute(sql`select public.lock_form_owner(${ownerId})`);
+			return responseId
+				? tx
+						.delete(formResponses)
+						.where(
+							and(
+								eq(formResponses.formId, id),
+								eq(formResponses.id, responseId),
+							),
+						)
+						.returning({ id: formResponses.id })
+				: tx
+						.delete(formResponses)
+						.where(eq(formResponses.formId, id))
+						.returning({ id: formResponses.id });
+		});
+		return { success: true, deleted: deleted.length };
 	}
 
 	/** Pages through the initial high-water tuple; concurrent deletes and same-millisecond inserts are best-effort, not a snapshot. */
@@ -967,6 +1050,7 @@ export class FormsService {
 						fieldId: field.id,
 						label: field.label,
 						type: field.type,
+						options: field.options ?? [],
 						answered: question.answered,
 						distribution: question.distribution,
 					};
@@ -990,7 +1074,6 @@ export class FormsService {
 			return {
 				versionId: version.id,
 				version: version.version,
-				fields: stats.fields,
 				responseCount: stats.responseCount,
 				questions,
 			};
@@ -1068,6 +1151,7 @@ export class FormsService {
 	}
 
 	private async getOwnedFormId(ownerId: string, id: string) {
+		if (id.includes("\0")) return null;
 		const [form] = await this.db
 			.select({ id: forms.id })
 			.from(forms)
@@ -1107,14 +1191,41 @@ export class FormsError extends Error {
 	}
 }
 
+function validateFormSlug(slug: string) {
+	if (!/^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/.test(slug))
+		throw new FormsError("INVALID_SLUG", 400);
+}
+
+function makeDefaultFormSlug(title: string, id: string) {
+	const titleSlug = title
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 38)
+		.replace(/-+$/g, "");
+	const idSuffix = id
+		.replace(/[^a-z0-9]/gi, "")
+		.slice(-8)
+		.toLowerCase();
+	return `${titleSlug || "form"}-${idSuffix || "link"}`;
+}
+
 export function validateDefinition(value: FormDefinition): FormDefinition {
 	if (!value || typeof value !== "object")
 		throw new FormsError("INVALID_FORM", 400);
 	const title = value.title?.trim();
-	if (!title || title.length > 120) throw new FormsError("INVALID_TITLE", 400);
+	if (!title || title.length > 120 || title.includes("\0"))
+		throw new FormsError("INVALID_TITLE", 400);
 	const description = value.description?.trim();
+	if (description?.includes("\0"))
+		throw new FormsError("INVALID_DESCRIPTION", 400);
 	if (description && description.length > 1000)
 		throw new FormsError("INVALID_DESCRIPTION", 400);
+	const confirmationMessage = value.confirmationMessage?.slice(0, 500) ?? "";
+	if (confirmationMessage.includes("\0"))
+		throw new FormsError("INVALID_FORM", 400);
 	if (!formAccentIds.includes(value.accent))
 		throw new FormsError("INVALID_ACCENT", 400);
 	if (!Array.isArray(value.fields) || value.fields.length > maxFormFields)
@@ -1154,7 +1265,7 @@ export function validateDefinition(value: FormDefinition): FormDefinition {
 		title,
 		description,
 		accent: value.accent,
-		confirmationMessage: value.confirmationMessage?.slice(0, 500) ?? "",
+		confirmationMessage,
 		fields,
 	};
 }
@@ -1215,6 +1326,7 @@ function decodeFormsListCursor(value: string): FormsListCursor {
 			!Number.isSafeInteger(cursor.updatedAt) ||
 			typeof cursor.id !== "string" ||
 			!cursor.id ||
+			cursor.id.includes("\0") ||
 			typeof cursor.search !== "string"
 		)
 			throw new Error("Malformed forms list cursor");
@@ -1237,4 +1349,38 @@ function errorText(error: unknown): string {
 				: null;
 	}
 	return result;
+}
+
+function pgCode(error: unknown): string | null {
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current === "object" && "code" in current) {
+			const code = (current as { code?: unknown }).code;
+			if (typeof code === "string") return code;
+		}
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return null;
+}
+
+function pgConstraint(error: unknown): string | null {
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current === "object" && "constraint" in current) {
+			const constraint = (current as { constraint?: unknown }).constraint;
+			if (typeof constraint === "string") return constraint;
+		}
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return null;
 }

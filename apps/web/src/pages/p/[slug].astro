@@ -3,18 +3,18 @@ import QRCode from "qrcode/lib/browser.js";
 
 import StatusPage from "../../components/StatusPage.astro";
 import Layout from "../../layouts/Layout.astro";
-import { orpc } from "../../lib/orpc";
 import { isOrpcErrorCode } from "../../lib/orpc-errors";
+import { serverOrpc } from "../../lib/orpc-server";
 
 const { slug } = Astro.params;
 
-type BioPage = Awaited<ReturnType<typeof orpc.bio.getBySlug>>;
+type BioPage = Awaited<ReturnType<typeof serverOrpc.bio.getBySlug>>;
 
 let page: BioPage | null = null;
 
 if (slug) {
 	try {
-		page = await orpc.bio.getBySlug({ slug });
+		page = await serverOrpc.bio.getBySlug({ slug });
 	} catch (error) {
 		if (!isOrpcErrorCode(error, "PAGE_NOT_FOUND")) {
 			throw error;

@@ -1,0 +1,342 @@
+name: urlx
+
+services:
+  web:
+    labels:
+      com.urlx.stack: urlx
+    build:
+      context: .
+      target: web
+      args:
+        PUBLIC_SERVER_URL: ${PUBLIC_SERVER_URL:?Set PUBLIC_SERVER_URL to the public origin}
+        PUBLIC_CONVERSION_SERVER_URL: ${PUBLIC_CONVERSION_SERVER_URL:?Set the public /convert URL}
+    ports:
+      - target: 8080
+        published: ${WEB_HOST_PORT:-8080}
+        host_ip: 127.0.0.1
+        protocol: tcp
+    restart: unless-stopped
+    mem_limit: ${WEB_MEMORY_LIMIT:?Set WEB_MEMORY_LIMIT in bytes}
+    cpus: ${WEB_CPU_LIMIT:?Set WEB_CPU_LIMIT for this host}
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      PUBLIC_SERVER_URL: ${PUBLIC_SERVER_URL:?Set PUBLIC_SERVER_URL to the public origin}
+      PUBLIC_CONVERSION_SERVER_URL: ${PUBLIC_CONVERSION_SERVER_URL:?Set the public /convert URL}
+      INTERNAL_SERVER_URL: http://api:8787
+      EGRESS_PROXY_URL: http://egress-proxy:3128
+      FORMS_ENABLED: ${FORMS_ENABLED:-false}
+      EGRESS_POLICY_READY_FILE: /run/urlx-egress/ready.json
+      EGRESS_POLICY_SERVICE: web
+    volumes:
+      - ./deploy/egress/policy:/run/urlx-egress:ro
+    depends_on:
+      api:
+        condition: service_started
+      egress-proxy:
+        condition: service_started
+    networks:
+      - app
+      - web-egress
+      - host-ingress
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    init: true
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://127.0.0.1:8080/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      target: server
+    command: [bun, src/main-api.ts]
+    ports:
+      - target: 8787
+        published: ${API_HOST_PORT:-8787}
+        host_ip: 127.0.0.1
+        protocol: tcp
+    restart: unless-stopped
+    mem_limit: ${API_MEMORY_LIMIT:?Set API_MEMORY_LIMIT in bytes}
+    cpus: ${API_CPU_LIMIT:?Set API_CPU_LIMIT for this host}
+    labels:
+      com.urlx.stack: urlx
+      com.urlx.host-memory-budget-bytes: ${URLX_HOST_MEMORY_BUDGET_BYTES:?Set the total host memory budget in bytes}
+      com.urlx.host-cpu-budget: ${URLX_HOST_CPU_BUDGET:?Set the total host CPU budget}
+    environment:
+      PORT: "8787"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the urlx_app PostgreSQL URL}
+      PG_POOL_MAX: ${PG_POOL_MAX:?Set PG_POOL_MAX for this host}
+      VALKEY_URL: redis://valkey:6379/0
+      VISITOR_TOKEN_KEY_BASE64: ${VISITOR_TOKEN_KEY_BASE64:?Set a random 32-byte base64 key}
+      CORS_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      SHORT_URL_BASE: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      EGRESS_PROXY_URL: http://egress-proxy:3128
+      FORMS_ENABLED: ${FORMS_ENABLED:-false}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}/api/auth
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
+      EGRESS_POLICY_READY_FILE: /run/urlx-egress/ready.json
+      EGRESS_POLICY_SERVICE: api
+    volumes:
+      - ./deploy/egress/policy:/run/urlx-egress:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      egress-proxy:
+        condition: service_started
+    networks: [app, data, limits, api-egress, host-ingress]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    init: true
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  conversion:
+    labels:
+      com.urlx.stack: urlx
+    build:
+      context: .
+      target: server
+    command: [bun, src/main-conversion.ts]
+    ports:
+      - target: 8788
+        published: ${CONVERSION_HOST_PORT:-8788}
+        host_ip: 127.0.0.1
+        protocol: tcp
+    restart: unless-stopped
+    mem_limit: ${CONVERSION_MEMORY_LIMIT:?Set CONVERSION_MEMORY_LIMIT in bytes}
+    cpus: ${CONVERSION_CPU_LIMIT:?Set CONVERSION_CPU_LIMIT for this host}
+    environment:
+      PORT: "8788"
+      VALKEY_URL: redis://valkey:6379/0
+      VISITOR_TOKEN_KEY_BASE64: ${VISITOR_TOKEN_KEY_BASE64:?Set a random 32-byte base64 key}
+      CORS_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      BROWSER_RENDERER_URL: http://conversion-renderer:3100
+      CONVERSION_BROWSER_DISABLED: ${CONVERSION_BROWSER_DISABLED:-false}
+      EGRESS_POLICY_READY_FILE: /run/urlx-egress/ready.json
+      EGRESS_POLICY_SERVICE: conversion
+    volumes:
+      - ./deploy/egress/policy:/run/urlx-egress:ro
+    depends_on:
+      valkey:
+        condition: service_healthy
+      egress-proxy:
+        condition: service_started
+      conversion-renderer:
+        condition: service_started
+    networks: [app, limits, renderer-control, conversion-egress, host-ingress]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    init: true
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://127.0.0.1:8788/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  conversion-renderer:
+    labels:
+      com.urlx.stack: urlx
+    build:
+      context: .
+      target: conversion-renderer
+    command: [bun, src/main.ts]
+    restart: on-failure:3
+    mem_limit: ${CONVERSION_RENDERER_MEMORY_LIMIT:?Set CONVERSION_RENDERER_MEMORY_LIMIT in bytes}
+    cpus: ${CONVERSION_RENDERER_CPU_LIMIT:?Set CONVERSION_RENDERER_CPU_LIMIT for this host}
+    environment:
+      PORT: "3100"
+      EGRESS_PROXY_URL: http://egress-proxy:3128
+      RENDERER_CONCURRENCY: ${RENDERER_CONCURRENCY:?Set RENDERER_CONCURRENCY for this host}
+      RENDERER_MAX_QUEUE: ${RENDERER_MAX_QUEUE:?Set RENDERER_MAX_QUEUE for this host}
+      RENDERER_QUEUE_TIMEOUT_MS: ${RENDERER_QUEUE_TIMEOUT_MS:-5000}
+      EGRESS_POLICY_READY_FILE: /run/urlx-egress/ready.json
+      EGRESS_POLICY_SERVICE: conversion-renderer
+    volumes:
+      - ./deploy/egress/policy:/run/urlx-egress:ro
+    depends_on:
+      egress-proxy:
+        condition: service_started
+    networks: [renderer-control, renderer-egress]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./deploy/egress/renderer-seccomp.json
+    cap_drop: [ALL]
+    init: true
+    shm_size: 256m
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://127.0.0.1:3100/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
+  postgres:
+    labels:
+      com.urlx.stack: urlx
+    image: urlx/postgres:18.6-alpine3.24-r1
+    build:
+      context: ./deploy/postgres
+    restart: unless-stopped
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:?Set POSTGRES_MEMORY_LIMIT in bytes}
+    cpus: ${POSTGRES_CPU_LIMIT:?Set POSTGRES_CPU_LIMIT for this host}
+    environment:
+      POSTGRES_USER: urlx_bootstrap
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD:?Set POSTGRES_BOOTSTRAP_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-urlx}
+      URLX_APP_PASSWORD: ${URLX_APP_PASSWORD:?Set URLX_APP_PASSWORD}
+      URLX_MIGRATOR_PASSWORD: ${URLX_MIGRATOR_PASSWORD:?Set URLX_MIGRATOR_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./deploy/postgres/roles.sql:/docker-entrypoint-initdb.d/11-roles.sql:ro
+    networks: [data]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -h 127.0.0.1 -U urlx_bootstrap -d "$${POSTGRES_DB}"'
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  valkey:
+    labels:
+      com.urlx.stack: urlx
+    image: valkey/valkey:8.1.11-alpine
+    user: "999:1000"
+    command:
+      - valkey-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:?Set VALKEY_MAXMEMORY in bytes below VALKEY_MEMORY_LIMIT}
+      - --maxmemory-policy
+      - noeviction
+    restart: unless-stopped
+    mem_limit: ${VALKEY_MEMORY_LIMIT:?Set VALKEY_MEMORY_LIMIT in bytes for this host}
+    cpus: ${VALKEY_CPU_LIMIT:?Set VALKEY_CPU_LIMIT for this host}
+    networks: [limits]
+    read_only: true
+    tmpfs:
+      - /data:size=16m,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    labels:
+      com.urlx.stack: urlx
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    mem_limit: ${MIGRATOR_MEMORY_LIMIT:?Set MIGRATOR_MEMORY_LIMIT in bytes}
+    cpus: ${MIGRATOR_CPU_LIMIT:?Set MIGRATOR_CPU_LIMIT for this host}
+    environment:
+      MIGRATOR_DATABASE_URL: ${MIGRATOR_DATABASE_URL:?Set MIGRATOR_DATABASE_URL to urlx_migrator PostgreSQL URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  egress-proxy:
+    labels:
+      com.urlx.stack: urlx
+    build:
+      context: ./deploy/egress
+    restart: unless-stopped
+    mem_limit: ${EGRESS_PROXY_MEMORY_LIMIT:?Set EGRESS_PROXY_MEMORY_LIMIT in bytes}
+    cpus: ${EGRESS_PROXY_CPU_LIMIT:?Set EGRESS_PROXY_CPU_LIMIT for this host}
+    volumes:
+      - ./deploy/egress/policy:/run/urlx-egress:ro
+    networks: [proxy-outbound, api-egress, web-egress, conversion-egress, renderer-egress]
+    read_only: true
+    tmpfs:
+      - /var/run/squid:size=8m,mode=0750,uid=13,gid=13
+      - /var/cache/squid:size=16m,mode=0750,uid=13,gid=13
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD-SHELL, squid -k parse -f /etc/squid/squid.conf >/dev/null 2>&1]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres-data:
+    name: urlx-postgres-data
+    labels:
+      com.urlx.data: postgres
+networks:
+  app:
+    internal: true
+    enable_ipv6: false
+  data:
+    internal: true
+    enable_ipv6: false
+  limits:
+    internal: true
+    enable_ipv6: false
+  renderer-control:
+    internal: true
+    enable_ipv6: false
+  api-egress:
+    internal: true
+    enable_ipv6: false
+  web-egress:
+    internal: true
+    enable_ipv6: false
+  conversion-egress:
+    internal: true
+    enable_ipv6: false
+  renderer-egress:
+    internal: true
+    enable_ipv6: false
+  proxy-outbound:
+    driver: bridge
+    enable_ipv6: false
+  host-ingress:
+    driver: bridge
+    enable_ipv6: false

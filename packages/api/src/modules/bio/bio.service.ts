@@ -1,8 +1,9 @@
+import type { UrlxDb } from "@urlx/db";
 import { generateSlug } from "../../lib/generate-slug";
 import { validateSlug } from "../../lib/validate-slug";
 import { validateDestinationUrl } from "../../lib/validate-url";
 import { BioError } from "./bio.errors";
-import type { BioRepository, UrlxDb } from "./bio.repository";
+import type { BioRepository } from "./bio.repository";
 import { BioRepository as Repository } from "./bio.repository";
 import type {
 	CheckBioSlugOutput,
@@ -37,6 +38,16 @@ export class BioService {
 	}
 
 	async createBioPage(input: CreateBioInput): Promise<{ slug: string }> {
+		if (
+			input.title.includes("\0") ||
+			input.description?.includes("\0") ||
+			input.slug?.includes("\0") ||
+			input.links.some(
+				(link) => link.label.includes("\0") || link.url.includes("\0"),
+			)
+		)
+			throw new BioError("INVALID_TEXT");
+
 		const title = input.title.trim();
 
 		if (!title) {
@@ -135,6 +146,7 @@ export class BioService {
 	}
 
 	async searchBioPages(input: SearchBioInput): Promise<SearchBioOutput> {
+		if (input.query?.includes("\0")) throw new BioError("INVALID_TEXT");
 		const query = normalizeSearchQuery(input.query ?? "");
 		const pageSize = clamp(
 			input.pageSize ?? defaultBioSearchPageSize,
@@ -143,44 +155,28 @@ export class BioService {
 		);
 		const requestedPage = Math.max(1, input.page ?? 1);
 
-		const firstPass = await this.repository.searchPages({
+		const result = await this.repository.searchPages({
 			query,
 			limit: pageSize,
-			offset: (requestedPage - 1) * pageSize,
+			page: requestedPage,
 		});
 
-		const totalPages = Math.max(1, Math.ceil(firstPass.total / pageSize));
+		const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
 		const page = Math.min(requestedPage, totalPages);
-
-		if (page === requestedPage) {
-			return {
-				query,
-				page,
-				pageSize,
-				totalItems: firstPass.total,
-				totalPages,
-				items: firstPass.items,
-			};
-		}
-
-		const clamped = await this.repository.searchPages({
-			query,
-			limit: pageSize,
-			offset: (page - 1) * pageSize,
-		});
 
 		return {
 			query,
 			page,
 			pageSize,
-			totalItems: clamped.total,
+			totalItems: result.total,
 			totalPages,
-			items: clamped.items,
+			items: result.items,
 		};
 	}
 
 	async getBioPage(rawSlug: string): Promise<GetBioOutput> {
 		const slug = rawSlug.trim().toLowerCase();
+		if (slug.includes("\0")) throw new BioError("PAGE_NOT_FOUND");
 		const result = await this.repository.findBySlug(slug);
 
 		if (!result || result.page.disabledAt !== null) {
@@ -239,10 +235,39 @@ function normalizeSearchQuery(rawQuery: string) {
 }
 
 function isSlugConflict(error: unknown) {
-	const message =
-		error instanceof Error
-			? error.message.toLowerCase()
-			: String(error).toLowerCase();
+	if (getErrorText(error).includes("bio_pages_slug")) return true;
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current === "object" && "code" in current) {
+			const code = (current as { code?: unknown }).code;
+			const constraint =
+				"constraint" in current
+					? (current as { constraint?: unknown }).constraint
+					: undefined;
+			if (code === "23505" && constraint === "bio_pages_slug_unique")
+				return true;
+		}
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return false;
+}
 
-	return message.includes("bio_pages_slug") || message.includes("slug");
+function getErrorText(error: unknown) {
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	let message = "";
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		message += ` ${current instanceof Error ? current.message : String(current)}`;
+		current =
+			typeof current === "object" && "cause" in current
+				? (current as { cause?: unknown }).cause
+				: null;
+	}
+	return message.toLowerCase();
 }

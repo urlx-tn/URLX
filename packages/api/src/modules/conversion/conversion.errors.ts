@@ -1,3 +1,4 @@
+import { RateLimitUnavailableError } from "../../lib/layered-rate-limit";
 import { LinkError } from "../links/link.errors";
 
 export const conversionErrorCodes = [
@@ -12,6 +13,7 @@ export const conversionErrorCodes = [
 	"MARKDOWN_TOO_LARGE",
 	"HTML_TOO_LARGE",
 	"RATE_LIMITED",
+	"RATE_LIMIT_UNAVAILABLE",
 	"BROWSER_UNAVAILABLE",
 	"SERVER_ERROR",
 ] as const;
@@ -31,6 +33,8 @@ const defaultMessages: Record<ConversionErrorCode, string> = {
 	HTML_TOO_LARGE: "The generated HTML is too large to return.",
 	RATE_LIMITED:
 		"You've reached the temporary request limit. Please wait about a minute and try again.",
+	RATE_LIMIT_UNAVAILABLE:
+		"The request limit service is temporarily unavailable. Please try again.",
 	BROWSER_UNAVAILABLE: "The conversion service is temporarily unavailable.",
 	SERVER_ERROR: "Something went wrong. Please try again.",
 };
@@ -47,6 +51,7 @@ const defaultStatuses: Record<ConversionErrorCode, number> = {
 	MARKDOWN_TOO_LARGE: 413,
 	HTML_TOO_LARGE: 413,
 	RATE_LIMITED: 429,
+	RATE_LIMIT_UNAVAILABLE: 503,
 	BROWSER_UNAVAILABLE: 503,
 	SERVER_ERROR: 500,
 };
@@ -70,6 +75,9 @@ export class ConversionError extends Error {
 export function toConversionError(error: unknown) {
 	if (error instanceof ConversionError) {
 		return error;
+	}
+	if (error instanceof RateLimitUnavailableError) {
+		return new ConversionError("RATE_LIMIT_UNAVAILABLE");
 	}
 
 	if (error instanceof LinkError && isConversionErrorCode(error.code)) {

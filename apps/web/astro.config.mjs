@@ -1,33 +1,15 @@
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import node from "@astrojs/node";
 import sitemap from "@astrojs/sitemap";
 // @ts-check
 import tailwindcss from "@tailwindcss/vite";
-import alchemy from "alchemy/cloudflare/astro";
 import { defineConfig, envField, svgoOptimizer } from "astro/config";
-
-const alchemyConfigPath = fileURLToPath(
-	new URL("./.alchemy/local/wrangler.jsonc", import.meta.url),
-);
-const shouldUseAlchemy = existsSync(alchemyConfigPath);
-const cloudflareWorkersShimPath = fileURLToPath(
-	new URL("../../packages/env/src/cloudflare-local.ts", import.meta.url),
-);
-const cloudflareWorkersAlias = shouldUseAlchemy
-	? {}
-	: {
-			"cloudflare:workers": cloudflareWorkersShimPath,
-		};
 
 // https://astro.build/config
 export default defineConfig({
 	site: "https://urlx.tn",
 	output: "server",
 	devToolbar: { enabled: false },
-	adapter: shouldUseAlchemy
-		? alchemy({ platformProxy: { configPath: alchemyConfigPath } })
-		: node({ mode: "standalone" }),
+	adapter: node({ mode: "standalone" }),
 	integrations: [
 		sitemap({
 			filter: (page) => {
@@ -43,6 +25,21 @@ export default defineConfig({
 	],
 	env: {
 		schema: {
+			FORMS_ENABLED: envField.string({
+				access: "secret",
+				context: "server",
+				default: "false",
+			}),
+			INTERNAL_SERVER_URL: envField.string({
+				access: "secret",
+				context: "server",
+				optional: true,
+			}),
+			EGRESS_PROXY_URL: envField.string({
+				access: "secret",
+				context: "server",
+				optional: true,
+			}),
 			PUBLIC_CONVERSION_SERVER_URL: envField.string({
 				access: "public",
 				context: "client",
@@ -64,6 +61,5 @@ export default defineConfig({
 	vite: {
 		envDir: "../..",
 		plugins: [tailwindcss()],
-		resolve: { alias: cloudflareWorkersAlias },
 	},
 });

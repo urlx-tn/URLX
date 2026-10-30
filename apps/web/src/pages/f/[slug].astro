@@ -3,16 +3,14 @@ import logoAccent from "../../assets/logo-layer-accent.png";
 import logoInk from "../../assets/logo-layer-ink.png";
 import Layout from "../../layouts/Layout.astro";
 import "../../styles/forms.css";
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import { proxyApiRequest } from "../../lib/api-proxy";
 import { formsReady } from "../../lib/forms-ready";
 import { accentColors, formsIcon, publicFieldMarkup } from "../../lib/forms-ui";
 
 export const prerender = false;
 const { slug = "" } = Astro.params;
-const formsEnabled = formsReady(
-	env as typeof env & Parameters<typeof formsReady>[0],
-);
+const formsEnabled = formsReady(FORMS_ENABLED);
 Astro.response.headers.set("Cache-Control", "no-store");
 type PublicForm = {
 	form?: Record<string, any>;

@@ -17,7 +17,15 @@
 			"dependsOn": ["transit"]
 		},
 		"test": {
-			"dependsOn": ["transit"]
+			"dependsOn": ["transit"],
+			"env": [
+				"DATABASE_URL",
+				"MIGRATOR_DATABASE_URL",
+				"TEST_DATABASE_URL",
+				"TEST_MIGRATOR_DATABASE_URL",
+				"TEST_IMPORT_DATABASE_URL",
+				"TEST_IMPORT_DATABASE_NAME"
+			]
 		},
 		"dev": {
 			"cache": false,

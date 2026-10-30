@@ -1,31 +1,27 @@
-import { createDb } from "@urlx/db";
-import type { Context as HonoContext } from "hono";
+import type { UrlxDb } from "@urlx/db";
 
 import { verifyAnonymousVisitorToken } from "./lib/anonymous-visitor";
-import type { RateLimitIdentity } from "./lib/layered-rate-limit";
+import { getTrustedClientIp } from "./lib/client-ip";
+import type { RateLimiter, RateLimitIdentity } from "./lib/layered-rate-limit";
+import type { MetadataFetcher } from "./modules/metadata/metadata.service";
 
 export const defaultShortUrlBase = "http://localhost:4321";
 
-export type ServerBindings = {
-	DB: D1Database;
-	CORS_ORIGIN: string;
-	METADATA_IP_RATE_LIMIT: RateLimit;
-	METADATA_VISITOR_RATE_LIMIT: RateLimit;
-	SHORT_URL_BASE?: string;
-	VISITOR_TOKEN_KEY: CryptoKey;
-	FORMS_ENABLED?: boolean | string;
-	BETTER_AUTH_SECRET?: string;
-	BETTER_AUTH_URL?: string;
-	RESEND_API_KEY?: string;
-	AUTH_EMAIL_FROM?: string;
-};
-
-type HonoEnv = {
-	Bindings: ServerBindings;
+type VisitorContext = {
+	req: {
+		header(name: string): string | undefined;
+		header(): Record<string, string | undefined>;
+	};
+	env: { VISITOR_TOKEN_KEY: CryptoKey };
 };
 
 export type CreateContextOptions = {
-	context: HonoContext<HonoEnv>;
+	context: VisitorContext;
+	db: UrlxDb;
+	fetcher: MetadataFetcher;
+	metadataIpRateLimiter: RateLimiter;
+	metadataVisitorRateLimiter: RateLimiter;
+	shortUrlBase?: string;
 };
 
 export async function createContext(options: CreateContextOptions) {
@@ -43,25 +39,17 @@ export async function createContext(options: CreateContextOptions) {
 
 	return {
 		auth: null,
-		clientIp: getClientIp(options.context.req.header()),
-		db: createDb(options.context.env.DB),
-		fetcher: globalThis.fetch.bind(globalThis),
-		metadataIpRateLimiter: options.context.env.METADATA_IP_RATE_LIMIT,
-		metadataVisitorRateLimiter: options.context.env.METADATA_VISITOR_RATE_LIMIT,
+		clientIp: getTrustedClientIp(options.context.req.header()),
+		db: options.db,
+		fetcher: options.fetcher,
+		metadataIpRateLimiter: options.metadataIpRateLimiter,
+		metadataVisitorRateLimiter: options.metadataVisitorRateLimiter,
 		now: () => new Date(),
 		rateLimitIdentity,
 		session: null,
-		shortUrlBase: options.context.env.SHORT_URL_BASE ?? defaultShortUrlBase,
+		shortUrlBase: options.shortUrlBase ?? defaultShortUrlBase,
 		visitorTokenVerification,
 	};
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
-
-function getClientIp(headers: Record<string, string>) {
-	return (
-		headers["cf-connecting-ip"] ??
-		headers["x-forwarded-for"]?.split(",")[0]?.trim() ??
-		"unknown"
-	);
-}

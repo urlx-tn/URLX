@@ -1,3 +1,4 @@
+import { RateLimitUnavailableError } from "../../lib/layered-rate-limit";
 import { LinkError } from "../links/link.errors";
 
 export const metadataErrorCodes = [
@@ -9,6 +10,7 @@ export const metadataErrorCodes = [
 	"PRIVATE_IP_NOT_ALLOWED",
 	"URL_TOO_LONG",
 	"RATE_LIMITED",
+	"RATE_LIMIT_UNAVAILABLE",
 	"TOO_MANY_REDIRECTS",
 	"FETCH_TIMEOUT",
 	"FETCH_FAILED",
@@ -27,6 +29,8 @@ const defaultMessages: Record<MetadataErrorCode, string> = {
 	URL_TOO_LONG: "URLs must be 2048 characters or fewer.",
 	RATE_LIMITED:
 		"You've reached the temporary request limit. Please wait about a minute and try again.",
+	RATE_LIMIT_UNAVAILABLE:
+		"The request limit service is temporarily unavailable. Please try again.",
 	TOO_MANY_REDIRECTS: "The URL redirected too many times.",
 	FETCH_TIMEOUT: "The page took too long to respond.",
 	FETCH_FAILED: "The page could not be fetched.",
@@ -42,6 +46,7 @@ const defaultStatuses: Record<MetadataErrorCode, number> = {
 	PRIVATE_IP_NOT_ALLOWED: 400,
 	URL_TOO_LONG: 400,
 	RATE_LIMITED: 429,
+	RATE_LIMIT_UNAVAILABLE: 503,
 	TOO_MANY_REDIRECTS: 422,
 	FETCH_TIMEOUT: 504,
 	FETCH_FAILED: 422,
@@ -67,6 +72,9 @@ export class MetadataError extends Error {
 export function toMetadataError(error: unknown) {
 	if (error instanceof MetadataError) {
 		return error;
+	}
+	if (error instanceof RateLimitUnavailableError) {
+		return new MetadataError("RATE_LIMIT_UNAVAILABLE");
 	}
 
 	if (error instanceof LinkError && isMetadataErrorCode(error.code)) {

@@ -1,4 +1,13 @@
-type RateLimiter = Pick<RateLimit, "limit">;
+export type RateLimiter = {
+	limit(input: { key: string }): Promise<{ success: boolean }>;
+};
+
+export class RateLimitUnavailableError extends Error {
+	constructor() {
+		super("The rate limit service is unavailable.");
+		this.name = "RateLimitUnavailableError";
+	}
+}
 
 export type RateLimitOperation = "conversion" | "metadata";
 export type RateLimitScope = "visitor" | "fallback-ip" | "ip";
@@ -22,7 +31,7 @@ export type LayeredRateLimitResult =
 export async function checkLayeredRateLimit(
 	options: LayeredRateLimitOptions,
 ): Promise<LayeredRateLimitResult> {
-	const ipResult = await options.ipRateLimiter.limit({
+	const ipResult = await checkLimiter(options.ipRateLimiter, {
 		key: `${options.operation}:ip:${options.clientIp}`,
 	});
 	if (!ipResult.success) {
@@ -35,7 +44,7 @@ export async function checkLayeredRateLimit(
 		options.identity.kind === "visitor"
 			? options.identity.visitorId
 			: options.clientIp;
-	const visitorResult = await options.visitorRateLimiter.limit({
+	const visitorResult = await checkLimiter(options.visitorRateLimiter, {
 		key: `${options.operation}:${scope}:${identifier}`,
 	});
 	if (!visitorResult.success) {
@@ -44,6 +53,17 @@ export async function checkLayeredRateLimit(
 	}
 
 	return { success: true };
+}
+
+async function checkLimiter(
+	limiter: RateLimiter,
+	input: { key: string },
+): Promise<{ success: boolean }> {
+	try {
+		return await limiter.limit(input);
+	} catch {
+		throw new RateLimitUnavailableError();
+	}
 }
 
 function warnExceeded(options: LayeredRateLimitOptions, scope: RateLimitScope) {

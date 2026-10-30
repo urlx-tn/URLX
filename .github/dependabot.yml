@@ -23,7 +23,6 @@ updates:
           - "@cloudflare/workers-types"
           - "@libsql/client"
           - "@types/node"
-          - "alchemy"
           - "astro"
           - "libsql"
           - "sharp"

@@ -1,10 +1,8 @@
-import type { createDb } from "@urlx/db";
+import type { UrlxDb } from "@urlx/db";
 import { bioLinks, bioPages } from "@urlx/db";
 import { and, asc, count, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import type { NewBioLink, NewBioPage } from "./bio.types";
-
-export type UrlxDb = ReturnType<typeof createDb>;
 
 export class BioRepository {
 	constructor(private readonly db: UrlxDb) {}
@@ -20,36 +18,40 @@ export class BioRepository {
 	}
 
 	async createPageWithLinks(page: NewBioPage, links: NewBioLink[]) {
-		await this.db.batch([
-			this.db.insert(bioPages).values(page),
-			...links.map((link) => this.db.insert(bioLinks).values(link)),
-		]);
+		await this.db.transaction(async (tx) => {
+			await tx.insert(bioPages).values(page);
+			if (links.length) await tx.insert(bioLinks).values(links);
+		});
 
 		return page;
 	}
 
-	async searchPages(options: { query: string; limit: number; offset: number }) {
+	async searchPages(options: { query: string; limit: number; page: number }) {
 		const where = buildSearchWhere(options.query);
 		const orderBy = buildSearchOrder(options.query);
-
-		const [totalRows, items] = await Promise.all([
-			this.db.select({ total: count() }).from(bioPages).where(where),
-			this.db
-				.select({
-					slug: bioPages.slug,
-					title: bioPages.title,
-					description: bioPages.description,
-					createdAt: bioPages.createdAt,
-				})
-				.from(bioPages)
-				.where(where)
-				.orderBy(...orderBy)
-				.limit(options.limit)
-				.offset(options.offset),
-		]);
+		const [totalRows] = await this.db
+			.select({ total: count() })
+			.from(bioPages)
+			.where(where);
+		const total = Number(totalRows?.total ?? 0);
+		const totalPages = Math.max(1, Math.ceil(total / options.limit));
+		const page = Math.min(Math.max(1, options.page), totalPages);
+		const offset = (page - 1) * options.limit;
+		const items = await this.db
+			.select({
+				slug: bioPages.slug,
+				title: bioPages.title,
+				description: bioPages.description,
+				createdAt: bioPages.createdAt,
+			})
+			.from(bioPages)
+			.where(where)
+			.orderBy(...orderBy)
+			.limit(options.limit)
+			.offset(offset);
 
 		return {
-			total: Number(totalRows[0]?.total ?? 0),
+			total,
 			items,
 		};
 	}

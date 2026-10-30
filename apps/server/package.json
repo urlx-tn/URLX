@@ -3,15 +3,18 @@
 	"type": "module",
 	"main": "src/index.ts",
 	"scripts": {
+		"start:api": "bun src/main-api.ts",
+		"start:conversion": "bun src/main-conversion.ts",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit --pretty false",
-		"test": "vitest run",
+		"test": "vitest run --fileParallelism=false",
 		"compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server"
 	},
 	"dependencies": {
 		"@orpc/openapi": "catalog:",
 		"@orpc/server": "catalog:",
 		"@orpc/zod": "catalog:",
+		"ioredis": "^5.4.2",
 		"@resvg/resvg-wasm": "2.6.2",
 		"@urlx/api": "workspace:*",
 		"@urlx/db": "workspace:*",
@@ -24,11 +27,10 @@
 		"@cloudflare/workers-types": "catalog:",
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
-		"alchemy": "catalog:",
+		"drizzle-orm": "catalog:",
 		"miniflare": "4.20260424.0",
 		"tsdown": "^0.22.3",
 		"typescript": "catalog:",
-		"vitest": "^4.1.11",
-		"wrangler": "^4.127.1"
+		"vitest": "^4.1.11"
 	}
 }

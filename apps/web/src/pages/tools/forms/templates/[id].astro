@@ -2,7 +2,7 @@
 import FormsHeader from "../../../../components/forms/FormsHeader.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import "../../../../styles/forms.css";
-import { env } from "cloudflare:workers";
+import { FORMS_ENABLED } from "astro:env/server";
 import {
 	formTemplateCategories,
 	formTemplates,
@@ -10,9 +10,7 @@ import {
 import { formsReady } from "../../../../lib/forms-ready";
 import { formsIcon, previewFormMarkup } from "../../../../lib/forms-ui";
 
-const formsEnabled = formsReady(
-	env as typeof env & Parameters<typeof formsReady>[0],
-);
+const formsEnabled = formsReady(FORMS_ENABLED);
 const template = formTemplates.find(
 	(item) => item.id === Astro.params.id && item.id !== "blank",
 );

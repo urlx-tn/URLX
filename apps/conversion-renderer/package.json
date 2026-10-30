@@ -1,0 +1,25 @@
+{
+	"name": "@urlx/conversion-renderer",
+	"private": true,
+	"type": "module",
+	"main": "src/main.ts",
+	"scripts": {
+		"start": "bun src/main.ts",
+		"check-types": "tsc --noEmit --pretty false",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@urlx/env": "workspace:*",
+		"hono": "catalog:",
+		"playwright": "1.64.1",
+		"turndown": "^7.2.0",
+		"turndown-plugin-gfm": "^1.0.2"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:",
+		"@types/turndown": "^5.0.5",
+		"@urlx/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "^4.1.11"
+	}
+}

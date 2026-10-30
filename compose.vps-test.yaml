@@ -1,0 +1,13 @@
+# Test-host override: keep the public conversion API available as a controlled
+# 503 while leaving the Playwright/Chromium renderer out of the stack.
+services:
+  conversion:
+    environment:
+      CONVERSION_BROWSER_DISABLED: "true"
+    depends_on: !override
+      valkey:
+        condition: service_healthy
+      egress-proxy:
+        condition: service_started
+  conversion-renderer:
+    profiles: [browser]

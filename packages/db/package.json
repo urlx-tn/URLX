@@ -11,18 +11,22 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit --pretty false",
-		"db:generate": "drizzle-kit generate"
+		"test": "bun test ./scripts",
+		"db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+		"db:migrate": "bun ./scripts/migrate.ts",
+		"db:import-sqlite": "bun ./scripts/import-sqlite-to-postgres.ts",
+		"test:migrate": "bun test ./scripts/migrate.test.ts",
+		"test:import-sqlite": "bun test ./scripts/import-sqlite-to-postgres.test.ts"
 	},
 	"dependencies": {
-		"@libsql/client": "0.17.4",
-		"@urlx/env": "workspace:*",
-		"dotenv": "catalog:",
 		"drizzle-orm": "^0.45.1",
-		"libsql": "0.5.29",
+		"pg": "^8.16.3",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"bun-types": "catalog:",
 		"@urlx/config": "workspace:*",
+		"@types/pg": "catalog:",
 		"drizzle-kit": "^0.31.8",
 		"typescript": "catalog:"
 	}
