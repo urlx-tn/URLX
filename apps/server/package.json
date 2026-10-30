@@ -28,11 +28,9 @@
 		"@types/node": "catalog:",
 		"@urlx/config": "workspace:*",
 		"drizzle-orm": "catalog:",
-		"alchemy": "catalog:",
 		"miniflare": "4.20260424.0",
 		"tsdown": "^0.22.3",
 		"typescript": "catalog:",
-		"vitest": "^4.1.11",
-		"wrangler": "^4.127.1"
+		"vitest": "^4.1.11"
 	}
 }

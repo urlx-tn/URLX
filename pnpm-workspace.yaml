@@ -15,7 +15,6 @@ catalog:
   '@orpc/zod': ^1.15.0
   '@types/node': ^26.0.0
   '@types/pg': ^8.23.1
-  alchemy: ^0.93.12
   bun-types: ^1.4.4
   dotenv: ^17.4.2
   drizzle-orm: ^0.45.2
