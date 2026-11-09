@@ -23,15 +23,15 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
-		"@astrojs/check": "^0.9.10",
+		"@astrojs/check": "^0.9.12",
 		"@astrojs/cloudflare": "^13.7.0",
 		"@cloudflare/workers-types": "catalog:",
-		"@tailwindcss/vite": "^4.3.3",
+		"@tailwindcss/vite": "^4.3.4",
 		"@types/qrcode": "^1.5.5",
 		"@urlx/config": "workspace:*",
 		"alchemy": "catalog:",
 		"sharp": "^0.35.2",
-		"tailwindcss": "^4.3.3",
+		"tailwindcss": "^4.3.4",
 		"typescript": "catalog:"
 	}
 }
